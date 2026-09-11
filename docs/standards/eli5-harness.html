@@ -1,0 +1,420 @@
+<title>레일 위의 에이전트</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --ground: #EFEFEA;
+    --panel: #F7F7F3;
+    --ink: #1C1F1C;
+    --muted: #62665F;
+    --rail: #BDC0B7;
+    --hair: #D9DBD3;
+    --go: #1F6F4A;
+    --stop: #B03A2E;
+    --go-soft: #DCE9E1;
+    --stop-soft: #F2DEDA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #15181A;
+      --panel: #1D2124;
+      --ink: #E9EAE4;
+      --muted: #9AA098;
+      --rail: #3C423E;
+      --hair: #2A2F31;
+      --go: #57B384;
+      --stop: #E07A69;
+      --go-soft: #1D2E26;
+      --stop-soft: #33211E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #15181A;
+    --panel: #1D2124;
+    --ink: #E9EAE4;
+    --muted: #9AA098;
+    --rail: #3C423E;
+    --hair: #2A2F31;
+    --go: #57B384;
+    --stop: #E07A69;
+    --go-soft: #1D2E26;
+    --stop-soft: #33211E;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 56px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 76px;
+  }
+
+  .display {
+    font-family: "Black Han Sans", "IBM Plex Sans KR", sans-serif;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  /* ---------- hero ---------- */
+  .hero { display: flex; flex-direction: column; gap: 20px; }
+  .hero h1 { font-size: clamp(2.1rem, 7vw, 3.4rem); margin: 0; }
+  .hero .lede { font-size: clamp(1.02rem, 2.3vw, 1.2rem); color: var(--muted); max-width: 62ch; margin: 0; }
+  .hero .rule { height: 3px; background: var(--ink); width: 64px; border-radius: 2px; }
+
+  /* ---------- scene ---------- */
+  .scene { display: flex; flex-direction: column; gap: 18px; }
+  .scene h2 { font-family: "Black Han Sans", "IBM Plex Sans KR", sans-serif; font-weight: 400; font-size: clamp(1.45rem, 4.4vw, 2.05rem); margin: 0; line-height: 1.3; text-wrap: balance; }
+  .scene p { margin: 0; max-width: 64ch; }
+  .scene p + p { margin-top: -4px; }
+  .aside { color: var(--muted); font-size: 0.94rem; }
+
+  figure { margin: 0; }
+  .fig-scroll { overflow-x: auto; padding-bottom: 4px; }
+  svg { display: block; max-width: 100%; height: auto; }
+  .fig-scroll svg { min-width: 700px; }
+  figcaption { margin-top: 10px; color: var(--muted); font-size: 0.86rem; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  /* svg token classes */
+  .s-ink  { fill: var(--ink); }
+  .s-mut  { fill: var(--muted); }
+  .s-rail { stroke: var(--rail); }
+  .s-inkl { stroke: var(--ink); }
+  .s-go   { fill: var(--go); }
+  .s-gol  { stroke: var(--go); }
+  .s-stop { fill: var(--stop); }
+  .s-stopl{ stroke: var(--stop); }
+  .s-panel{ fill: var(--panel); }
+  .s-ground { fill: var(--ground); }
+  .s-hair { stroke: var(--hair); }
+  .t-lg { font-family: "IBM Plex Sans KR", sans-serif; font-size: 15px; font-weight: 600; }
+  .t-md { font-family: "IBM Plex Sans KR", sans-serif; font-size: 13px; font-weight: 500; }
+  .t-mono { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; }
+  .t-num { font-family: "Black Han Sans", sans-serif; font-size: 22px; }
+
+  /* ---------- pair panels ---------- */
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--hair);
+    padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .panel h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+  .panel p { font-size: 0.94rem; color: var(--muted); margin: 0; }
+
+  /* ---------- table ---------- */
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.93rem; min-width: 420px; }
+  th, td { text-align: left; padding: 11px 14px 11px 0; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  th { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 0.76rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  td code { font-size: 0.86em; }
+
+  /* ---------- closing ---------- */
+  .closing {
+    border-top: 3px solid var(--ink);
+    padding-top: 26px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .closing .big { font-family: "Black Han Sans", sans-serif; font-size: clamp(1.5rem, 5vw, 2.25rem); line-height: 1.35; margin: 0; text-wrap: balance; }
+  .closing ul { margin: 0; padding-left: 1.1em; color: var(--muted); font-size: 0.94rem; }
+  .closing li { margin-bottom: 4px; }
+</style>
+
+<div class="page">
+
+  <header class="hero">
+    <div class="rule"></div>
+    <p class="eyebrow">AI SDLC harness · 다섯 살도 알아듣는 설명</p>
+    <h1 class="display">부탁하지 않는다.<br>레일을 깔고 검사한다.</h1>
+    <p class="lede">
+      코딩 에이전트는 똑똑하지만 매번 조금씩 다르게 일한다. 이 저장소는 에이전트가 달릴 선로를 깔고,
+      선로를 벗어났는지 사람이 아니라 스크립트가 검사하게 만드는 틀이다.
+    </p>
+  </header>
+
+  <!-- 1. 문제 -->
+  <section class="scene">
+    <p class="eyebrow">01 · 문제</p>
+    <h2>같은 부탁을 세 번 하면, 세 가지 결과가 나온다</h2>
+    <figure>
+      <svg viewBox="0 0 700 250" role="img" aria-label="같은 요청 하나가 서로 다른 세 가지 결과로 갈라지는 그림">
+        <rect x="14" y="100" width="150" height="50" rx="4" class="s-panel s-hair" stroke-width="1.5"/>
+        <text x="89" y="122" text-anchor="middle" class="t-md s-ink">같은 요청</text>
+        <text x="89" y="140" text-anchor="middle" class="t-mono s-mut">"이 기능 만들어줘"</text>
+
+        <path d="M164 125 C 230 125, 240 48, 300 48" fill="none" class="s-rail" stroke-width="2"/>
+        <path d="M164 125 C 230 125, 240 125, 300 125" fill="none" class="s-rail" stroke-width="2"/>
+        <path d="M164 125 C 230 125, 240 202, 300 202" fill="none" class="s-rail" stroke-width="2"/>
+
+        <rect x="300" y="26" width="290" height="44" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
+        <text x="314" y="46" class="t-md s-ink">바로 코드부터 쓴다</text>
+        <text x="314" y="62" class="t-mono s-mut">남는 문서 없음</text>
+
+        <rect x="300" y="103" width="290" height="44" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
+        <text x="314" y="123" class="t-md s-ink">계획은 세우고 테스트는 건너뛴다</text>
+        <text x="314" y="139" class="t-mono s-mut">plan.md 만 남음</text>
+
+        <rect x="300" y="180" width="290" height="44" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
+        <text x="314" y="200" class="t-md s-ink">되묻기만 하다 끝난다</text>
+        <text x="314" y="216" class="t-mono s-mut">아무것도 안 남음</text>
+
+        <circle cx="606" cy="48" r="5" class="s-stop"/>
+        <circle cx="606" cy="125" r="5" class="s-stop"/>
+        <circle cx="606" cy="202" r="5" class="s-stop"/>
+        <text x="624" y="130" class="t-mono s-mut">매번 다름</text>
+      </svg>
+    </figure>
+    <p>
+      새 대화를 열 때마다 에이전트의 기억은 0이 된다. 지난주에 정한 규칙도, 어제 합의한 용어도 모른다.
+    </p>
+    <p>
+      프롬프트에 "이렇게 해줘"라고 적어 두는 것으로는 부족하다. 부탁은 지켜질 때도 있고 안 지켜질 때도 있는데,
+      안 지켜졌다는 걸 나중에 사람이 발견한다.
+    </p>
+  </section>
+
+  <!-- 2. 산출물 체인 -->
+  <section class="scene">
+    <p class="eyebrow">02 · 선로</p>
+    <h2>일을 여섯 개의 역으로 쪼갠다</h2>
+    <p>
+      역마다 파일 하나를 남기고 다음 역으로 간다. 이 파일들은 저장소에 같이 커밋되기 때문에,
+      다음 사람도 다음 에이전트도 "왜 이렇게 만들었는지"를 읽을 수 있다.
+    </p>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 940 230" role="img" aria-label="의도, 사양, 계획, 구현, 리뷰, 인도 여섯 단계가 선로 위의 역으로 이어진 그림. 각 역 아래에 남기는 파일 이름이 적혀 있다.">
+          <line x1="52" y1="112" x2="888" y2="112" class="s-rail" stroke-width="3"/>
+          <line x1="52" y1="121" x2="888" y2="121" class="s-rail" stroke-width="3"/>
+
+          <g>
+            <circle cx="60" cy="116" r="15" class="s-go"/>
+            <text x="60" y="72" text-anchor="middle" class="t-lg s-ink">의도</text>
+            <text x="60" y="90" text-anchor="middle" class="t-mono s-mut">무엇을 왜</text>
+            <text x="60" y="170" text-anchor="middle" class="t-mono s-ink">intent.md</text>
+          </g>
+          <g>
+            <circle cx="225" cy="116" r="15" class="s-go"/>
+            <text x="225" y="72" text-anchor="middle" class="t-lg s-ink">사양</text>
+            <text x="225" y="90" text-anchor="middle" class="t-mono s-mut">무엇을 만들지</text>
+            <text x="225" y="170" text-anchor="middle" class="t-mono s-ink">spec.md</text>
+          </g>
+          <g>
+            <circle cx="390" cy="116" r="15" class="s-go"/>
+            <text x="390" y="72" text-anchor="middle" class="t-lg s-ink">계획</text>
+            <text x="390" y="90" text-anchor="middle" class="t-mono s-mut">어떤 순서로</text>
+            <text x="390" y="170" text-anchor="middle" class="t-mono s-ink">plan.md</text>
+          </g>
+          <g>
+            <circle cx="555" cy="116" r="15" class="s-go"/>
+            <text x="555" y="72" text-anchor="middle" class="t-lg s-ink">구현</text>
+            <text x="555" y="90" text-anchor="middle" class="t-mono s-mut">테스트 먼저</text>
+            <text x="555" y="170" text-anchor="middle" class="t-mono s-ink">코드 · 커밋</text>
+          </g>
+          <g>
+            <circle cx="720" cy="116" r="15" class="s-go"/>
+            <text x="720" y="72" text-anchor="middle" class="t-lg s-ink">리뷰</text>
+            <text x="720" y="90" text-anchor="middle" class="t-mono s-mut">새 눈으로</text>
+            <text x="720" y="170" text-anchor="middle" class="t-mono s-ink">지적 사항 수정</text>
+          </g>
+          <g>
+            <circle cx="880" cy="116" r="15" class="s-go"/>
+            <text x="880" y="72" text-anchor="middle" class="t-lg s-ink">인도</text>
+            <text x="880" y="90" text-anchor="middle" class="t-mono s-mut">보여줄 것</text>
+            <text x="880" y="170" text-anchor="middle" class="t-mono s-ink">deliverables/</text>
+          </g>
+
+          <text x="60" y="205" text-anchor="middle" class="t-mono s-mut">건너뛸 수 있음</text>
+          <text x="225" y="205" text-anchor="middle" class="t-mono s-mut">건너뛸 수 있음</text>
+          <text x="390" y="205" text-anchor="middle" class="t-mono s-mut">건너뛸 수 있음</text>
+          <text x="720" y="205" text-anchor="middle" class="t-mono s-mut">건너뛰면 안 됨</text>
+          <text x="880" y="205" text-anchor="middle" class="t-mono s-mut">건너뛰면 안 됨</text>
+        </svg>
+      </div>
+      <figcaption>한 줄짜리 수정에는 앞의 세 역이 필요 없다. 여러 앱을 건드리는 변경에는 전부 필요하다.</figcaption>
+    </figure>
+    <p class="aside">
+      "다 됐다"고 말할 수 있는 조건도 파일로 정해져 있다. 인도할 것이 남아 있거나 계획서의 체크박스가
+      비어 있으면 아직 끝난 게 아니다.
+    </p>
+  </section>
+
+  <!-- 3. 계약 하나, 호스트 셋 -->
+  <section class="scene">
+    <p class="eyebrow">03 · 계약</p>
+    <h2>규칙은 한 군데에만 적는다</h2>
+    <p>
+      에이전트 도구는 여러 개고, 도구마다 설정 파일이 따로 있다. 같은 규칙을 세 군데에 적으면
+      언젠가 세 개가 서로 달라진다. 그래서 규칙의 원본은 파일 하나로 두고, 나머지는 그 원본을 따르는지 검사받는다.
+    </p>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 800 330" role="img" aria-label="harness.yaml 하나가 Claude 설정, Codex 훅, 커밋 훅 세 곳으로 갈라지고, 그 아래 검사 스크립트가 세 곳을 모두 대조하는 그림">
+          <rect x="270" y="16" width="260" height="58" rx="4" class="s-panel s-inkl" stroke-width="2"/>
+          <text x="400" y="40" text-anchor="middle" class="t-lg s-ink">규칙 원본 한 장</text>
+          <text x="400" y="60" text-anchor="middle" class="t-mono s-mut">.agents/harness.yaml</text>
+
+          <path d="M400 74 L400 100 M400 100 L150 100 L150 128" fill="none" class="s-rail" stroke-width="2"/>
+          <path d="M400 100 L400 128" fill="none" class="s-rail" stroke-width="2"/>
+          <path d="M400 100 L650 100 L650 128" fill="none" class="s-rail" stroke-width="2"/>
+
+          <rect x="40" y="128" width="220" height="62" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
+          <text x="150" y="152" text-anchor="middle" class="t-md s-ink">Claude Code 설정</text>
+          <text x="150" y="172" text-anchor="middle" class="t-mono s-mut">.claude/settings.json</text>
+
+          <rect x="290" y="128" width="220" height="62" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
+          <text x="400" y="152" text-anchor="middle" class="t-md s-ink">Codex 훅</text>
+          <text x="400" y="172" text-anchor="middle" class="t-mono s-mut">.codex/hooks.json</text>
+
+          <rect x="540" y="128" width="220" height="62" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
+          <text x="650" y="152" text-anchor="middle" class="t-md s-ink">커밋 직전 훅</text>
+          <text x="650" y="172" text-anchor="middle" class="t-mono s-mut">.husky/pre-commit</text>
+
+          <path d="M150 190 L150 232 M400 190 L400 232 M650 190 L650 232" fill="none" class="s-gol" stroke-width="2" stroke-dasharray="5 5"/>
+
+          <rect x="190" y="232" width="420" height="64" rx="4" class="s-panel s-gol" stroke-width="2"/>
+          <text x="400" y="258" text-anchor="middle" class="t-lg s-ink">대조 검사기</text>
+          <text x="400" y="278" text-anchor="middle" class="t-mono s-mut">원본과 세 곳이 어긋나면 실패한다</text>
+
+          <text x="400" y="318" text-anchor="middle" class="t-mono s-mut">pnpm check:harness</text>
+        </svg>
+      </div>
+      <figcaption>원본을 고치고 세 곳에 옮겨 적는 것은 사람이 한다. 옮겨 적기를 빠뜨렸는지는 검사기가 잡는다.</figcaption>
+    </figure>
+  </section>
+
+  <!-- 4. 게이트 -->
+  <section class="scene">
+    <p class="eyebrow">04 · 신호기</p>
+    <h2>지켜졌는지 묻지 않고, 막는다</h2>
+    <figure>
+      <svg viewBox="0 0 700 300" role="img" aria-label="변경 사항이 신호기를 지나며 통과하거나 정지하는 그림">
+        <rect x="16" y="122" width="150" height="52" rx="4" class="s-panel s-hair" stroke-width="1.5"/>
+        <text x="91" y="144" text-anchor="middle" class="t-md s-ink">에이전트의 변경</text>
+        <text x="91" y="162" text-anchor="middle" class="t-mono s-mut">커밋하려는 순간</text>
+
+        <line x1="166" y1="148" x2="268" y2="148" class="s-rail" stroke-width="3"/>
+
+        <rect x="268" y="108" width="120" height="80" rx="4" class="s-ground s-inkl" stroke-width="2"/>
+        <circle cx="328" cy="132" r="12" class="s-go"/>
+        <circle cx="328" cy="164" r="12" class="s-stop"/>
+        <text x="328" y="210" text-anchor="middle" class="t-mono s-mut">가드 스크립트</text>
+
+        <path d="M388 138 L470 96" fill="none" class="s-gol" stroke-width="3"/>
+        <path d="M388 158 L470 200" fill="none" class="s-stopl" stroke-width="3"/>
+
+        <rect x="470" y="68" width="216" height="58" rx="4" class="s-ground" fill-opacity="1"/>
+        <rect x="470" y="68" width="216" height="58" rx="4" class="s-gol" fill="none" stroke-width="2"/>
+        <text x="486" y="92" class="t-md s-ink">통과</text>
+        <text x="486" y="112" class="t-mono s-mut">커밋이 만들어진다</text>
+
+        <rect x="470" y="172" width="216" height="58" rx="4" class="s-ground" fill-opacity="1"/>
+        <rect x="470" y="172" width="216" height="58" rx="4" class="s-stopl" fill="none" stroke-width="2"/>
+        <text x="486" y="196" class="t-md s-ink">정지</text>
+        <text x="486" y="216" class="t-mono s-mut">exit 1 · 커밋되지 않는다</text>
+      </svg>
+    </figure>
+    <p>
+      검사는 모델의 판단이 아니라 파이썬과 셸 스크립트가 한다. 모델이 기분이 좋든 나쁘든 결과가 같다.
+    </p>
+    <div class="pair">
+      <div class="panel">
+        <h3>건드리면 안 되는 파일</h3>
+        <p>자동 생성 파일처럼 손으로 고치면 안 되는 경로는 쓰려는 순간 거부된다.</p>
+      </div>
+      <div class="panel">
+        <h3>남의 컴퓨터 경로</h3>
+        <p>문서나 설정에 특정 사용자의 절대 경로가 섞여 들어가면 잡아낸다.</p>
+      </div>
+      <div class="panel">
+        <h3>빠진 계획서</h3>
+        <p>여러 앱을 한꺼번에 건드리는 변경에 계획서가 없으면 경고한다.</p>
+      </div>
+    </div>
+    <p class="aside">
+      그리고 한 가지가 더 있다. 규칙이 <em>적혀 있는지</em>가 아니라 에이전트가 <em>실제로 지키는지</em>를
+      확인하는 시험이다. 진짜 모델을 불러서 시켜 보고 결과를 채점한다. 모델 사용량을 쓰기 때문에
+      평소 테스트와는 따로 돌린다.
+    </p>
+  </section>
+
+  <!-- 5. 스킬 -->
+  <section class="scene">
+    <p class="eyebrow">05 · 스킬</p>
+    <h2>남이 만든 좋은 것은 그대로 두고 얇게 감싼다</h2>
+    <p>
+      "요구사항 캐묻기", "사양서로 정리하기", "테스트 먼저 구현하기" 같은 작업 방식은 이미 공개된 좋은
+      스킬들이 있다. 이 저장소는 그것들을 고쳐 쓰지 않고 원본 그대로 가져온 뒤, 얇은 껍데기 하나를 씌운다.
+      껍데기가 이 프로젝트의 폴더 규칙과 언어를 알려주는 역할을 한다.
+    </p>
+    <figure>
+      <svg viewBox="0 0 700 200" role="img" aria-label="바깥의 얇은 어댑터가 안쪽의 원본 스킬을 감싸고 있는 그림">
+        <rect x="60" y="30" width="300" height="140" rx="6" class="s-panel s-gol" stroke-width="2"/>
+        <text x="78" y="56" class="t-md s-ink">어댑터 (이 저장소 것)</text>
+        <text x="78" y="74" class="t-mono s-mut">폴더 규칙 · 출력 언어 · 경로</text>
+
+        <rect x="96" y="92" width="228" height="60" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
+        <text x="210" y="118" text-anchor="middle" class="t-md s-ink">원본 스킬</text>
+        <text x="210" y="136" text-anchor="middle" class="t-mono s-mut">손대지 않음 · 위에서 당겨 받음</text>
+
+        <path d="M360 100 L432 100" fill="none" class="s-rail" stroke-width="2"/>
+        <polygon points="434,100 424,94 424,106" class="s-mut"/>
+
+        <rect x="444" y="66" width="240" height="68" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
+        <text x="564" y="92" text-anchor="middle" class="t-md s-ink">메뉴에 보이는 것은</text>
+        <text x="564" y="112" text-anchor="middle" class="t-mono s-mut">어댑터 하나뿐</text>
+      </svg>
+    </figure>
+    <p>
+      그래서 원본이 좋아지면 다시 당겨 받기만 하면 된다. 내가 고쳐 놓은 것이 없으니 충돌하지 않는다.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>이 저장소가 부르는 이름</th><th>실제로 하는 일</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>-intent</code></td><td>무엇을 왜 만드는지 캐묻는다</td></tr>
+          <tr><td><code>-spec</code></td><td>대화를 사양서 한 장으로 정리한다</td></tr>
+          <tr><td><code>-tickets</code></td><td>사양서를 작업 단위로 쪼갠다</td></tr>
+          <tr><td><code>-implement</code></td><td>테스트를 먼저 놓고 구현한다</td></tr>
+          <tr><td><code>-ui-review</code></td><td>바뀐 화면을 눈으로 검토한다</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- closing -->
+  <section class="closing">
+    <p class="eyebrow">한 문장으로</p>
+    <p class="big">에이전트에게 규칙을 부탁하는 대신,<br>규칙을 파일로 못 박고 스크립트가 검사하게 한다.</p>
+    <ul>
+      <li>일은 여섯 개의 역을 지나며, 역마다 파일을 하나씩 남긴다.</li>
+      <li>규칙의 원본은 한 장이고, 도구별 설정은 그 원본과 대조된다.</li>
+      <li>어긴 변경은 커밋 직전에 멈춘다. 사람이 나중에 발견하는 게 아니다.</li>
+      <li>작업 방식 스킬은 원본 그대로 두고 얇게 감싸서, 위에서 좋아지면 그대로 받는다.</li>
+    </ul>
+  </section>
+
+</div>

@@ -6,7 +6,7 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 ③ 모델 판단과 무관하게 도는 결정적 게이트(hooks · husky), ④ 변경마다 커밋되는 산출물 체인
 (`docs/changes/<YYMMDD_NN>-<slug>/`), ⑤ 그 전부를 기계적으로 검사하는 체커와 회귀 테스트를 묶어 놓았다.
 
-원본은 사내 모노레포 `inax-platform` 의 하네스이며, 프로젝트 고유 지식은 모두 제거하고
+실제로 운영 중이던 폴리글랏 모노레포의 하네스에서 추출했다. 프로젝트 고유 지식은 모두 제거하고
 `__UPPER_SNAKE__` 플레이스홀더로 바꿔 두었다.
 
 ## Use this template — 3단계
@@ -39,10 +39,10 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 
 ## 플레이스홀더 표
 
-| 플레이스홀더 | 의미 | 원본(inax) 예시 |
+| 플레이스홀더 | 의미 | 예시 |
 |---|---|---|
-| `__PROJECT_NAME__` | 저장소/프로젝트 이름 (`package.json` name 포함) | `inax-platform` |
-| `__PREFIX__` | 어댑터 스킬 접두사 — 디렉터리명·슬래시 커맨드 모두 | `inax` → `/inax-intent` |
+| `__PROJECT_NAME__` | 저장소/프로젝트 이름 (`package.json` name 포함) | `acme-platform` |
+| `__PREFIX__` | 어댑터 스킬 접두사 — 디렉터리명·슬래시 커맨드 모두 | `acme` → `/acme-intent` |
 | `__APP__` | 예시 앱 디렉터리 이름 (`apps/__APP__`) | `frontend` |
 | `__APPS_OVERVIEW__` | AGENTS.md 첫 문단: 앱 목록과 스택 한 덩어리 | "Polyglot monorepo … pnpm 9, Node ≥ 22.12." |
 | `__PACKAGE_MANAGER__` | 문서에 적히는 패키지 매니저 명령 | `pnpm` |
@@ -84,9 +84,8 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 
 ### C. 일부러 뺀 것 (프로젝트 고유)
 
-- 도메인 스킬 전부: `inax-api-*`, `inax-frontend-*`, `inax-design-system`, `desktop-*`,
-  `ledger-sync`, `release-stamp`, `verify-publish`, `answering-brs-questions`, `agent-*`,
-  `ux-writing`, `inax-verify-screen` 등 — 특정 제품 지식에 묶여 있다.
+- 도메인 스킬 전부: 백엔드/프런트엔드 아키텍처 가이드, 디자인 시스템, 데스크톱 패키징·릴리스,
+  capability ledger, UX 라이팅, 제품 DB 조회 스킬 등 — 특정 제품 지식에 묶여 있어 옮겨봐야 쓸모가 없다.
 - 도메인 가드·스크립트: `ds-design-guard.py`(디자인 토큰), `ds-registry-drift-check.sh`,
   `ledger-update.sh`(데스크톱 capability ledger), `brs-skill-sync-check.sh`,
   `frontend-quality-check.sh` 와 그 테스트들 — husky 훅과 `.claude/settings.json` 에서도 뺐다.
