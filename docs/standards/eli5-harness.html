@@ -1,420 +1,388 @@
-<title>레일 위의 에이전트</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI SDLC 하네스 — 아주 쉽게</title>
 <style>
-  :root {
-    --ground: #EFEFEA;
-    --panel: #F7F7F3;
-    --ink: #1C1F1C;
-    --muted: #62665F;
-    --rail: #BDC0B7;
-    --hair: #D9DBD3;
-    --go: #1F6F4A;
-    --stop: #B03A2E;
-    --go-soft: #DCE9E1;
-    --stop-soft: #F2DEDA;
+  :root{
+    --paper:#f7f5f0; --ink:#1b242e; --soft:#5d6b78; --line:#d7d2c8;
+    --teal:#137a6c; --teal-l:#e2f0ed; --amber:#c9871f; --amber-l:#faefdc;
+    --navy:#0e1c2b;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --ground: #15181A;
-      --panel: #1D2124;
-      --ink: #E9EAE4;
-      --muted: #9AA098;
-      --rail: #3C423E;
-      --hair: #2A2F31;
-      --go: #57B384;
-      --stop: #E07A69;
-      --go-soft: #1D2E26;
-      --stop-soft: #33211E;
-    }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    line-height:1.65; letter-spacing:-0.01em;
   }
-  :root[data-theme="dark"] {
-    --ground: #15181A;
-    --panel: #1D2124;
-    --ink: #E9EAE4;
-    --muted: #9AA098;
-    --rail: #3C423E;
-    --hair: #2A2F31;
-    --go: #57B384;
-    --stop: #E07A69;
-    --go-soft: #1D2E26;
-    --stop-soft: #33211E;
-  }
-
-  body {
-    background: var(--ground);
-    color: var(--ink);
-    font-family: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
-    line-height: 1.75;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .page {
-    max-width: 860px;
-    margin: 0 auto;
-    padding-inline: 20px;
-    padding-block: 56px 96px;
-    display: flex;
-    flex-direction: column;
-    gap: 76px;
-  }
-
-  .display {
-    font-family: "Black Han Sans", "IBM Plex Sans KR", sans-serif;
-    font-weight: 400;
-    letter-spacing: -0.01em;
-    line-height: 1.25;
-    text-wrap: balance;
-  }
-
-  .eyebrow {
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 0.74rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
-
-  /* ---------- hero ---------- */
-  .hero { display: flex; flex-direction: column; gap: 20px; }
-  .hero h1 { font-size: clamp(2.1rem, 7vw, 3.4rem); margin: 0; }
-  .hero .lede { font-size: clamp(1.02rem, 2.3vw, 1.2rem); color: var(--muted); max-width: 62ch; margin: 0; }
-  .hero .rule { height: 3px; background: var(--ink); width: 64px; border-radius: 2px; }
-
-  /* ---------- scene ---------- */
-  .scene { display: flex; flex-direction: column; gap: 18px; }
-  .scene h2 { font-family: "Black Han Sans", "IBM Plex Sans KR", sans-serif; font-weight: 400; font-size: clamp(1.45rem, 4.4vw, 2.05rem); margin: 0; line-height: 1.3; text-wrap: balance; }
-  .scene p { margin: 0; max-width: 64ch; }
-  .scene p + p { margin-top: -4px; }
-  .aside { color: var(--muted); font-size: 0.94rem; }
-
-  figure { margin: 0; }
-  .fig-scroll { overflow-x: auto; padding-bottom: 4px; }
-  svg { display: block; max-width: 100%; height: auto; }
-  .fig-scroll svg { min-width: 700px; }
-  figcaption { margin-top: 10px; color: var(--muted); font-size: 0.86rem; font-family: "IBM Plex Mono", ui-monospace, monospace; }
-
-  /* svg token classes */
-  .s-ink  { fill: var(--ink); }
-  .s-mut  { fill: var(--muted); }
-  .s-rail { stroke: var(--rail); }
-  .s-inkl { stroke: var(--ink); }
-  .s-go   { fill: var(--go); }
-  .s-gol  { stroke: var(--go); }
-  .s-stop { fill: var(--stop); }
-  .s-stopl{ stroke: var(--stop); }
-  .s-panel{ fill: var(--panel); }
-  .s-ground { fill: var(--ground); }
-  .s-hair { stroke: var(--hair); }
-  .t-lg { font-family: "IBM Plex Sans KR", sans-serif; font-size: 15px; font-weight: 600; }
-  .t-md { font-family: "IBM Plex Sans KR", sans-serif; font-size: 13px; font-weight: 500; }
-  .t-mono { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; }
-  .t-num { font-family: "Black Han Sans", sans-serif; font-size: 22px; }
-
-  /* ---------- pair panels ---------- */
-  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--hair);
-    padding: 18px 20px;
-    display: flex; flex-direction: column; gap: 6px;
-  }
-  .panel h3 { margin: 0; font-size: 1rem; font-weight: 600; }
-  .panel p { font-size: 0.94rem; color: var(--muted); margin: 0; }
-
-  /* ---------- table ---------- */
-  .tablewrap { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.93rem; min-width: 420px; }
-  th, td { text-align: left; padding: 11px 14px 11px 0; border-bottom: 1px solid var(--hair); vertical-align: top; }
-  th { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 0.76rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-  td code { font-size: 0.86em; }
-
-  /* ---------- closing ---------- */
-  .closing {
-    border-top: 3px solid var(--ink);
-    padding-top: 26px;
-    display: flex; flex-direction: column; gap: 14px;
-  }
-  .closing .big { font-family: "Black Han Sans", sans-serif; font-size: clamp(1.5rem, 5vw, 2.25rem); line-height: 1.35; margin: 0; text-wrap: balance; }
-  .closing ul { margin: 0; padding-left: 1.1em; color: var(--muted); font-size: 0.94rem; }
-  .closing li { margin-bottom: 4px; }
+  .wrap{max-width:860px; margin:0 auto; padding:0 24px}
+  section{padding-block:88px; border-bottom:1px solid var(--line)}
+  section:last-of-type{border-bottom:0}
+  .step{display:inline-block; font-size:15px; font-weight:700; letter-spacing:.12em;
+    color:var(--teal); background:var(--teal-l); padding:6px 14px; border-radius:99px; margin-bottom:22px}
+  h1{font-size:clamp(38px,7vw,68px); line-height:1.18; font-weight:800; margin:0 0 20px}
+  h2{font-size:clamp(28px,5vw,44px); line-height:1.25; font-weight:800; margin:0 0 18px}
+  p{font-size:clamp(18px,2.6vw,23px); margin:0 0 16px; max-width:44ch}
+  p.big{font-size:clamp(22px,3.4vw,30px); font-weight:600}
+  .soft{color:var(--soft)}
+  .fig{margin:36px 0 8px}
+  svg{width:100%; height:auto; display:block}
+  .hero{padding-block:110px 88px}
+  .hero p{font-size:clamp(19px,2.8vw,26px); color:var(--soft)}
+  .band{background:var(--navy); color:#f2f5f7; border-bottom:0}
+  .band h2{color:#fff}
+  .band p{color:#b9c6d2}
+  .band .step{color:#63d3c0; background:rgba(99,211,192,.14)}
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:20px; margin-top:38px}
+  .card{background:#fff; border:1px solid var(--line); border-radius:16px; padding:24px}
+  .card .n{font-size:14px; font-weight:800; color:var(--teal); letter-spacing:.1em}
+  .card h3{font-size:21px; margin:8px 0 6px; font-weight:800}
+  .card .q{font-size:17px; color:var(--soft); margin:0 0 12px}
+  .card .stop{font-size:15px; color:var(--ink); background:var(--amber-l); border-radius:9px; padding:9px 12px; margin:0}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:.92em}
+  .kicker{font-size:clamp(24px,3.6vw,34px); font-weight:800; line-height:1.35; max-width:20ch}
+  .note{font-size:17px; color:var(--soft); border-left:3px solid var(--teal); padding-left:14px; max-width:46ch}
+  .flow{margin-top:40px}
+  .fstep{position:relative; padding:0 0 34px 34px; border-left:2px solid var(--line); margin-left:9px}
+  .fstep:last-child{border-left-color:transparent; padding-bottom:0}
+  .fstep::before{content:""; position:absolute; left:-11px; top:4px; width:20px; height:20px;
+    border-radius:50%; background:var(--paper); border:2px solid var(--teal)}
+  .fstep.stop::before{background:var(--amber); border-color:var(--amber)}
+  .fstep .cmd{display:inline-block; font-family:ui-monospace,"SF Mono",Menlo,monospace;
+    font-size:clamp(17px,2.3vw,21px); font-weight:700; background:#fff; border:1px solid var(--line);
+    border-radius:9px; padding:7px 13px; margin:0 0 10px}
+  .fstep .cmd.plain{background:transparent; border-style:dashed; font-family:inherit}
+  .fstep .what{font-size:clamp(17px,2.3vw,21px); margin:0 0 6px; max-width:46ch}
+  .fstep .out{font-size:16px; color:var(--soft); margin:0; max-width:46ch}
+  .fstep .out b{color:var(--teal)}
+  .stopline{background:var(--amber-l); border-radius:12px; padding:16px 18px; margin:6px 0 34px 43px;
+    font-size:17px; max-width:46ch}
+  .cmdbox{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:clamp(16px,2.2vw,20px);
+    font-weight:700; background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:18px 20px; display:block; max-width:none; overflow-x:auto; white-space:pre; line-height:1.9}
+  footer{padding:56px 0 96px; font-size:16px; color:var(--soft)}
+  @media (max-width:640px){ section{padding-block:64px} }
 </style>
+</head>
+<body>
 
-<div class="page">
+<section class="hero">
+  <div class="wrap">
+    <div class="step">아주 쉽게</div>
+    <h1>말로 부탁하지 않고,<br>종이를 남기고<br>문을 답니다</h1>
+    <p>AI에게 개발을 시킬 때 왜 규칙이 지켜지지 않는지, 이 저장소가 그걸 어떻게 바꾸는지 그림으로 설명합니다.</p>
+  </div>
+</section>
 
-  <header class="hero">
-    <div class="rule"></div>
-    <p class="eyebrow">AI SDLC harness · 다섯 살도 알아듣는 설명</p>
-    <h1 class="display">부탁하지 않는다.<br>레일을 깔고 검사한다.</h1>
-    <p class="lede">
-      코딩 에이전트는 똑똑하지만 매번 조금씩 다르게 일한다. 이 저장소는 에이전트가 달릴 선로를 깔고,
-      선로를 벗어났는지 사람이 아니라 스크립트가 검사하게 만드는 틀이다.
-    </p>
-  </header>
+<section>
+  <div class="wrap">
+    <div class="step">1 · 지금 벌어지는 일</div>
+    <h2>매일 아침,<br>어제를 하나도 기억 못 하는<br>신입이 출근합니다</h2>
+    <p>아주 유능합니다. 시키면 하루 치 일을 한 시간에 끝냅니다.</p>
+    <p class="big">그런데 <b>어제 정한 규칙</b>을 모릅니다.</p>
 
-  <!-- 1. 문제 -->
-  <section class="scene">
-    <p class="eyebrow">01 · 문제</p>
-    <h2>같은 부탁을 세 번 하면, 세 가지 결과가 나온다</h2>
-    <figure>
-      <svg viewBox="0 0 700 250" role="img" aria-label="같은 요청 하나가 서로 다른 세 가지 결과로 갈라지는 그림">
-        <rect x="14" y="100" width="150" height="50" rx="4" class="s-panel s-hair" stroke-width="1.5"/>
-        <text x="89" y="122" text-anchor="middle" class="t-md s-ink">같은 요청</text>
-        <text x="89" y="140" text-anchor="middle" class="t-mono s-mut">"이 기능 만들어줘"</text>
+    <div class="fig">
+      <svg viewBox="0 0 800 260" role="img" aria-label="월요일 화요일 수요일마다 다른 신입이 출근하고, 어제의 기억은 남지 않는다">
+        <text x="0" y="30" font-size="19" font-weight="700" fill="#5d6b78">월요일</text>
+        <circle cx="40" cy="92" r="26" fill="#1b242e"/>
+        <rect x="26" y="126" width="28" height="66" rx="12" fill="#1b242e"/>
+        <text x="86" y="100" font-size="19" fill="#1b242e">폴더 규칙을 알려줬다</text>
 
-        <path d="M164 125 C 230 125, 240 48, 300 48" fill="none" class="s-rail" stroke-width="2"/>
-        <path d="M164 125 C 230 125, 240 125, 300 125" fill="none" class="s-rail" stroke-width="2"/>
-        <path d="M164 125 C 230 125, 240 202, 300 202" fill="none" class="s-rail" stroke-width="2"/>
+        <text x="270" y="30" font-size="19" font-weight="700" fill="#5d6b78">화요일</text>
+        <circle cx="310" cy="92" r="26" fill="#1b242e"/>
+        <rect x="296" y="126" width="28" height="66" rx="12" fill="#1b242e"/>
+        <text x="356" y="100" font-size="19" fill="#1b242e">또 알려줬다</text>
 
-        <rect x="300" y="26" width="290" height="44" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
-        <text x="314" y="46" class="t-md s-ink">바로 코드부터 쓴다</text>
-        <text x="314" y="62" class="t-mono s-mut">남는 문서 없음</text>
+        <text x="540" y="30" font-size="19" font-weight="700" fill="#5d6b78">수요일</text>
+        <circle cx="580" cy="92" r="26" fill="#1b242e"/>
+        <rect x="566" y="126" width="28" height="66" rx="12" fill="#1b242e"/>
+        <text x="626" y="100" font-size="19" fill="#1b242e">또…</text>
 
-        <rect x="300" y="103" width="290" height="44" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
-        <text x="314" y="123" class="t-md s-ink">계획은 세우고 테스트는 건너뛴다</text>
-        <text x="314" y="139" class="t-mono s-mut">plan.md 만 남음</text>
-
-        <rect x="300" y="180" width="290" height="44" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
-        <text x="314" y="200" class="t-md s-ink">되묻기만 하다 끝난다</text>
-        <text x="314" y="216" class="t-mono s-mut">아무것도 안 남음</text>
-
-        <circle cx="606" cy="48" r="5" class="s-stop"/>
-        <circle cx="606" cy="125" r="5" class="s-stop"/>
-        <circle cx="606" cy="202" r="5" class="s-stop"/>
-        <text x="624" y="130" class="t-mono s-mut">매번 다름</text>
+        <line x1="0" y1="222" x2="790" y2="222" stroke="#d7d2c8" stroke-width="2" stroke-dasharray="8 8"/>
+        <text x="0" y="252" font-size="19" font-weight="700" fill="#c9871f">어제의 기억은 아래로 내려오지 않습니다</text>
       </svg>
-    </figure>
-    <p>
-      새 대화를 열 때마다 에이전트의 기억은 0이 된다. 지난주에 정한 규칙도, 어제 합의한 용어도 모른다.
-    </p>
-    <p>
-      프롬프트에 "이렇게 해줘"라고 적어 두는 것으로는 부족하다. 부탁은 지켜질 때도 있고 안 지켜질 때도 있는데,
-      안 지켜졌다는 걸 나중에 사람이 발견한다.
-    </p>
-  </section>
+    </div>
 
-  <!-- 2. 산출물 체인 -->
-  <section class="scene">
-    <p class="eyebrow">02 · 선로</p>
-    <h2>일을 여섯 개의 역으로 쪼갠다</h2>
-    <p>
-      역마다 파일 하나를 남기고 다음 역으로 간다. 이 파일들은 저장소에 같이 커밋되기 때문에,
-      다음 사람도 다음 에이전트도 "왜 이렇게 만들었는지"를 읽을 수 있다.
-    </p>
-    <figure>
-      <div class="fig-scroll">
-        <svg viewBox="0 0 940 230" role="img" aria-label="의도, 사양, 계획, 구현, 리뷰, 인도 여섯 단계가 선로 위의 역으로 이어진 그림. 각 역 아래에 남기는 파일 이름이 적혀 있다.">
-          <line x1="52" y1="112" x2="888" y2="112" class="s-rail" stroke-width="3"/>
-          <line x1="52" y1="121" x2="888" y2="121" class="s-rail" stroke-width="3"/>
+    <p class="note">사람이라면 한 번 알려주면 됩니다. 새 대화를 열 때마다 기억이 0이 되는 상대에게는 그게 안 통합니다.</p>
+  </div>
+</section>
 
-          <g>
-            <circle cx="60" cy="116" r="15" class="s-go"/>
-            <text x="60" y="72" text-anchor="middle" class="t-lg s-ink">의도</text>
-            <text x="60" y="90" text-anchor="middle" class="t-mono s-mut">무엇을 왜</text>
-            <text x="60" y="170" text-anchor="middle" class="t-mono s-ink">intent.md</text>
-          </g>
-          <g>
-            <circle cx="225" cy="116" r="15" class="s-go"/>
-            <text x="225" y="72" text-anchor="middle" class="t-lg s-ink">사양</text>
-            <text x="225" y="90" text-anchor="middle" class="t-mono s-mut">무엇을 만들지</text>
-            <text x="225" y="170" text-anchor="middle" class="t-mono s-ink">spec.md</text>
-          </g>
-          <g>
-            <circle cx="390" cy="116" r="15" class="s-go"/>
-            <text x="390" y="72" text-anchor="middle" class="t-lg s-ink">계획</text>
-            <text x="390" y="90" text-anchor="middle" class="t-mono s-mut">어떤 순서로</text>
-            <text x="390" y="170" text-anchor="middle" class="t-mono s-ink">plan.md</text>
-          </g>
-          <g>
-            <circle cx="555" cy="116" r="15" class="s-go"/>
-            <text x="555" y="72" text-anchor="middle" class="t-lg s-ink">구현</text>
-            <text x="555" y="90" text-anchor="middle" class="t-mono s-mut">테스트 먼저</text>
-            <text x="555" y="170" text-anchor="middle" class="t-mono s-ink">코드 · 커밋</text>
-          </g>
-          <g>
-            <circle cx="720" cy="116" r="15" class="s-go"/>
-            <text x="720" y="72" text-anchor="middle" class="t-lg s-ink">리뷰</text>
-            <text x="720" y="90" text-anchor="middle" class="t-mono s-mut">새 눈으로</text>
-            <text x="720" y="170" text-anchor="middle" class="t-mono s-ink">지적 사항 수정</text>
-          </g>
-          <g>
-            <circle cx="880" cy="116" r="15" class="s-go"/>
-            <text x="880" y="72" text-anchor="middle" class="t-lg s-ink">인도</text>
-            <text x="880" y="90" text-anchor="middle" class="t-mono s-mut">보여줄 것</text>
-            <text x="880" y="170" text-anchor="middle" class="t-mono s-ink">deliverables/</text>
-          </g>
+<section>
+  <div class="wrap">
+    <div class="step">2 · 그래서 이렇게 해봤는데</div>
+    <h2>“이렇게 해줘”라고<br>적어두면 될까요</h2>
+    <p>안내문을 써서 붙여 둡니다. 어떤 날은 지킵니다. 어떤 날은 그냥 지나갑니다.</p>
+    <p class="big">문제는 <b>지나갔다는 걸 아무도 모른다</b>는 겁니다.</p>
 
-          <text x="60" y="205" text-anchor="middle" class="t-mono s-mut">건너뛸 수 있음</text>
-          <text x="225" y="205" text-anchor="middle" class="t-mono s-mut">건너뛸 수 있음</text>
-          <text x="390" y="205" text-anchor="middle" class="t-mono s-mut">건너뛸 수 있음</text>
-          <text x="720" y="205" text-anchor="middle" class="t-mono s-mut">건너뛰면 안 됨</text>
-          <text x="880" y="205" text-anchor="middle" class="t-mono s-mut">건너뛰면 안 됨</text>
-        </svg>
-      </div>
-      <figcaption>한 줄짜리 수정에는 앞의 세 역이 필요 없다. 여러 앱을 건드리는 변경에는 전부 필요하다.</figcaption>
-    </figure>
-    <p class="aside">
-      "다 됐다"고 말할 수 있는 조건도 파일로 정해져 있다. 인도할 것이 남아 있거나 계획서의 체크박스가
-      비어 있으면 아직 끝난 게 아니다.
-    </p>
-  </section>
+    <div class="fig">
+      <svg viewBox="0 0 800 200" role="img" aria-label="같은 안내문을 세 번 줬을 때 지킴, 지킴, 어김으로 결과가 갈린다">
+        <rect x="0" y="58" width="190" height="84" rx="14" fill="#fff" stroke="#d7d2c8" stroke-width="2"/>
+        <text x="95" y="96" text-anchor="middle" font-size="19" font-weight="700" fill="#1b242e">붙여 둔 안내문</text>
+        <text x="95" y="122" text-anchor="middle" font-size="17" fill="#5d6b78">“이렇게 해주세요”</text>
 
-  <!-- 3. 계약 하나, 호스트 셋 -->
-  <section class="scene">
-    <p class="eyebrow">03 · 계약</p>
-    <h2>규칙은 한 군데에만 적는다</h2>
-    <p>
-      에이전트 도구는 여러 개고, 도구마다 설정 파일이 따로 있다. 같은 규칙을 세 군데에 적으면
-      언젠가 세 개가 서로 달라진다. 그래서 규칙의 원본은 파일 하나로 두고, 나머지는 그 원본을 따르는지 검사받는다.
-    </p>
-    <figure>
-      <div class="fig-scroll">
-        <svg viewBox="0 0 800 330" role="img" aria-label="harness.yaml 하나가 Claude 설정, Codex 훅, 커밋 훅 세 곳으로 갈라지고, 그 아래 검사 스크립트가 세 곳을 모두 대조하는 그림">
-          <rect x="270" y="16" width="260" height="58" rx="4" class="s-panel s-inkl" stroke-width="2"/>
-          <text x="400" y="40" text-anchor="middle" class="t-lg s-ink">규칙 원본 한 장</text>
-          <text x="400" y="60" text-anchor="middle" class="t-mono s-mut">.agents/harness.yaml</text>
+        <path d="M198 100 L268 52" fill="none" stroke="#9aa6b2" stroke-width="2"/>
+        <path d="M198 100 L268 100" fill="none" stroke="#9aa6b2" stroke-width="2"/>
+        <path d="M198 100 L268 148" fill="none" stroke="#9aa6b2" stroke-width="2"/>
 
-          <path d="M400 74 L400 100 M400 100 L150 100 L150 128" fill="none" class="s-rail" stroke-width="2"/>
-          <path d="M400 100 L400 128" fill="none" class="s-rail" stroke-width="2"/>
-          <path d="M400 100 L650 100 L650 128" fill="none" class="s-rail" stroke-width="2"/>
-
-          <rect x="40" y="128" width="220" height="62" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
-          <text x="150" y="152" text-anchor="middle" class="t-md s-ink">Claude Code 설정</text>
-          <text x="150" y="172" text-anchor="middle" class="t-mono s-mut">.claude/settings.json</text>
-
-          <rect x="290" y="128" width="220" height="62" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
-          <text x="400" y="152" text-anchor="middle" class="t-md s-ink">Codex 훅</text>
-          <text x="400" y="172" text-anchor="middle" class="t-mono s-mut">.codex/hooks.json</text>
-
-          <rect x="540" y="128" width="220" height="62" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
-          <text x="650" y="152" text-anchor="middle" class="t-md s-ink">커밋 직전 훅</text>
-          <text x="650" y="172" text-anchor="middle" class="t-mono s-mut">.husky/pre-commit</text>
-
-          <path d="M150 190 L150 232 M400 190 L400 232 M650 190 L650 232" fill="none" class="s-gol" stroke-width="2" stroke-dasharray="5 5"/>
-
-          <rect x="190" y="232" width="420" height="64" rx="4" class="s-panel s-gol" stroke-width="2"/>
-          <text x="400" y="258" text-anchor="middle" class="t-lg s-ink">대조 검사기</text>
-          <text x="400" y="278" text-anchor="middle" class="t-mono s-mut">원본과 세 곳이 어긋나면 실패한다</text>
-
-          <text x="400" y="318" text-anchor="middle" class="t-mono s-mut">pnpm check:harness</text>
-        </svg>
-      </div>
-      <figcaption>원본을 고치고 세 곳에 옮겨 적는 것은 사람이 한다. 옮겨 적기를 빠뜨렸는지는 검사기가 잡는다.</figcaption>
-    </figure>
-  </section>
-
-  <!-- 4. 게이트 -->
-  <section class="scene">
-    <p class="eyebrow">04 · 신호기</p>
-    <h2>지켜졌는지 묻지 않고, 막는다</h2>
-    <figure>
-      <svg viewBox="0 0 700 300" role="img" aria-label="변경 사항이 신호기를 지나며 통과하거나 정지하는 그림">
-        <rect x="16" y="122" width="150" height="52" rx="4" class="s-panel s-hair" stroke-width="1.5"/>
-        <text x="91" y="144" text-anchor="middle" class="t-md s-ink">에이전트의 변경</text>
-        <text x="91" y="162" text-anchor="middle" class="t-mono s-mut">커밋하려는 순간</text>
-
-        <line x1="166" y1="148" x2="268" y2="148" class="s-rail" stroke-width="3"/>
-
-        <rect x="268" y="108" width="120" height="80" rx="4" class="s-ground s-inkl" stroke-width="2"/>
-        <circle cx="328" cy="132" r="12" class="s-go"/>
-        <circle cx="328" cy="164" r="12" class="s-stop"/>
-        <text x="328" y="210" text-anchor="middle" class="t-mono s-mut">가드 스크립트</text>
-
-        <path d="M388 138 L470 96" fill="none" class="s-gol" stroke-width="3"/>
-        <path d="M388 158 L470 200" fill="none" class="s-stopl" stroke-width="3"/>
-
-        <rect x="470" y="68" width="216" height="58" rx="4" class="s-ground" fill-opacity="1"/>
-        <rect x="470" y="68" width="216" height="58" rx="4" class="s-gol" fill="none" stroke-width="2"/>
-        <text x="486" y="92" class="t-md s-ink">통과</text>
-        <text x="486" y="112" class="t-mono s-mut">커밋이 만들어진다</text>
-
-        <rect x="470" y="172" width="216" height="58" rx="4" class="s-ground" fill-opacity="1"/>
-        <rect x="470" y="172" width="216" height="58" rx="4" class="s-stopl" fill="none" stroke-width="2"/>
-        <text x="486" y="196" class="t-md s-ink">정지</text>
-        <text x="486" y="216" class="t-mono s-mut">exit 1 · 커밋되지 않는다</text>
+        <circle cx="292" cy="52" r="13" fill="#137a6c"/>
+        <text x="318" y="59" font-size="19" font-weight="700" fill="#1b242e">지켰다</text>
+        <circle cx="292" cy="100" r="13" fill="#137a6c"/>
+        <text x="318" y="107" font-size="19" font-weight="700" fill="#1b242e">지켰다</text>
+        <circle cx="292" cy="148" r="13" fill="#c9871f"/>
+        <text x="318" y="155" font-size="19" font-weight="700" fill="#c9871f">안 지켰다</text>
+        <text x="452" y="155" font-size="18" fill="#5d6b78">— 그런데 아무도 모릅니다</text>
       </svg>
-    </figure>
-    <p>
-      검사는 모델의 판단이 아니라 파이썬과 셸 스크립트가 한다. 모델이 기분이 좋든 나쁘든 결과가 같다.
-    </p>
-    <div class="pair">
-      <div class="panel">
-        <h3>건드리면 안 되는 파일</h3>
-        <p>자동 생성 파일처럼 손으로 고치면 안 되는 경로는 쓰려는 순간 거부된다.</p>
+    </div>
+
+    <p class="soft">두 달 뒤에 누군가 이상한 걸 발견합니다. 그때는 이미 그 위에 여러 개가 쌓여 있습니다.</p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="step">3 · 그래서 바꿨습니다</div>
+    <h2>말 대신<br>종이와 문을 둡니다</h2>
+    <p class="big" style="color:#fff">지켜달라고 <b>부탁</b>하는 대신,<br>지나갈 수 없는 <b>문</b>을 답니다.</p>
+
+    <div class="fig">
+      <svg viewBox="0 0 800 210" role="img" aria-label="왼쪽은 말로 부탁하는 방식, 오른쪽은 종이를 남기고 문으로 막는 방식">
+        <text x="0" y="34" font-size="19" font-weight="700" fill="#b9c6d2">예전</text>
+        <rect x="0" y="50" width="330" height="76" rx="14" fill="#1b3246"/>
+        <text x="165" y="84" text-anchor="middle" font-size="21" font-weight="700" fill="#8fa2b2">“이렇게 해주세요”</text>
+        <text x="165" y="110" text-anchor="middle" font-size="17" fill="#8fa2b2">지켰는지는 나중에</text>
+
+        <text x="430" y="34" font-size="19" font-weight="700" fill="#63d3c0">지금</text>
+        <rect x="430" y="50" width="160" height="76" rx="14" fill="#137a6c"/>
+        <text x="510" y="84" text-anchor="middle" font-size="21" font-weight="800" fill="#fff">종이</text>
+        <text x="510" y="110" text-anchor="middle" font-size="16" fill="#c9ece6">단계마다 남긴다</text>
+
+        <rect x="606" y="50" width="160" height="76" rx="14" fill="#c9871f"/>
+        <text x="686" y="84" text-anchor="middle" font-size="21" font-weight="800" fill="#fff">문</text>
+        <text x="686" y="110" text-anchor="middle" font-size="16" fill="#fbeacd">어기면 안 열린다</text>
+
+        <text x="0" y="182" font-size="18" fill="#b9c6d2">종이는 다음 사람이 읽습니다. 문은 사람이 아니라 기계가 지킵니다.</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="step">4 · 첫 번째 · 종이</div>
+    <h2>일을 여섯 칸으로 쪼개고<br>칸마다 한 장씩 남깁니다</h2>
+    <p>머릿속에만 있던 것을 파일로 꺼냅니다. 이 파일들은 코드와 같이 저장됩니다.</p>
+    <p class="big">그래서 <b>다음 사람</b>도 <b>내일의 신입</b>도 읽을 수 있습니다.</p>
+
+    <div class="cards">
+      <div class="card">
+        <div class="n">01</div>
+        <h3>intent.md</h3>
+        <p class="q">“무엇을, 왜 하고 싶은가?”</p>
+        <p class="stop">어떻게 만들지는 안 씁니다. 하고 싶은 것만 적어요.</p>
       </div>
-      <div class="panel">
+      <div class="card">
+        <div class="n">02</div>
+        <h3>spec.md</h3>
+        <p class="q">“이렇게 되면 된 건가요?”</p>
+        <p class="stop">다 됐다는 게 무슨 뜻인지 서로 맞추는 약속.</p>
+      </div>
+      <div class="card">
+        <div class="n">03</div>
+        <h3>plan.md</h3>
+        <p class="q">“어디부터, 어떤 순서로?”</p>
+        <p class="stop">여기서 멈추면 코드도 테스트도 아직 안 만든 상태.</p>
+      </div>
+      <div class="card">
+        <div class="n">04</div>
+        <h3>deliverables</h3>
+        <p class="q">“눈으로 보면 어떤 모습?”</p>
+        <p class="stop">목업 · 흐름도 · 구조도. 진짜 화면을 만들기 전에 그림으로 봅니다.</p>
+      </div>
+    </div>
+
+    <p class="note" style="margin-top:34px">네 장을 늘 다 만드는 건 아닙니다. 한 문장이면 설명되는 작은 일은 그냥 합니다.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="step">5 · 두 번째 · 한 장에만</div>
+    <h2>규칙은<br>한 군데에만 적습니다</h2>
+    <p>AI 도구는 여러 개고, 도구마다 설정 파일이 따로 있습니다. 같은 규칙을 세 군데에 적으면 언젠가 세 개가 서로 달라집니다.</p>
+    <p class="big">그래서 <b>원본은 한 장</b>, 나머지는 그 원본과 대조합니다.</p>
+
+    <div class="fig">
+      <svg viewBox="0 0 800 320" role="img" aria-label="규칙 원본 한 장이 도구 세 개의 설정으로 갈라지고, 대조 검사기가 세 곳을 원본과 맞춰 본다">
+        <rect x="265" y="10" width="270" height="74" rx="16" fill="#137a6c"/>
+        <text x="400" y="44" text-anchor="middle" font-size="22" font-weight="800" fill="#fff">규칙 원본 한 장</text>
+        <text x="400" y="70" text-anchor="middle" font-size="16" fill="#c9ece6" font-family="ui-monospace, Menlo, monospace">harness.yaml</text>
+
+        <path d="M400 84 L400 112 L140 112 L140 140" fill="none" stroke="#9aa6b2" stroke-width="2"/>
+        <path d="M400 112 L400 140" fill="none" stroke="#9aa6b2" stroke-width="2"/>
+        <path d="M400 112 L660 112 L660 140" fill="none" stroke="#9aa6b2" stroke-width="2"/>
+
+        <rect x="30" y="140" width="220" height="72" rx="14" fill="#fff" stroke="#d7d2c8" stroke-width="2"/>
+        <text x="140" y="176" text-anchor="middle" font-size="20" font-weight="700" fill="#1b242e">도구 A 설정</text>
+        <text x="140" y="200" text-anchor="middle" font-size="16" fill="#5d6b78">Claude Code</text>
+
+        <rect x="290" y="140" width="220" height="72" rx="14" fill="#fff" stroke="#d7d2c8" stroke-width="2"/>
+        <text x="400" y="176" text-anchor="middle" font-size="20" font-weight="700" fill="#1b242e">도구 B 설정</text>
+        <text x="400" y="200" text-anchor="middle" font-size="16" fill="#5d6b78">Codex</text>
+
+        <rect x="550" y="140" width="220" height="72" rx="14" fill="#fff" stroke="#d7d2c8" stroke-width="2"/>
+        <text x="660" y="176" text-anchor="middle" font-size="20" font-weight="700" fill="#1b242e">저장 직전 검사</text>
+        <text x="660" y="200" text-anchor="middle" font-size="16" fill="#5d6b78">커밋 훅</text>
+
+        <path d="M140 212 L140 248 M400 212 L400 248 M660 212 L660 248" fill="none" stroke="#137a6c" stroke-width="2" stroke-dasharray="6 6"/>
+
+        <rect x="180" y="248" width="440" height="62" rx="14" fill="#e2f0ed" stroke="#137a6c" stroke-width="2"/>
+        <text x="400" y="278" text-anchor="middle" font-size="20" font-weight="800" fill="#137a6c">대조 검사기</text>
+        <text x="400" y="300" text-anchor="middle" font-size="16" fill="#5d6b78">한 곳이라도 어긋나면 실패합니다</text>
+      </svg>
+    </div>
+
+    <p class="soft">옮겨 적는 건 사람이 합니다. 옮겨 적기를 빠뜨렸는지는 기계가 잡습니다.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="step">6 · 제일 중요한 것</div>
+    <h2>값어치는<br>‘그 자리에서 막힌다’에<br>있습니다</h2>
+    <p>어긴 것을 나중에 사람이 발견하는 게 아니라, 저장되기 전에 문이 안 열립니다.</p>
+
+    <div class="fig">
+      <svg viewBox="0 0 800 200" role="img" aria-label="변경 사항이 문 앞에서 통과하거나 막히는 그림">
+        <rect x="0" y="66" width="196" height="70" rx="14" fill="#1b242e"/>
+        <text x="98" y="100" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">방금 만든 변경</text>
+        <text x="98" y="124" text-anchor="middle" font-size="16" fill="#9aa6b2">저장하려는 순간</text>
+
+        <line x1="226" y1="24" x2="226" y2="180" stroke="#c9871f" stroke-width="6" stroke-linecap="round"/>
+        <text x="226" y="14" text-anchor="middle" font-size="17" font-weight="800" fill="#c9871f">문</text>
+
+        <rect x="264" y="26" width="330" height="62" rx="14" fill="#137a6c"/>
+        <text x="288" y="55" font-size="20" font-weight="800" fill="#fff">규칙을 지켰다</text>
+        <text x="288" y="78" font-size="16" fill="#c9ece6">그대로 저장됩니다</text>
+
+        <rect x="264" y="112" width="330" height="62" rx="14" fill="#faefdc" stroke="#c9871f" stroke-width="2"/>
+        <text x="288" y="141" font-size="20" font-weight="800" fill="#1b242e">규칙을 어겼다</text>
+        <text x="288" y="164" font-size="16" fill="#5d6b78">저장되지 않고, 무엇이 문제인지 알려줍니다</text>
+      </svg>
+    </div>
+
+    <p class="kicker">막는 건 AI가 아니라<br>작은 검사 프로그램입니다.</p>
+    <p class="soft">그래서 결과가 늘 같습니다. 모델이 그날 어떻게 판단하든 상관이 없습니다.</p>
+
+    <div class="cards">
+      <div class="card">
+        <div class="n">막는 것 01</div>
+        <h3>손대면 안 되는 파일</h3>
+        <p class="q">기계가 만들어 주는 파일을 손으로 고치는 것</p>
+      </div>
+      <div class="card">
+        <div class="n">막는 것 02</div>
         <h3>남의 컴퓨터 경로</h3>
-        <p>문서나 설정에 특정 사용자의 절대 경로가 섞여 들어가면 잡아낸다.</p>
+        <p class="q">내 컴퓨터에서만 되는 주소가 문서에 섞여 들어가는 것</p>
       </div>
-      <div class="panel">
+      <div class="card">
+        <div class="n">막는 것 03</div>
         <h3>빠진 계획서</h3>
-        <p>여러 앱을 한꺼번에 건드리는 변경에 계획서가 없으면 경고한다.</p>
+        <p class="q">여러 군데를 한꺼번에 고치면서 계획을 안 남기는 것</p>
       </div>
     </div>
-    <p class="aside">
-      그리고 한 가지가 더 있다. 규칙이 <em>적혀 있는지</em>가 아니라 에이전트가 <em>실제로 지키는지</em>를
-      확인하는 시험이다. 진짜 모델을 불러서 시켜 보고 결과를 채점한다. 모델 사용량을 쓰기 때문에
-      평소 테스트와는 따로 돌린다.
-    </p>
-  </section>
+  </div>
+</section>
 
-  <!-- 5. 스킬 -->
-  <section class="scene">
-    <p class="eyebrow">05 · 스킬</p>
-    <h2>남이 만든 좋은 것은 그대로 두고 얇게 감싼다</h2>
-    <p>
-      "요구사항 캐묻기", "사양서로 정리하기", "테스트 먼저 구현하기" 같은 작업 방식은 이미 공개된 좋은
-      스킬들이 있다. 이 저장소는 그것들을 고쳐 쓰지 않고 원본 그대로 가져온 뒤, 얇은 껍데기 하나를 씌운다.
-      껍데기가 이 프로젝트의 폴더 규칙과 언어를 알려주는 역할을 한다.
-    </p>
-    <figure>
-      <svg viewBox="0 0 700 200" role="img" aria-label="바깥의 얇은 어댑터가 안쪽의 원본 스킬을 감싸고 있는 그림">
-        <rect x="60" y="30" width="300" height="140" rx="6" class="s-panel s-gol" stroke-width="2"/>
-        <text x="78" y="56" class="t-md s-ink">어댑터 (이 저장소 것)</text>
-        <text x="78" y="74" class="t-mono s-mut">폴더 규칙 · 출력 언어 · 경로</text>
+<section>
+  <div class="wrap">
+    <div class="step">7 · 남의 좋은 것</div>
+    <h2>잘 만들어진 건<br>고치지 않고 그대로 씁니다</h2>
+    <p>“요구사항 캐묻기”, “테스트 먼저 만들기” 같은 일하는 방식은 이미 공개된 좋은 것들이 있습니다.</p>
+    <p>가져다가 손대기 시작하면, 원본이 좋아져도 다시 받을 수 없습니다. 그래서 원본은 그대로 두고 얇은 껍데기만 하나 씌웁니다. 껍데기가 “우리 폴더는 여기, 우리 말은 한국어”를 알려줍니다.</p>
+    <p class="note">원본이 좋아지면 다시 받기만 하면 됩니다. 고쳐 놓은 게 없으니 부딪힐 일도 없습니다.</p>
+  </div>
+</section>
 
-        <rect x="96" y="92" width="228" height="60" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
-        <text x="210" y="118" text-anchor="middle" class="t-md s-ink">원본 스킬</text>
-        <text x="210" y="136" text-anchor="middle" class="t-mono s-mut">손대지 않음 · 위에서 당겨 받음</text>
+<section>
+  <div class="wrap">
+    <div class="step">8 · 그래서 뭘 하면 되나</div>
+    <h2>새 프로젝트는<br>여기서 시작합니다</h2>
+    <p>이 저장소는 틀입니다. 복사해서 프로젝트 이름만 넣으면 위의 것이 전부 따라옵니다.</p>
 
-        <path d="M360 100 L432 100" fill="none" class="s-rail" stroke-width="2"/>
-        <polygon points="434,100 424,94 424,106" class="s-mut"/>
+    <p class="cmdbox">sh scripts/harness/init-template.sh --project-name &lt;이름&gt; --prefix &lt;줄임말&gt;
+pnpm install
+pnpm test:harness</p>
 
-        <rect x="444" y="66" width="240" height="68" rx="4" class="s-ground s-hair" stroke-width="1.5"/>
-        <text x="564" y="92" text-anchor="middle" class="t-md s-ink">메뉴에 보이는 것은</text>
-        <text x="564" y="112" text-anchor="middle" class="t-mono s-mut">어댑터 하나뿐</text>
-      </svg>
-    </figure>
-    <p>
-      그래서 원본이 좋아지면 다시 당겨 받기만 하면 된다. 내가 고쳐 놓은 것이 없으니 충돌하지 않는다.
-    </p>
-    <div class="tablewrap">
-      <table>
-        <thead>
-          <tr><th>이 저장소가 부르는 이름</th><th>실제로 하는 일</th></tr>
-        </thead>
-        <tbody>
-          <tr><td><code>-intent</code></td><td>무엇을 왜 만드는지 캐묻는다</td></tr>
-          <tr><td><code>-spec</code></td><td>대화를 사양서 한 장으로 정리한다</td></tr>
-          <tr><td><code>-tickets</code></td><td>사양서를 작업 단위로 쪼갠다</td></tr>
-          <tr><td><code>-implement</code></td><td>테스트를 먼저 놓고 구현한다</td></tr>
-          <tr><td><code>-ui-review</code></td><td>바뀐 화면을 눈으로 검토한다</td></tr>
-        </tbody>
-      </table>
+    <p>마지막 줄이 통과하면 문이 제대로 달렸다는 뜻입니다.</p>
+    <p class="note">그다음부터는 일을 시작할 때 <b>의도</b>부터 적습니다. 무엇을, 왜. 어떻게는 그다음입니다.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="step">9 · 전체 과정</div>
+    <h2>처음부터 끝까지,<br>한 단계씩</h2>
+    <p>명령어 한 줄이 한 단계입니다. 각 단계가 무엇을 남기는지만 알면 됩니다.</p>
+
+    <div class="flow">
+      <div class="fstep">
+        <div class="cmd">/의도</div>
+        <p class="what">하고 싶은 걸 물어봅니다. 사실 확인은 알아서 찾아봅니다.</p>
+        <p class="out">남는 것 · <b>intent.md</b> — 무엇을, 왜. 어떻게는 아직 안 씁니다.</p>
+      </div>
+
+      <div class="fstep">
+        <div class="cmd">/사양</div>
+        <p class="what">합의된 의도를 “이렇게 되면 된 것” 목록으로 바꿉니다.</p>
+        <p class="out">남는 것 · <b>spec.md</b> — 끝났다는 게 무슨 뜻인지 서로 맞춘 약속.</p>
+      </div>
+
+      <div class="fstep">
+        <div class="cmd plain">계획 모드</div>
+        <p class="what">건드릴 파일이 여럿이면 순서부터 정합니다.</p>
+        <p class="out">남는 것 · <b>plan.md</b> — 어디를, 어떤 순서로, 언제 끝난 건지.</p>
+      </div>
+
+      <div class="fstep stop">
+        <div class="cmd plain">필요하면 그림도</div>
+        <p class="what">화면이 걸린 일이면 목업·흐름도·구조도를 같이 냅니다.</p>
+        <p class="out">남는 것 · <b>deliverables</b> — 눈으로 보고 판단할 수 있는 그림.</p>
+      </div>
+
+      <div class="stopline">
+        <b>여기가 멈추는 자리입니다.</b> 이 상태로 검토를 받습니다.
+        아니라는 답이 나오면, 아래 것들은 아예 안 만듭니다.
+      </div>
+
+      <div class="fstep">
+        <div class="cmd">/구현</div>
+        <p class="what">판단이 선 다음에 실제로 만듭니다. 테스트를 먼저 쓰고 통과시킵니다.</p>
+        <p class="out">남는 것 · 코드와 저장 기록.</p>
+      </div>
+
+      <div class="fstep">
+        <div class="cmd">/리뷰</div>
+        <p class="what">새 대화에서 아무 기억 없이, 계획·약속과 코드를 맞대 봅니다.</p>
+        <p class="out">남는 것 · 고쳐야 할 목록.</p>
+      </div>
+
+      <div class="fstep">
+        <div class="cmd">/화면 리뷰</div>
+        <p class="what">화면이 바뀌었으면 실제로 띄워서 눈으로 봅니다.</p>
+        <p class="out">남는 것 · 화면 그림과 지적 사항.</p>
+      </div>
     </div>
-  </section>
 
-  <!-- closing -->
-  <section class="closing">
-    <p class="eyebrow">한 문장으로</p>
-    <p class="big">에이전트에게 규칙을 부탁하는 대신,<br>규칙을 파일로 못 박고 스크립트가 검사하게 한다.</p>
-    <ul>
-      <li>일은 여섯 개의 역을 지나며, 역마다 파일을 하나씩 남긴다.</li>
-      <li>규칙의 원본은 한 장이고, 도구별 설정은 그 원본과 대조된다.</li>
-      <li>어긴 변경은 커밋 직전에 멈춘다. 사람이 나중에 발견하는 게 아니다.</li>
-      <li>작업 방식 스킬은 원본 그대로 두고 얇게 감싸서, 위에서 좋아지면 그대로 받는다.</li>
-    </ul>
-  </section>
+    <p class="note" style="margin-top:30px">명령어의 실제 이름은 프로젝트마다 다릅니다. 틀을 복사할 때 넣은 줄임말이 앞에 붙습니다.</p>
+    <p class="soft" style="margin-top:20px">작은 일은 이 단계를 다 밟지 않습니다. 한 문장으로 설명되는 변경은 그냥 고치면 됩니다.</p>
+  </div>
+</section>
 
-</div>
+<footer>
+  <div class="wrap">AI SDLC 하네스 · 쉬운 설명서</div>
+</footer>
+
+</body>
+</html>
