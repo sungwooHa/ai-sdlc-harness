@@ -1,0 +1,64 @@
+---
+name: __PREFIX__-implement
+description: Implement an approved docs/changes/<YYMMDD_NN>-<slug>/plan.md (or one ticket from its `## 티켓` section) test-first, using this repo's test ladder, then review against the plan. Use when the user says "구현해", "플랜대로 만들어", "implement", "이 티켓 해", or hands you a plan/spec to build. Wraps the vendored implement + tdd skills.
+disable-model-invocation: true
+argument-hint: "[폴더명] [티켓 제목] — 예 260910_00-<slug>; 생략하면 docs/changes/ 의 최근 plan.md 를 쓴다"
+---
+
+Project adapter around the vendored `implement` skill.
+
+Before calling it:
+
+1. Resolve the change folder (`$0` = the folder name `<YYMMDD_NN>-<slug>`, `$1` = ticket title;
+   without `$0`, the most recent `docs/changes/<YYMMDD_NN>-<slug>/` with a `plan.md`). Most recent =
+   the folder whose relevant document was added by the newest commit
+   (`git log -1 --format=%ct -- <path>`); the folder id sorts chronologically, so break a tie with
+   the larger id; if candidates are still ambiguous, ask the user. Read `plan.md` — its file order,
+   test plan, and Definition of Done are the contract — and `spec.md` for the user stories. If a
+   ticket title is given, scope to that ticket row's one-line scope (한 줄 범위) in the `## 티켓`
+   table only. If there is no plan and the change touches several files, stop and ask for plan mode
+   first; do not invent a plan inside this skill.
+2. Read `apps/<app>/AGENTS.md` for every app the plan touches.
+
+Then call the Skill tool with `implement` and apply these overrides:
+
+- TDD at the seams the plan names (`/tdd`); do not open new seams without telling the user.
+- Test ladder from `AGENTS.md`: one file → sibling directory → whole suite once before commit.
+  Paste the commands and results, not a summary.
+- Never edit a path listed in `.agents/harness.yaml` `protected_paths` by hand.
+- Commits follow the repo's commit convention (`AGENTS.md` § Git); one commit per plan step where
+  practical.
+- Review: run `/review-since <branch-base>` in a fresh subagent with
+  `docs/changes/<YYMMDD_NN>-<slug>/spec.md` as the spec source; if the diff touches
+  `__UI_SOURCE_GLOB__`, also run `/__PREFIX__-ui-review <branch-base>` — unless the approved
+  `plan.md` states `시각 변경 없음`, in which case skip it and say so in the final report
+  (`artifact_chain.ui_review_waiver`). Fix blockers and majors, then tick the Definition of Done in
+  `plan.md`.
+- When a ticket's implementation is done, tick its checkbox in the `## 티켓` table of `plan.md`.
+
+Deliverables (`artifact_chain.deliverables`): after review passes and before the final report,
+generate the four PR deliverables under `docs/changes/<YYMMDD_NN>-<slug>/deliverables/`, in parallel
+subagents where possible:
+
+- `mockup.html` — part 1 static wireframe, part 2 real-render walkthrough: screenshots in feature
+  order, each numbered with 무엇을 했나 / 무엇이 보이나(확인 포인트) / 관련 US, images embedded as
+  base64 (relative paths do not render for the reader). Capture conditions go in the footer; keep no
+  screenshot folder. If no runnable environment exists, say so in the footer and ship part 1 only.
+- `flow.html` — usage flow diagram; `architecture.html` — system structure with the changed parts
+  highlighted. Budget a diagram before drawing it (split rather than iterate) and delete any
+  temporary render artifacts before committing.
+- `설명서(eli5).html` — picture-first standalone HTML (inline SVG analogy, "누가 무엇을 보나" table,
+  3-box mechanism, checklist). Not Markdown.
+
+Exactly those four files, no `/Users/...` paths, no external URLs. Tick the deliverables row in
+`plan.md` Definition of Done.
+
+Knowledge: `docs/changes/<YYMMDD_NN>-<slug>/` is the record of this change and is not edited
+afterwards. Before finishing, ask one question — did this change produce something the next agent
+needs beyond the code (a decision, a non-obvious constraint, an operational fact)? If yes and it is
+a rule, add one line to the relevant `apps/<app>/AGENTS.md`; otherwise say "지식 승격 없음"
+explicitly.
+
+Finish by listing which plan rows are done, which are deferred (and why), the exact test commands
+that passed, whether `/__PREFIX__-ui-review` ran or was waived, the deliverables paths, and the
+knowledge decision above.

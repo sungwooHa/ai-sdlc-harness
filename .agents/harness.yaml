@@ -1,0 +1,250 @@
+{
+  "version": 2,
+  "format": "json-compatible-yaml",
+  "description": "Machine-readable contract for the __PROJECT_NAME__ agent development harness (AI-native SDLC layout).",
+  "layers": {
+    "always_on": [
+      "AGENTS.md",
+      "CLAUDE.md"
+    ],
+    "per_app": [
+      "apps/__APP__/AGENTS.md"
+    ],
+    "on_demand": ".agents/skills",
+    "deterministic": [
+      ".claude/settings.json",
+      ".codex/hooks.json",
+      ".husky/pre-commit"
+    ],
+    "artifacts": "docs/changes",
+    "evals": ".claude/evals",
+    "subagents": ".claude/agents"
+  },
+  "always_on_max_lines": 120,
+  "per_app_max_lines": 80,
+  "evals": {
+    "description": "Behavioural regression cases for the harness itself, run through `claude -p` (uses model quota; not part of test:harness). Run after changing AGENTS.md, apps/*/AGENTS.md, .agents/**, .claude/**, or scripts/*guard*.",
+    "cases": ".claude/evals/cases.jsonl",
+    "runner": "scripts/harness/run-evals.py",
+    "readme": ".claude/evals/README.md",
+    "run_command": "__PACKAGE_MANAGER__ evals:harness"
+  },
+  "artifact_chain": {
+    "root": "docs/changes",
+    "folder_pattern": "<YYMMDD_NN>-<slug>",
+    "templates_dir": "docs/changes/_templates",
+    "documents": [
+      "intent.md",
+      "spec.md",
+      "plan.md"
+    ],
+    "review_gate": "intent.md and spec.md are shown in full in the conversation and confirmed by the user before they are committed; the adapters enforce it.",
+    "ui_review_waiver": "/__PREFIX__-ui-review is required for a diff under __UI_SOURCE_GLOB__ unless the approved plan.md states 시각 변경 없음 (no visual change); the implement adapter records the waiver in its final report.",
+    "deliverables": {
+      "dir": "deliverables",
+      "files": [
+        "mockup.html",
+        "flow.html",
+        "architecture.html",
+        "설명서(eli5).html"
+      ],
+      "rule": "Before /__PREFIX__-implement reports completion, the four PR deliverables are generated under docs/changes/<YYMMDD_NN>-<slug>/deliverables/ and ticked in plan.md Definition of Done; no screenshot folder, no absolute paths, no external URLs."
+    }
+  },
+  "documentation_layout": {
+    "active_roots": [
+      "docs/standards",
+      "docs/changes",
+      "docs/agents"
+    ],
+    "retired_roots": [],
+    "standards_root_files": [
+      "AGENT_HARNESS.md"
+    ],
+    "tracker_config": "docs/agents/issue-tracker.md"
+  },
+  "local_artifacts": {
+    "description": "Local agent runtime state is not part of the harness surface and must not be scanned as repository policy.",
+    "scan_excluded_paths": [
+      ".claude/skills/.omc/**",
+      ".codex/worktrees/**",
+      ".claude/worktrees/**",
+      ".serena/**"
+    ],
+    "claude_skill_symlink_exemptions": [
+      ".claude/skills/.omc"
+    ]
+  },
+  "skills": {
+    "root": ".agents/skills",
+    "claude_mirror": ".claude/skills",
+    "mirror_mode": "symlink",
+    "vendored": [
+      {
+        "source": "github.com/mattpocock/skills",
+        "license": "MIT",
+        "skills": [
+          "grilling",
+          "grill-me",
+          "grill-with-docs",
+          "domain-modeling",
+          "to-spec",
+          "to-tickets",
+          "implement",
+          "tdd",
+          {
+            "name": "code-review",
+            "as": "review-since",
+            "reason": "Upstream name collides with the Claude Code built-in /code-review; this one is the two-axis (standards + spec) review the artifact chain uses."
+          },
+          "diagnosing-bugs",
+          "prototype",
+          "writing-for-agents",
+          "handoff"
+        ],
+        "update_command": "python3 scripts/harness/vendor-skills.py --source mattpocock/skills"
+      },
+      {
+        "source": "github.com/vercel-labs/agent-skills",
+        "license": "MIT",
+        "skills": [
+          "web-design-guidelines"
+        ],
+        "reason": "Web Interface Guidelines code review (accessibility, focus, forms, animation, typography, dark mode); fetches the rule set from vercel-labs/web-interface-guidelines at run time. Reached through __PREFIX__-ui-review.",
+        "update_command": "python3 scripts/harness/vendor-skills.py --source vercel-labs/agent-skills"
+      },
+      {
+        "source": "github.com/emilkowalski/skills",
+        "license": "MIT",
+        "skills": [
+          "review-animations",
+          "animation-vocabulary"
+        ],
+        "reason": "Interaction/motion audit for UI work. Reached through __PREFIX__-ui-review.",
+        "update_command": "python3 scripts/harness/vendor-skills.py --source emilkowalski/skills"
+      }
+    ],
+    "adapters": {
+      "description": "Project skills that wrap a vendored skill with this repo's change-folder convention, paths, and language. Adapter-mapped vendored skills carry `user-invocable: false` (hidden from the slash menu, callable by the adapter through the Skill tool); vendor-skills.py rewrites an upstream `disable-model-invocation: true` on import and check-agent-harness.py fails when one survives. Users and AGENTS.md route through the adapter.",
+      "map": {
+        "__PREFIX__-intent": "grilling",
+        "__PREFIX__-spec": "to-spec",
+        "__PREFIX__-tickets": "to-tickets",
+        "__PREFIX__-implement": "implement",
+        "__PREFIX__-ui-review": "web-design-guidelines"
+      }
+    },
+    "disabled": []
+  },
+  "host_adapters": {
+    "policy": {
+      "shared_policy_entrypoint": "AGENTS.md",
+      "claude_entrypoint": "CLAUDE.md",
+      "claude_entrypoint_must_import": "@AGENTS.md",
+      "per_app_claude_mirror": "symlink CLAUDE.md -> AGENTS.md"
+    },
+    "claude": {
+      "required_files": [
+        "CLAUDE.md",
+        ".claude/settings.json"
+      ],
+      "absolute_path_scan_files": [
+        ".claude/settings.json"
+      ]
+    },
+    "codex": {
+      "required_files": [
+        ".codex/config.toml",
+        ".codex/hooks.json",
+        ".codex/rules/commit-convention.mdc"
+      ],
+      "absolute_path_scan_files": [
+        ".codex/config.toml",
+        ".codex/hooks.json"
+      ]
+    }
+  },
+  "protected_paths": [
+    {
+      "id": "lockfiles",
+      "globs": [
+        "pnpm-lock.yaml"
+      ],
+      "reason": "Lockfiles are produced by the package manager.",
+      "instead": "Run __PACKAGE_MANAGER__ install."
+    }
+  ],
+  "protected_paths_examples": [
+    {
+      "id": "generated-sources",
+      "globs": [
+        "packages/**/*.generated.ts"
+      ],
+      "reason": "Example: generated from a source of truth; hand edits are overwritten.",
+      "instead": "Edit the source and run the generator. Move this entry into protected_paths to activate it."
+    }
+  ],
+  "shared_hook_intents": [
+    {
+      "id": "harness_fast_guard_stop",
+      "event": "Stop",
+      "description": "Fast harness guard on each agent host: docs outside active roots and user-specific absolute paths. Warns when husky is not wired.",
+      "required_scripts": [
+        "scripts/agent-harness-fast-guard.py"
+      ],
+      "host_files": {
+        "claude": ".claude/settings.json",
+        "codex": ".codex/hooks.json"
+      }
+    },
+    {
+      "id": "husky_shim_sessionstart",
+      "event": "SessionStart",
+      "description": "Write minimal .husky/_ shims when install has not run in this checkout (fresh clone, linked worktree), so pre-commit gates are live before the first commit. An absolute core.hooksPath that resolves to this repo's .husky/_ is normalized back to the relative form husky writes, so every worktree runs its own hook files.",
+      "required_scripts": [
+        "scripts/harness/ensure-husky.sh"
+      ],
+      "host_files": {
+        "claude": ".claude/settings.json"
+      }
+    },
+    {
+      "id": "protected_paths_pretooluse",
+      "event": "PreToolUse",
+      "description": "Block agent edits to files declared in protected_paths — Edit/Write/MultiEdit by file_path, and Bash commands that write to a protected path (heuristic; a pre-commit gate is the second fence).",
+      "required_scripts": [
+        "scripts/protected-paths-guard.py"
+      ],
+      "host_files": {
+        "claude": ".claude/settings.json"
+      }
+    },
+    {
+      "id": "harness_fast_guard_precommit",
+      "event": "pre-commit",
+      "description": "Same fast guard at commit time, over the staged files only.",
+      "required_scripts": [
+        "scripts/agent-harness-fast-guard.py"
+      ],
+      "host_files": {
+        "husky": ".husky/pre-commit"
+      }
+    }
+  ],
+  "stale_project_names": [
+    "__PROJECT_NAME__-old"
+  ],
+  "ci": {
+    "required_package_scripts": [
+      "check:harness",
+      "check:harness:fast",
+      "check:plan",
+      "test:harness",
+      "evals:harness"
+    ],
+    "pipeline_file": null,
+    "recommended_pipeline_substrings": [
+      "scripts/check-agent-harness.py --format text"
+    ]
+  }
+}

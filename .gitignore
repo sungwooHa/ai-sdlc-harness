@@ -1,0 +1,16 @@
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+dist/
+build/
+.DS_Store
+
+# husky runtime shims (written by install / scripts/harness/ensure-husky.sh)
+.husky/_/
+
+# local agent runtime state (declared in .agents/harness.yaml local_artifacts)
+.claude/skills/.omc/
+.claude/worktrees/
+.codex/worktrees/
+.serena/

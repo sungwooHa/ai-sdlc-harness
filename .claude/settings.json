@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/scripts/harness/ensure-husky.sh --quiet"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agent-harness-fast-guard.py --repo-root \"$CLAUDE_PROJECT_DIR\" --quiet-unless-relevant"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/protected-paths-guard.py --repo-root \"$CLAUDE_PROJECT_DIR\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/protected-paths-guard.py --repo-root \"$CLAUDE_PROJECT_DIR\""
+          }
+        ]
+      }
+    ]
+  }
+}

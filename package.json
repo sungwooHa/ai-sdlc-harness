@@ -1,0 +1,21 @@
+{
+  "name": "__PROJECT_NAME__",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=__NODE_VERSION__"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "check:harness": "python3 scripts/check-agent-harness.py --format text",
+    "check:harness:json": "python3 scripts/check-agent-harness.py --format json",
+    "check:harness:fast": "python3 scripts/agent-harness-fast-guard.py",
+    "check:plan": "bash scripts/harness/check-plan-artifact.sh",
+    "evals:harness": "python3 scripts/harness/run-evals.py",
+    "test:fast-guard": "python3 scripts/test/agent-harness-fast-guard.test.py",
+    "test:harness": "pnpm check:harness && python3 scripts/test/harness-local-artifacts.test.py && python3 scripts/test/check-agent-harness.test.py && python3 scripts/test/vendor-skills.test.py && python3 scripts/test/protected-paths-guard.test.py && bash scripts/test/ensure-husky.test.sh && bash scripts/test/check-plan-artifact.test.sh && pnpm test:fast-guard"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# Each line is one gate. Escape hatch for every gate: git commit --no-verify (emergencies only).
+
+# Agent harness fast guard — docs outside the active roots declared in .agents/harness.yaml,
+# and user-specific absolute paths, blocked just before the commit.
+python3 "$(git rev-parse --show-toplevel)/scripts/agent-harness-fast-guard.py" --staged
+
+# Add project gates below, one per line, each with a comment saying what it blocks and how to
+# turn it off. Declare it in .agents/harness.yaml shared_hook_intents so the harness check
+# fails when it is removed from here. Example:
+# "$(git rev-parse --show-toplevel)/scripts/lint-changed.sh"
