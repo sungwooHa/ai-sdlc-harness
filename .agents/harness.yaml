@@ -16,7 +16,7 @@
       ".codex/hooks.json",
       ".husky/pre-commit"
     ],
-    "artifacts": "docs/changes",
+    "artifacts": "docs/changes (local-only working folder; history lives on the PR)",
     "evals": ".claude/evals",
     "subagents": ".claude/agents"
   },
@@ -46,9 +46,93 @@
         "mockup.html",
         "flow.html",
         "architecture.html",
-        "설명서(eli5).html"
+        "설명서(eli7).html"
       ],
-      "rule": "Before /__PREFIX__-implement reports completion, the four PR deliverables are generated under docs/changes/<YYMMDD_NN>-<slug>/deliverables/ and ticked in plan.md Definition of Done; no screenshot folder, no absolute paths, no external URLs."
+      "rule": "Before /__PREFIX__-implement reports completion, every deliverable whose required_when matches the change is generated under <change folder>/deliverables/ (local, not committed) and attached to the PR; pr.md 그림 names them. No external hosting, no absolute paths, no external URLs. Presence next to pr.md is enforced at Stop by scripts/pr-body-gate.py; attachment to the PR is the reviewer's check (CI cannot read the PR body without a token).",
+      "ui_glob": "__UI_SOURCE_GLOB__",
+      "required_when": {
+        "설명서(eli7).html": "plan-scale change (two or more apps/* or any packages/*) or ui path (__UI_SOURCE_GLOB__) — the reviewer's low-load explainer",
+        "mockup.html": "ui path",
+        "flow.html": "ui path",
+        "architecture.html": "ui path"
+      }
+    },
+    "history_policy": "The change folder is a local working area, gitignored except README.md and _templates/. Nothing under docs/changes/<YYMMDD_NN>-<slug>/ is committed; the PR description (from _templates/pr.md) and PR attachments carry the history. The repo keeps rules only.",
+    "plan_gate": {
+      "base": "origin/__INTEGRATION_BRANCH__",
+      "evidence": "commit trailer `Plan-Ref: <YYMMDD_NN>-<slug>` on at least one commit in the PR range",
+      "rule": "A PR that touches more than one app or any packages/* contract must carry a Plan-Ref trailer; the plan itself is pasted into the PR description. CI check: scripts/harness/check-plan-artifact.sh (warn, PLAN_GATE=enforce to block)."
+    },
+    "pr_body": {
+      "template": "docs/changes/_templates/pr.md",
+      "shape": "one-sentence title (who · what · gains) → Plan-Ref → 그림 (attached explainer) → 세 상자 (≤3 rows: 무엇이 바뀌었나 | 그래서 | 확인은) → 볼 곳 (≤3 files, one reason each) → 증거 (fenced, ≤10 lines)",
+      "max_lines": 30,
+      "max_evidence_lines": 10,
+      "max_title_chars": 60,
+      "max_box_rows": 3,
+      "max_look_items": 3,
+      "required_headings": [
+        "## 그림",
+        "## 세 상자",
+        "## 볼 곳",
+        "## 증거"
+      ],
+      "rule": "/__PREFIX__-implement fills the template into <change folder>/pr.md before the completion report; the developer pastes it as the PR description. Enforced by scripts/pr-body-gate.py (hook intent pr_body_gate): Write of a pr.md that breaks the shape is refused, and Stop is blocked while a pr.md touched in the session breaks it or lacks a required deliverable."
+    }
+  },
+  "question_gate": {
+    "description": "Questions to the user in the Intent / Spec / Plan stages go through AskUserQuestion only: capped per round, header limited to the stage's categories, recommended option first plus at least two real alternatives (min_options 3). Enforced by scripts/question-gate.py (hook intent question_gate), not by prose.",
+    "max_per_round": 4,
+    "min_options": 3,
+    "recommended_suffix": [
+      "(추천)",
+      "(Recommended)"
+    ],
+    "exit_triggers": [
+      "/__PREFIX__-implement",
+      "ExitPlanMode"
+    ],
+    "stages": {
+      "intent": {
+        "triggers": [
+          "/__PREFIX__-intent"
+        ],
+        "headers": [
+          "문제",
+          "결과",
+          "가치",
+          "제약",
+          "비범위",
+          "이름"
+        ],
+        "defer": "intent.md 열린 질문(권장 답 포함) → /__PREFIX__-spec"
+      },
+      "spec": {
+        "triggers": [
+          "/__PREFIX__-spec"
+        ],
+        "headers": [
+          "해법",
+          "스토리",
+          "구현",
+          "테스트",
+          "우려",
+          "비범위"
+        ],
+        "defer": "spec.md Flagged Concerns → plan"
+      },
+      "plan": {
+        "triggers": [
+          "EnterPlanMode"
+        ],
+        "headers": [
+          "변경 순서",
+          "테스트",
+          "리스크",
+          "완료 증거"
+        ],
+        "defer": "plan.md 리스크와 완화"
+      }
     }
   },
   "documentation_layout": {
@@ -57,9 +141,21 @@
       "docs/changes",
       "docs/agents"
     ],
+    "local_only_roots": {
+      "description": "Execution history that must never be committed: the harness keeps rules, the PR keeps history. Globs are matched against staged/changed paths by scripts/agent-harness-fast-guard.py (pre-commit and CI) and refused.",
+      "globs": [
+        "docs/changes/*/**"
+      ],
+      "allow": [
+        "docs/changes/README.md",
+        "docs/changes/_templates/**"
+      ]
+    },
     "retired_roots": [],
     "standards_root_files": [
-      "AGENT_HARNESS.md"
+      "AGENT_HARNESS.md",
+      "HARNESS_PRINCIPLES.md",
+      "eli7-harness.html"
     ],
     "tracker_config": "docs/agents/issue-tracker.md"
   },
@@ -228,6 +324,28 @@
       ],
       "host_files": {
         "husky": ".husky/pre-commit"
+      }
+    },
+    {
+      "id": "question_gate",
+      "event": "UserPromptSubmit|PreToolUse|Stop",
+      "description": "Selectable-question gate for Intent/Spec/Plan: arms the stage on /__PREFIX__-intent, /__PREFIX__-spec, EnterPlanMode; validates every AskUserQuestion round (max_per_round, stage headers, recommended option first, min_options, exit 2 on violation); blocks a Stop whose last assistant text is a free-text question round. Config: question_gate.",
+      "required_scripts": [
+        "scripts/question-gate.py"
+      ],
+      "host_files": {
+        "claude": ".claude/settings.json"
+      }
+    },
+    {
+      "id": "pr_body_gate",
+      "event": "PreToolUse|PostToolUse|Stop",
+      "description": "PR description gate: refuses a Write of docs/changes/*/pr.md that breaks artifact_chain.pr_body (length, title, Plan-Ref, sections, ≤3 boxes, ≤3 files, ≤10 evidence lines); remembers pr.md files touched in the session and blocks Stop while one breaks the shape or lacks a deliverable required by artifact_chain.deliverables.required_when.",
+      "required_scripts": [
+        "scripts/pr-body-gate.py"
+      ],
+      "host_files": {
+        "claude": ".claude/settings.json"
       }
     }
   ],

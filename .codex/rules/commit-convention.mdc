@@ -28,6 +28,11 @@ refactor: 전역 스타일 정리
 chore: 빌드 설정 업데이트
 ```
 
+**참고**: 여러 앱이나 공유 계약을 건드린 변경은 커밋 중 하나에 `Plan-Ref: <YYMMDD_NN>-<slug>`
+트레일러가 필요합니다 — plan 은 저장소에 없으므로(로컬 전용) 커밋과 계획을 잇는 유일한 고리이고,
+CI 의 plan 게이트가 이것을 봅니다 (`git commit --trailer 'Plan-Ref: 260914_00-slug'`).
+그 외의 트레일러는 붙이지 않습니다.
+
 ## 커밋 타입 (Type)
 
 Conventional Commits 스타일을 따릅니다:

@@ -5,28 +5,42 @@ __APPS_OVERVIEW__
 Each app has its own `AGENTS.md` (loaded when you work under that app). Deep standards live under
 `docs/standards/`; open them only when the app file points there or the task needs the background.
 
+## Principles
+
+Four principles govern every harness rule below — full text and rationale in
+`docs/standards/HARNESS_PRINCIPLES.md`; nothing is added to the harness that fails all four:
+(1) rules in the repo, history on the PR; (2) enforce with the system, not with prose;
+(3) minimum cognitive load for humans; (4) facts are the agent's, decisions are the user's — take
+only the stages you need.
+
 ## Workflow (artifact chain)
 
-Every non-trivial change leaves committed artifacts under `docs/changes/<YYMMDD_NN>-<slug>/`
-(`<YYMMDD_NN>` = start date + that day's sequence from `00`; `/__PREFIX__-intent` assigns it):
+Every non-trivial change works in a local, uncommitted folder `docs/changes/<YYMMDD_NN>-<slug>/`
+(`<YYMMDD_NN>` = start date + that day's sequence from `00`; `/__PREFIX__-intent` assigns it). The repo
+keeps rules only; the change's history goes to the PR (description from `_templates/pr.md`, attachments):
 
 | Stage | When | Do | Artifact |
 |---|---|---|---|
 | Intent | requirement is unclear or new | `/__PREFIX__-intent` (interviews you, looks up facts itself) | `intent.md` |
 | Spec | intent agreed | `/__PREFIX__-spec` (synthesizes from intent + conversation) | `spec.md` |
-| Plan | change touches several files | plan mode, then commit the approved plan | `plan.md` |
+| Plan | change touches several files | plan mode; implementation commits carry `Plan-Ref: <YYMMDD_NN>-<slug>` | `plan.md` (local) |
 | Implement | plan approved | `/__PREFIX__-implement` (TDD at agreed seams), narrow tests while iterating | code + commits |
 | Review | before declaring done | `/review-since <base>` in a fresh subagent, checked against `plan.md` + `spec.md`; UI diffs also `/__PREFIX__-ui-review` unless `plan.md` says `시각 변경 없음` | findings fixed |
-| Deliver | review passed, before the completion report | `/__PREFIX__-implement` generates the four PR deliverables (mockup, flow, architecture, 설명서(eli5)) | `deliverables/` |
+| Deliver | review passed, before the completion report | `/__PREFIX__-implement` writes the short `pr.md` (title · 그림 · 세 상자 · 볼 곳 · 증거, hook-enforced) and the deliverables `harness.yaml` `required_when` demands (설명서(eli7) for multi-app/shared-contract or UI; mockup + flow/architecture for UI) to attach | `pr.md`, `deliverables/` (local → PR) |
 
+Questions to the user in Intent, Spec, and plan mode go through `AskUserQuestion` only — at most 4
+per round, 3–4 options each with the recommended one first (`(추천)`), header limited to the stage's
+categories declared in `harness.yaml` `question_gate`; a hook refuses numbered text question rounds
+and non-compliant calls.
 The `/__PREFIX__-*` skills are user-invoked: when a request is vague or product-facing and no
 `docs/changes/<YYMMDD_NN>-<slug>/intent.md` exists, do not start coding — say what is unclear and
 ask the user to run `/__PREFIX__-intent`. Skip stages that add nothing: a one-sentence diff needs no
 intent/spec/plan. Never skip Review for diffs that touch more than one app or any shared contract;
-CI warns when such a PR carries no `plan.md`.
-A change is not done until `docs/changes/<YYMMDD_NN>-<slug>/deliverables/` holds the four PR
-deliverables (Deliver row) and every Definition of Done box in `plan.md` is ticked — the completion
-report lists them.
+CI warns when such a PR carries no `Plan-Ref` commit trailer.
+A change is not done until `pr.md` passes the `pr_body_gate` hook, the deliverables required by
+`harness.yaml` `artifact_chain.deliverables.required_when` exist beside it, and every Definition of
+Done box in `plan.md` is ticked — the completion report lists them. Never commit anything under a
+change folder (the fast guard refuses it; `local_only_roots`).
 
 Show evidence, not confidence: paste the test/typecheck command you ran and its result.
 

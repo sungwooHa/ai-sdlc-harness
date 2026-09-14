@@ -118,6 +118,38 @@ def run_command(repo: Path, command: list[str]) -> tuple[int, str]:
     return completed.returncode, (completed.stdout.strip() or completed.stderr.strip())
 
 
+def check_local_only_roots(repo: Path, manifest: dict, paths: set[str]) -> list[str]:
+    """Files under documentation_layout.local_only_roots must never be committed.
+
+    The harness tracks rules only; a change's execution history (intent/spec/plan/deliverables)
+    lives on the PR. .gitignore is the first fence, but `git add -f` or a merge from another
+    branch slips past it — so refuse those paths when they show up in the staged/PR diff.
+    A deletion (path gone from the working tree) is history leaving, so it passes."""
+    spec = manifest.get("documentation_layout", {}).get("local_only_roots", {})
+    globs = [g for g in spec.get("globs", []) if isinstance(g, str)]
+    allow = [g for g in spec.get("allow", []) if isinstance(g, str)]
+    if not globs:
+        return []
+    errors: list[str] = []
+    for rel in sorted(paths):
+        if not (repo / rel).exists():
+            continue
+        if any(_glob_match(rel, g) for g in allow):
+            continue
+        if any(_glob_match(rel, g) for g in globs):
+            errors.append(
+                f"{rel}: execution history is local-only (documentation_layout.local_only_roots); "
+                "unstage it — the PR description/attachments carry it, the repo keeps rules only"
+            )
+    return errors
+
+
+def _glob_match(rel: str, pattern: str) -> bool:
+    """`**` matches across path separators, `*` stays inside one segment."""
+    regex = re.escape(pattern).replace(r"\*\*/", "(?:.*/)?").replace(r"\*\*", ".*").replace(r"\*", "[^/]*")
+    return re.fullmatch(regex, rel) is not None
+
+
 def check_docs_roots(repo: Path, manifest: dict, paths: set[str]) -> list[str]:
     layout = manifest.get("documentation_layout", {})
     active_roots = tuple(
@@ -173,7 +205,7 @@ def print_preflight(repo: Path) -> int:
     if paths:
         print("- Changed paths detected; run `pnpm check:harness` before completion when docs/harness files change.")
     print("- Read the AGENTS.md of the app you are touching (apps/<app>/AGENTS.md) before editing.")
-    print("- Scope unclear? Run `/__PREFIX__-intent` and leave the artifact under docs/changes/.")
+    print("- Scope unclear? Run `/__PREFIX__-intent`; the change folder under docs/changes/ stays local (history goes to the PR).")
     print("- After harness changes (.agents/, .claude/, .codex/, scripts/), run `pnpm check:harness`.")
     return 0
 
@@ -262,6 +294,7 @@ def main() -> int:
 
     manifest = load_manifest(repo)
     errors: list[str] = []
+    errors.extend(check_local_only_roots(repo, manifest, paths))
     errors.extend(check_docs_roots(repo, manifest, paths))
     errors.extend(check_user_absolute_paths(repo, paths))
 

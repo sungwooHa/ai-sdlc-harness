@@ -6,6 +6,10 @@ may be changed from.
 
 ## Purpose
 
+The four governing principles — rules in the repo / history on the PR, enforce with the system,
+minimum cognitive load for humans, facts are the agent's and decisions the user's — live in
+`HARNESS_PRINCIPLES.md`; this document is their implementation.
+
 The harness keeps agent behaviour consistent across hosts by splitting guidance into layers:
 
 | Layer | What it is | Where |
@@ -15,7 +19,7 @@ The harness keeps agent behaviour consistent across hosts by splitting guidance 
 | On-demand | Skills invoked by name for a specific job | `.agents/skills/**` |
 | Subagents | Claude-only reviewer personas (`verifier`) | `.claude/agents/*.md` |
 | Deterministic | Hooks and gates that run without the model deciding to | `.claude/settings.json`, `.codex/hooks.json`, `.husky/pre-commit` |
-| Artifact chain | Committed record of what a change intends, specifies, and plans | `docs/changes/**` |
+| Artifact chain | Local working record of what a change intends, specifies, and plans (never committed; the PR carries it) | `docs/changes/**` |
 | Evals | Behavioural regression cases: does an agent follow the rules above? | `.claude/evals/**`, `scripts/harness/run-evals.py` |
 
 Prose persuades; hooks enforce. Anything that must never happen belongs in the deterministic layer,
@@ -34,35 +38,63 @@ not in a document.
 | `.claude/settings.json`, `.codex/hooks.json` | Host hook adapters |
 | `.codex/config.toml`, `.codex/rules/commit-convention.mdc` | Codex host files |
 | `.husky/pre-commit` | Commit-time gates |
-| `docs/changes/<YYMMDD_NN>-<slug>/` | Artifact chain per change |
-| `docs/changes/_templates/` | `intent.md`, `spec.md`, `plan.md` templates |
+| `docs/changes/<YYMMDD_NN>-<slug>/` | Artifact chain per change — local-only working folder, gitignored, never committed |
+| `docs/changes/_templates/` | `intent.md`, `spec.md`, `plan.md`, `pr.md` templates (the only tracked files under `docs/changes/` besides its README) |
 | `docs/agents/issue-tracker.md` | Change-folder convention consumed by the intent/spec/tickets/implement adapters and, through them, review-since |
 
 ## Artifact chain
 
-`intent.md` → `spec.md` → `plan.md` → code → review. Templates live in `docs/changes/_templates/`;
-the filled documents are committed under `docs/changes/<YYMMDD_NN>-<slug>/`, where `<YYMMDD_NN>` is
-the start date plus that day's sequence from `00` (`/__PREFIX__-intent` assigns it). The stage table
-(which skill runs each stage) is in `AGENTS.md`; do not duplicate it here.
+`intent.md` → `spec.md` → `plan.md` → code → review → `pr.md`. Templates live in
+`docs/changes/_templates/`; the filled documents live under `docs/changes/<YYMMDD_NN>-<slug>/`, where
+`<YYMMDD_NN>` is the start date plus that day's sequence from `00` (`/__PREFIX__-intent` assigns it).
+The stage table (which skill runs each stage) is in `AGENTS.md`; do not duplicate it here.
+
+**Rules in the repo, history on the PR** (`artifact_chain.history_policy`). The harness tracks only
+systemic constraints and rules: `AGENTS.md`, `harness.yaml`, hooks, skills, standards, promoted
+knowledge, and the templates. Per-change execution history — intent, spec, plan, deliverables,
+`pr.md`, and scratch — is never committed. The change folder is gitignored (`docs/changes/*` minus
+README and `_templates/`), and `documentation_layout.local_only_roots` makes the fast guard refuse
+any such path that is staged or appears in a PR diff (so `git add -f` and merges from older branches
+are caught at pre-commit and in CI). What leaves the machine: the PR description (from
+`_templates/pr.md`), PR attachments for the deliverables, the `Plan-Ref: <YYMMDD_NN>-<slug>` commit
+trailer, and knowledge promoted through the one door below. A multi-session or multi-machine handoff
+mid-change goes through the PR, not through a commit.
 
 - Skip a stage when it adds nothing. A one-sentence diff needs no intent, spec, or plan.
 - Never skip review for a diff touching more than one app or any shared contract.
-- No external tracker: the repo copy under `docs/changes/<YYMMDD_NN>-<slug>/` is the single source.
+- No external tracker: the local folder `docs/changes/<YYMMDD_NN>-<slug>/` is the working source
+  and the PR is the record.
   `docs/agents/issue-tracker.md` says so and tells adapters to skip the publish/label steps of the
   vendored skills.
 - Review gate (`artifact_chain.review_gate`): `intent.md` and `spec.md` are shown in full in the
-  conversation and confirmed by the user before they are committed. The adapters enforce it; a
-  committed document nobody read is not an agreed artifact.
+  conversation and confirmed by the user before they are marked agreed. The adapters enforce it; a
+  document nobody read is not an agreed artifact.
+- Plan gate (`artifact_chain.plan_gate`): a PR touching two or more `apps/*` or any shared contract
+  must have a commit with the `Plan-Ref: <YYMMDD_NN>-<slug>` trailer; the plan itself is in the PR
+  description. `scripts/harness/check-plan-artifact.sh` checks it in CI (warn; `PLAN_GATE=enforce`).
+  Host-neutral on purpose: a Codex user or a developer without hooks gets the same rule.
 - UI review waiver (`artifact_chain.ui_review_waiver`): a diff under `__UI_SOURCE_GLOB__` requires
   `/__PREFIX__-ui-review`, except when the approved `plan.md` states `시각 변경 없음` (a change that
   leaves copy, tokens, and layout untouched). The implement adapter names the waiver in its final
   report.
-- Deliverables (`artifact_chain.deliverables`): before `/__PREFIX__-implement` reports completion, it
-  generates the four PR deliverables under `docs/changes/<YYMMDD_NN>-<slug>/deliverables/` —
-  `mockup.html` (static wireframe + real-render walkthrough, screenshots embedded as base64),
-  `flow.html` (usage flow), `architecture.html` (system structure, changed parts highlighted),
-  `설명서(eli5).html` (picture-first standalone HTML). Exactly those four files: no screenshot
-  folder, no `/Users/...` paths, no external URLs. `plan.md` Definition of Done ticks them.
+- Deliverables (`artifact_chain.deliverables.required_when`, per file): `설명서(eli7).html` — the
+  reviewer's picture-first explainer — whenever the change spans two or more `apps/*` or touches a
+  shared contract (plan scale) or a UI path; `mockup.html` (static wireframe + real-render
+  walkthrough, screenshots embedded as base64), `flow.html` (usage flow) and `architecture.html`
+  (system structure, changed parts highlighted) only for a UI path (`__UI_SOURCE_GLOB__`, the
+  UI-review predicate). Nothing else is generated. `/__PREFIX__-implement` writes them under the
+  local `deliverables/` and the developer attaches them to the PR. No screenshot folder, no
+  `/Users/...` paths, no external URLs, no external hosting. Presence beside `pr.md` is enforced at
+  Stop by the `pr_body_gate` hook; attachment to the PR itself is the reviewer's check (CI cannot
+  read the PR body without a token). `plan.md` Definition of Done ticks them.
+- PR description (`artifact_chain.pr_body`): what a reviewer reads must cost the least attention, so
+  the description has a fixed short shape — one-sentence title (누가 · 무엇을 · 얻나), `Plan-Ref`,
+  `## 그림` naming the attached explainer, `## 세 상자` (≤ 3 rows, one cause→effect each), `## 볼 곳`
+  (≤ 3 files), `## 증거` (one fence, ≤ 10 lines); ≤ 30 non-empty lines outside the fence.
+  `_templates/pr.md` carries the shape, `scripts/pr-body-gate.py` enforces it: a `Write` of
+  `docs/changes/*/pr.md` that breaks it is refused with the fixes named, and Stop is blocked while a
+  pr.md touched in the session breaks it or lacks a required deliverable. Claude Code host only (it
+  reads tool payloads); the developer pastes the file as the PR description.
 
 ## Skills
 
@@ -112,8 +144,10 @@ harness check fails when a declared intent is missing from its host file.
 | Intent | Event | Script | Host files |
 |---|---|---|---|
 | `husky_shim_sessionstart` | SessionStart | `scripts/harness/ensure-husky.sh` | `.claude/settings.json` |
-| `harness_fast_guard_stop` | Stop | `scripts/agent-harness-fast-guard.py` | `.claude/settings.json`, `.codex/hooks.json` |
+| `harness_fast_guard_stop` | Stop | `scripts/agent-harness-fast-guard.py` (also refuses staged/PR-diff paths under `local_only_roots`) | `.claude/settings.json`, `.codex/hooks.json` |
 | `protected_paths_pretooluse` | PreToolUse (Edit/Write/MultiEdit **and Bash**) | `scripts/protected-paths-guard.py` | `.claude/settings.json` |
+| `question_gate` | UserPromptSubmit / PreToolUse (AskUserQuestion, EnterPlanMode, ExitPlanMode, Skill) / Stop | `scripts/question-gate.py` | `.claude/settings.json` |
+| `pr_body_gate` | PreToolUse (Write) / PostToolUse (Edit, Write, MultiEdit) / Stop | `scripts/pr-body-gate.py` | `.claude/settings.json` |
 | `harness_fast_guard_precommit` | pre-commit | `scripts/agent-harness-fast-guard.py` | `.husky/pre-commit` |
 
 Add a project gate by writing it as one line in `.husky/pre-commit` (or one hook entry in
@@ -126,6 +160,23 @@ next to a write marker (`>`, `sed`, `tee`, `mv`, ...). Read-only shell use of th
 allowed. The Bash check is a heuristic, so back it with a pre-commit gate for anything that must
 never be committed. `protected_paths_examples` in the manifest holds an inactive example entry;
 move an entry into `protected_paths` to activate it.
+
+**Question gate** (`question_gate`). The interview stages otherwise dump the whole grilling frontier
+on the user as one numbered list — ten questions at once, half of them spec-level. The gate turns
+that into rounds of choices: `/__PREFIX__-intent`, `/__PREFIX__-spec` (typed or model-invoked via
+`Skill`) and `EnterPlanMode` arm a stage for the session; while armed, every `AskUserQuestion` call
+must have at most `max_per_round` (4) questions, each `header` from the stage's category list
+(intent: 문제 · 결과 · 가치 · 제약 · 비범위 · 이름; spec: 해법 · 스토리 · 구현 · 테스트 · 우려 ·
+비범위; plan: 변경 순서 · 테스트 · 리스크 · 완료 증거), at least `min_options` (3) choices, and
+exactly one recommended option, first, labelled `(추천)` — a question with no real alternative is a
+decision and is written down instead of asked; a violation is refused (exit 2) with the fix in the
+message. A Stop whose last assistant text is a numbered question round (`❓ **Q1**`, `Q1:`, or three
+`n. …?` lines) is blocked and sent back to be re-asked as choices. `/__PREFIX__-implement` and
+`ExitPlanMode` disarm. Questions outside the stage's categories are not asked — they go to the
+artifact's deferral slot (intent 열린 질문 → spec; spec Flagged Concerns → plan) with a recommended
+answer. Claude Code is the reference host; the gate has no Codex mirror because Codex has no
+selectable-question tool. The vendored `grilling` skill still says "ask the whole frontier in one
+round"; the adapters override it and the gate enforces the override.
 
 **Husky in worktrees and fresh clones.** husky only creates the gitignored `.husky/_` shims during
 install; without them git runs no hooks at all. `scripts/harness/ensure-husky.sh` writes minimal
@@ -149,7 +200,7 @@ Local agent runtime state (`.claude/skills/.omc/**`, `.codex/worktrees/**`, `.cl
 ```bash
 __PACKAGE_MANAGER__ check:harness        # full harness contract check (read-only)
 __PACKAGE_MANAGER__ check:harness:fast   # fast guard: doc roots, absolute paths, husky wiring
-__PACKAGE_MANAGER__ check:plan           # artifact-chain gate: multi-app / packages/* diff needs a plan.md
+__PACKAGE_MANAGER__ check:plan           # artifact-chain gate: multi-app / shared-contract diff needs a Plan-Ref commit trailer
 __PACKAGE_MANAGER__ test:harness         # check:harness + the harness's own regression tests
 __PACKAGE_MANAGER__ evals:harness        # behavioural evals via `claude -p` (model quota; not in test:harness)
 ```
@@ -170,8 +221,10 @@ file changed. Point `harness.yaml` `ci.pipeline_file` at `__CI_FILE__` once the 
 harness check then warns when the pipeline stops referencing the checker.
 
 Also run `scripts/harness/check-plan-artifact.sh` on every PR: a diff spanning two or more `apps/*`
-or touching `packages/*` without a `docs/changes/*/plan.md` gets a warning in the log. Warn-first;
-promote with `PLAN_GATE=enforce` once the gate has earned trust.
+or touching a shared contract without a `Plan-Ref: <YYMMDD_NN>-<slug>` commit trailer in the PR
+range gets a warning in the log. Warn-first; promote with `PLAN_GATE=enforce` once the gate has
+earned trust. CI cannot read the PR description without a token, so the gate reads commit trailers,
+not the description.
 
 ## Changing the harness
 
