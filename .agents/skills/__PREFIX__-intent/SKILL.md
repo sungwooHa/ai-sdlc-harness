@@ -38,5 +38,5 @@ When the user confirms shared understanding:
    Apply requested edits and show it again. A document nobody has read is not an agreed intent.
    On confirmation set the header to `상태: agreed`.
 4. Do not commit it. The change folder is local-only (`.gitignore`; the fast guard refuses staged
-   history) — the intent reaches the team through the PR description's 의도 block later.
+   history) — the intent reaches the team through the PR value comparison against the agreement later.
 5. Tell the user the next step is `/__PREFIX__-spec` in this or a fresh session on the same machine.

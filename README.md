@@ -29,21 +29,26 @@
 
 ```mermaid
 flowchart LR
-  I["Intent<br/>intent.md<br/>(생략 가능)"] --> S["Spec<br/>spec.md<br/>(생략 가능)"]
-  S --> P["Plan<br/>plan.md<br/>(생략 가능)"]
-  P --> C["Implement<br/>code + commits"]
-  C --> R["Review<br/>findings 반영"]
-  R --> D["Deliver<br/>pr.md + deliverables/<br/>(PR 설명·첨부로)"]
+  I[Intent] --> S[Spec + HTML 초안]
+  S --> P[Plan + 초안 보완]
+  P --> A[사람의 구현 전 합의]
+  A --> B[합의본 보존]
+  B --> C[구현 + 코드 검증]
+  C --> V[PR 가치 리뷰]
 ```
 
-- 생략 가능 단계는 한 문장짜리 diff처럼 더할 것이 없을 때만 건너뛴다.
-- Review 는 여러 앱이나 공유 계약을 건드린 diff 에서는 건너뛸 수 없다.
-- `intent.md` 와 `spec.md` 는 대화에 전문을 보여주고 사용자가 확인해야 합의로 친다(커밋하지 않는다).
-- Intent · Spec · Plan 단계의 질문은 선택형(`AskUserQuestion`)으로만 한다 — 한 라운드 4개 이하,
-  추천 선택지 먼저. 질문 게이트 훅이 번호 나열식 질문을 거절한다.
-- Deliver 단계는 조건이 맞는 산출물만 만든다 — 여러 앱·공유 계약 변경이면 `설명서(eli7).html`,
-  UI 변경이면 `mockup.html` · `flow.html` · `architecture.html` 까지. 30줄 이내 `pr.md` 와
-  `plan.md` 의 Definition of Done 이 모두 채워져야 완료이고, 훅이 그 형태를 강제한다.
+- 작은 변경은 더할 것이 없는 단계를 생략한다. 기존 HTML 적용 조건은 유지한다.
+- 여러 앱·공유 계약 변경에는 설명서, UI 변경에는 목업·흐름·아키텍처까지 **구현 전에** 만든다.
+  설명서를 입구로 네 관점을 연결해 사람이 무엇을 만들고 어떻게 할지 판단하게 한다.
+- Intent · Spec은 전문을 보여주고 확인한다. Plan에서는 보완된 초안과 계획을 합의한 뒤
+  agreement 스킬로 범위·검증 명령을 준비한다. 사용자의 승인 명령을 훅이 처리하고
+  `agreements/<revision>/`에 합의본을 보존한다.
+- 구현 후 코드 리뷰와 테스트는 합의 대비 동작을 확인한다. 실제 결과는 작업용 `deliverables/`에
+  반영하고 합의본은 덮어쓰지 않는다. 여러 앱·공유 계약 변경의 코드 리뷰는 생략하지 않는다.
+- PR은 **가치 리뷰**다. 합의한 기대와 실제 변화·증거를 대조하고, 미검증 가치는 지표·담당·시점을
+  적는다. 구현 완료와 사람의 가치 승인을 구분한다. 본문은 기존처럼 짧게 유지한다.
+- 질문은 단계별 선택형 게이트를 따른다. 상세 절차와 보장 범위는
+  [AGREEMENT_REVIEW.md](docs/standards/AGREEMENT_REVIEW.md)에 있다.
 
 단계별로 어떤 스킬이 도는지는 `AGENTS.md` 의 표가 정본이다.
 
@@ -105,8 +110,15 @@ flowchart TB
   `Edit`/`Write`/`MultiEdit` 는 경로로, `Bash` 는 명령 안의 쓰기 마커로 판정한다.
 - `scripts/question-gate.py` — Intent · Spec · Plan 단계의 질문을 선택형으로 강제한다.
   라운드당 4개 이하, 단계 범주, 추천 선택지 먼저. 번호 나열식 질문으로 끝내려 하면 Stop 을 막는다.
-- `scripts/pr-body-gate.py` — `pr.md` 의 형태(30줄·한 문장 제목·세 상자·볼 곳 3개·증거 10줄)와
-  변경 조건에 맞는 첨부 산출물의 존재를 강제한다.
+- `scripts/pr-body-gate.py` — 짧은 가치 리뷰 형식과 비어 있지 않은 증거를 검사한다.
+  HTML 적용 변경은 `Agreement-Ref`의 합의본 해시와 합의본/결과 HTML 존재를 확인한다.
+  agreement 훅은 활성 변경의 `pr.md`를 직접 찾아 완료·커밋을 검사한다.
+  실제 첨부·가치 판단·PR 게시는 사람이 한다.
+- `scripts/agreement-gate.py` — Claude/Codex의 입력·도구 실행 전·종료 훅과 pre-commit에서
+  승인, 정확한 파일 범위, 현재 코드의 검증 기록을 검사한다. 스킬은 준비·진행을 맡는다.
+  신뢰·활성화된 훅이 필요하며 OS 보안 격리는 아니다.
+- `scripts/harness/agreement-snapshot.py` — 승인 참조와 초안의 파일 해시를 보존한다.
+  기존 리비전 덮어쓰기를 거절하고 `--check`로 합의본 변조·누락을 검출한다. 승인 자체를 인증하지는 않는다.
 - `scripts/harness/check-plan-artifact.sh` — 여러 앱·공유 계약을 건드린 PR 에 `Plan-Ref` 커밋
   트레일러가 있는지 CI 에서 본다(기본 경고, `PLAN_GATE=enforce` 로 차단).
 
@@ -147,3 +159,16 @@ pnpm test:harness
 - `github.com/mattpocock/skills` (MIT)
 - `github.com/vercel-labs/agent-skills` (MIT)
 - `github.com/emilkowalski/skills` (MIT)
+
+## 오래 유지할 결정은 ADR로
+
+작업별 합의본과 PR은 변경 이력이고, [ADR](docs/decisions/README.md)은 다음 작업에도 영향을 주는
+결정과 이유입니다. 구조·공유 계약·운영 정책·하네스 제어가 바뀔 때만 짧게 남깁니다.
+기본 내용은 배경, 결정, 대안, 감수한 비용, 재검토 조건, 근거입니다. 모든 PR에 새 ADR을 요구하지 않습니다.
+
+ADR 작성은 `__PREFIX__-adr` 스킬로 요청합니다. 기존 결정 재사용·새 기록 작성·대체를 지원하며,
+Stop/pre-commit 훅이 필수 항목·상태·중복 번호·대체 참조를 검사합니다.
+ADR의 필요성이나 결정의 타당성을 기계적으로 승인하는 기능은 아닙니다.
+
+ADR을 직접 요청하지 않아도, 합의 준비 훅이 중요한 결정 후보를 에이전트에게 알려줍니다.
+에이전트가 실제 내용과 기존 ADR을 확인한 뒤 필요한 기록을 먼저 제안합니다. 제안은 선택 사항입니다.

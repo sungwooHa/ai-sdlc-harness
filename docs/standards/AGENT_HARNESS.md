@@ -40,18 +40,20 @@ not in a document.
 | `.husky/pre-commit` | Commit-time gates |
 | `docs/changes/<YYMMDD_NN>-<slug>/` | Artifact chain per change — local-only working folder, gitignored, never committed |
 | `docs/changes/_templates/` | `intent.md`, `spec.md`, `plan.md`, `pr.md` templates (the only tracked files under `docs/changes/` besides its README) |
+| `docs/decisions/` | Tracked ADRs: durable decisions, alternatives and consequences; see its README |
 | `docs/agents/issue-tracker.md` | Change-folder convention consumed by the intent/spec/tickets/implement adapters and, through them, review-since |
 
 ## Artifact chain
 
-`intent.md` → `spec.md` → `plan.md` → code → review → `pr.md`. Templates live in
+`intent.md` → `spec.md` + HTML drafts → `plan.md` + refined drafts → human agreement →
+preserved baseline → code + correctness review → `pr.md` value review. Templates live in
 `docs/changes/_templates/`; the filled documents live under `docs/changes/<YYMMDD_NN>-<slug>/`, where
 `<YYMMDD_NN>` is the start date plus that day's sequence from `00` (`/__PREFIX__-intent` assigns it).
 The stage table (which skill runs each stage) is in `AGENTS.md`; do not duplicate it here.
 
 **Rules in the repo, history on the PR** (`artifact_chain.history_policy`). The harness tracks only
 systemic constraints and rules: `AGENTS.md`, `harness.yaml`, hooks, skills, standards, promoted
-knowledge, and the templates. Per-change execution history — intent, spec, plan, deliverables,
+knowledge, ADRs for durable decisions, and the templates. Per-change execution history — intent, spec, plan, deliverables,
 `pr.md`, and scratch — is never committed. The change folder is gitignored (`docs/changes/*` minus
 README and `_templates/`), and `documentation_layout.local_only_roots` makes the fast guard refuse
 any such path that is staged or appears in a PR diff (so `git add -f` and merges from older branches
@@ -60,41 +62,74 @@ are caught at pre-commit and in CI). What leaves the machine: the PR description
 trailer, and knowledge promoted through the one door below. A multi-session or multi-machine handoff
 mid-change goes through the PR, not through a commit.
 
-- Skip a stage when it adds nothing. A one-sentence diff needs no intent, spec, or plan.
+- Skip a stage when it adds nothing. Small changes may skip intent/plan and inapplicable HTML; spec, scope and hook-owned approval remain required.
 - Never skip review for a diff touching more than one app or any shared contract.
 - No external tracker: the local folder `docs/changes/<YYMMDD_NN>-<slug>/` is the working source
   and the PR is the record.
   `docs/agents/issue-tracker.md` says so and tells adapters to skip the publish/label steps of the
   vendored skills.
-- Review gate (`artifact_chain.review_gate`): `intent.md` and `spec.md` are shown in full in the
-  conversation and confirmed by the user before they are marked agreed. The adapters enforce it; a
-  document nobody read is not an agreed artifact.
-- Plan gate (`artifact_chain.plan_gate`): a PR touching two or more `apps/*` or any shared contract
-  must have a commit with the `Plan-Ref: <YYMMDD_NN>-<slug>` trailer; the plan itself is in the PR
-  description. `scripts/harness/check-plan-artifact.sh` checks it in CI (warn; `PLAN_GATE=enforce`).
-  Host-neutral on purpose: a Codex user or a developer without hooks gets the same rule.
-- UI review waiver (`artifact_chain.ui_review_waiver`): a diff under `__UI_SOURCE_GLOB__` requires
-  `/__PREFIX__-ui-review`, except when the approved `plan.md` states `시각 변경 없음` (a change that
-  leaves copy, tokens, and layout untouched). The implement adapter names the waiver in its final
-  report.
-- Deliverables (`artifact_chain.deliverables.required_when`, per file): `설명서(eli7).html` — the
-  reviewer's picture-first explainer — whenever the change spans two or more `apps/*` or touches a
-  shared contract (plan scale) or a UI path; `mockup.html` (static wireframe + real-render
-  walkthrough, screenshots embedded as base64), `flow.html` (usage flow) and `architecture.html`
-  (system structure, changed parts highlighted) only for a UI path (`__UI_SOURCE_GLOB__`, the
-  UI-review predicate). Nothing else is generated. `/__PREFIX__-implement` writes them under the
-  local `deliverables/` and the developer attaches them to the PR. No screenshot folder, no
-  `/Users/...` paths, no external URLs, no external hosting. Presence beside `pr.md` is enforced at
-  Stop by the `pr_body_gate` hook; attachment to the PR itself is the reviewer's check (CI cannot
-  read the PR body without a token). `plan.md` Definition of Done ticks them.
-- PR description (`artifact_chain.pr_body`): what a reviewer reads must cost the least attention, so
-  the description has a fixed short shape — one-sentence title (누가 · 무엇을 · 얻나), `Plan-Ref`,
-  `## 그림` naming the attached explainer, `## 세 상자` (≤ 3 rows, one cause→effect each), `## 볼 곳`
-  (≤ 3 files), `## 증거` (one fence, ≤ 10 lines); ≤ 30 non-empty lines outside the fence.
-  `_templates/pr.md` carries the shape, `scripts/pr-body-gate.py` enforces it: a `Write` of
-  `docs/changes/*/pr.md` that breaks it is refused with the fixes named, and Stop is blocked while a
-  pr.md touched in the session breaks it or lacks a required deliverable. Claude Code host only (it
-  reads tool payloads); the developer pastes the file as the PR description.
+- Agreement (`artifact_chain.review_gate` / `agreement`): human review happens before product
+  implementation. Spec drafts the applicable HTML, plan refines it, and the user approves the
+  presented revision. The snapshot helper preserves it under `agreements/<revision>/` with
+  an approval reference and file hashes. Implementation and PR reference that baseline.
+- Plan gate (`artifact_chain.plan_gate`): multi-app/shared-contract PRs carry a `Plan-Ref` commit
+  trailer. The existing script checks its presence (warn; `PLAN_GATE=enforce`), not the contents
+  of the approved plan. The PR refers to the attached agreement for the full plan.
+- UI review waiver: the approved plan can state `시각 변경 없음` for a change without visual
+  effects. This waives the code/UI audit as declared; HTML applicability still uses `required_when`.
+- Deliverables retain the existing conditions: explainer for multi-app/shared-contract or UI;
+  mockup, flow and architecture for UI. They are decision drafts before implementation and
+  result evidence afterward. The approved copies stay unchanged; working `deliverables/` is
+  updated with actual results. The explainer links the required perspectives as one entrypoint.
+- PR description: one value title, `Plan-Ref`, applicable `Agreement-Ref`, picture/comparison,
+  at most three expectation/result/evidence rows, explicit value status/remaining measurement,
+  at most three files and one nonempty evidence block (≤10 lines), ≤30 nonempty prose lines.
+  `_templates/pr.md` defines the human-facing shape. A successful test does not establish a
+  usage/business benefit; unmeasured value stays explicit, with its next observation/owner/time.
+
+Before drafting, agreeing, implementing or handing off, read `AGREEMENT_REVIEW.md` for stage
+ownership, approval commands, amendment handling and evidence semantics. The agreement skill
+prepares exact scope and draft hashes. UserPromptSubmit grants approval; PreToolUse checks tools
+and paths; Stop/pre-commit require current verification and the active local PR. These adapters
+require trusted enabled hooks and are not an OS sandbox. Trusted verification commands and host
+paths that bypass hooks remain outside the boundary. Value review and PR publishing are human steps.
+
+## Durable decisions (ADR)
+
+Keep decisions that constrain future work in tracked `docs/decisions/`; keep execution history
+in local change folders and on the PR. Read `docs/decisions/README.md` when a change establishes
+or replaces architecture, shared contracts, security/operational policy, or a harness control.
+Use one short ADR per decision: context, decision, alternatives, consequences, revisit trigger,
+and references. Routine fixes and implementation details that do not constrain future work need
+no ADR. Reuse an existing ADR when the decision is unchanged.
+
+During agreement, put a proposed new/replacement decision in spec/plan, link relevant existing
+ADRs and include its future ADR filename in scope.json. After approval, write the ADR through
+the same scoped edit path as other tracked files; link it in the local PR. ADR status is not an
+approval credential and never replaces the hook-owned agreement. Supersede accepted decisions
+with a new ADR; update the old status/link without rewriting its original rationale. Record only
+approval actually given; proposals remain proposed. Selecting whether a decision deserves an ADR
+and assessing its reasoning are review judgments; current hooks enforce file scope and ADR structure, not semantics.
+
+Use `__PREFIX__-adr` to author or supersede a record. `adr_gate` in the manifest owns the root,
+template, statuses and required sections. The ADR Stop and pre-commit hooks validate numbered
+records, nonempty sections, dates, statuses and reciprocal replacement links. Pre-commit reads
+the index, so an unstaged repair cannot hide a broken staged ADR. The agreement delivery gate
+runs the same validation before accepting its handoff. The exact approved scope stays repairable
+if another hook rejects the handoff; source edits require fresh verification. Pending drafts and explicit pauses are
+not completed deliveries. Run `python3 scripts/adr-gate.py --all` for a read-only full ADR check.
+
+**Proactive ADR suggestions.** Before the agent runs agreement `prepare`, the existing PreToolUse
+adapter consults `scripts/harness/adr-advice.py` using planned scope paths. `adr_suggestions` owns
+optional topic/glob rules and the maximum candidate count. The hook supplies advisory context
+without granting or denying tools. The ADR skill checks the actual decision and existing ADRs,
+then proposes a short title, reason and draft summary only when useful. Ordinary edits inside a
+matched directory need not produce a user-facing suggestion. Advice is emitted once per change
+and matched-path set, tracked separately in the worktree Git directory; it is not approval state.
+Missing/broken advisory configuration does not block work. Direct human-terminal prepare and
+hosts without the trusted PreToolUse adapter do not receive this automatic reminder. Paths are
+heuristics: an unchanged path set can contain a new decision, so the skill also responds to semantic
+changes found during normal work. No claim of complete decision detection is made.
 
 ## Skills
 

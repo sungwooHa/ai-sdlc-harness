@@ -13,7 +13,8 @@
     "check:plan": "bash scripts/harness/check-plan-artifact.sh",
     "evals:harness": "python3 scripts/harness/run-evals.py",
     "test:fast-guard": "python3 scripts/test/agent-harness-fast-guard.test.py",
-    "test:harness": "pnpm check:harness && python3 scripts/test/harness-local-artifacts.test.py && python3 scripts/test/check-agent-harness.test.py && python3 scripts/test/vendor-skills.test.py && python3 scripts/test/protected-paths-guard.test.py && python3 scripts/test/question-gate.test.py && python3 scripts/test/pr-body-gate.test.py && bash scripts/test/ensure-husky.test.sh && bash scripts/test/check-plan-artifact.test.sh && pnpm test:fast-guard"
+    "test:harness": "pnpm check:harness && python3 scripts/test/harness-local-artifacts.test.py && python3 scripts/test/check-agent-harness.test.py && python3 scripts/test/vendor-skills.test.py && python3 scripts/test/protected-paths-guard.test.py && python3 scripts/test/question-gate.test.py && python3 scripts/test/pr-body-gate.test.py && python3 scripts/test/agreement-snapshot.test.py && python3 scripts/test/agreement-gate.test.py && python3 scripts/test/adr-gate.test.py && python3 scripts/test/adr-advice.test.py && bash scripts/test/ensure-husky.test.sh && bash scripts/test/check-plan-artifact.test.sh && pnpm test:fast-guard",
+    "check:adr": "python3 scripts/adr-gate.py --all"
   },
   "devDependencies": {
     "husky": "^9.1.7"

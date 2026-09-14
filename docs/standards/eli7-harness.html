@@ -172,7 +172,7 @@
   <div class="wrap">
     <div class="step">4 · 첫 번째 · 종이</div>
     <h2>일을 여섯 칸으로 쪼개고<br>칸마다 한 장씩 남깁니다</h2>
-    <p>머릿속에만 있던 것을 파일로 꺼냅니다. 이 파일들은 코드와 같이 저장됩니다.</p>
+    <p>머릿속에만 있던 것을 파일로 꺼냅니다. 이 파일들은 로컬 작업 폴더에 두고, 합의본과 결과를 PR 첨부로 전달합니다.</p>
     <p class="big">그래서 <b>다음 사람</b>도 <b>내일의 신입</b>도 읽을 수 있습니다.</p>
 
     <div class="cards">
@@ -346,14 +346,14 @@ pnpm test:harness</p>
       </div>
 
       <div class="fstep stop">
-        <div class="cmd plain">필요하면 그림도</div>
-        <p class="what">화면이 걸린 일이면 목업·흐름도·구조도를 같이 냅니다.</p>
+        <div class="cmd plain">구현 전 합의 초안</div>
+        <p class="what">설명서를 입구로 목업·흐름도·구조도를 봅니다. 무엇을 만들고 어떻게 할지 함께 정합니다.</p>
         <p class="out">남는 것 · <b>deliverables</b> — 눈으로 보고 판단할 수 있는 그림.</p>
       </div>
 
       <div class="stopline">
         <b>여기가 멈추는 자리입니다.</b> 이 상태로 검토를 받습니다.
-        아니라는 답이 나오면, 아래 것들은 아예 안 만듭니다.
+        동의하면 그 버전을 따로 보존하고 구현합니다. 방향이 바뀌면 새 버전에 다시 합의합니다.
       </div>
 
       <div class="fstep">
@@ -363,7 +363,7 @@ pnpm test:harness</p>
       </div>
 
       <div class="fstep">
-        <div class="cmd">/리뷰</div>
+        <div class="cmd">코드 검증</div>
         <p class="what">새 대화에서 아무 기억 없이, 계획·약속과 코드를 맞대 봅니다.</p>
         <p class="out">남는 것 · 고쳐야 할 목록.</p>
       </div>
@@ -373,6 +373,12 @@ pnpm test:harness</p>
         <p class="what">화면이 바뀌었으면 실제로 띄워서 눈으로 봅니다.</p>
         <p class="out">남는 것 · 화면 그림과 지적 사항.</p>
       </div>
+    </div>
+
+    <div class="card" style="margin-top:30px">
+      <h3>PR · 가치 리뷰</h3>
+      <p>약속했던 가치와 실제 달라진 경험을 맞대 봅니다. 합의본은 남겨 두고 결과를 비교합니다.</p>
+      <p>잘 동작하는 것과 도움이 된 것이 같지는 않습니다. 아직 모르는 효과는 무엇을 언제 확인할지 적습니다.</p>
     </div>
 
     <p class="note" style="margin-top:30px">명령어의 실제 이름은 프로젝트마다 다릅니다. 틀을 복사할 때 넣은 줄임말이 앞에 붙습니다.</p>

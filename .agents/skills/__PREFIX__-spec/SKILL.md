@@ -32,15 +32,21 @@ Then call the Skill tool with `to-spec` and apply these overrides while followin
 - Seams: check the proposed test seams against `apps/<app>/AGENTS.md` for the touched app before
   asking the user to confirm them.
 - Output: draft the spec with the section headings of `docs/changes/_templates/spec.md` (keep the
-  headings, fill the body in __HUMAN_DOC_LANG__, no file paths or code snippets) and header status
+  headings, fill the body in __HUMAN_DOC_LANG__, no implementation file paths or code snippets; artifact links are allowed) and header status
   `draft`.
-- Confirm before commit: once the seams are agreed, show the whole draft in your reply and wait for
-  the user's explicit confirmation; apply edits and show it again. Only then write it to
+- Visual agreement: read `docs/standards/AGREEMENT_REVIEW.md`. Before asking for spec approval,
+  create applicable draft HTML in the working `deliverables/` from the planned affected paths.
+  Present the explainer as the entrypoint to mockup, flow and architecture when required. Label
+  assumptions and unresolved plan details; refine the same drafts during plan mode.
+- Confirm the presented draft: once the seams are agreed, show the whole draft and HTML and wait for
+  the user's explicit confirmation; apply edits and show it again. Only then mark
   `docs/changes/<YYMMDD_NN>-<slug>/spec.md` with status `agreed` (keep `draft` if the user says
   they will keep iterating). Never show a spec as agreed that the user has not seen in full.
 - No publishing step and no commit: the folder is local-only; the spec reaches the team through
-  the PR description's 범위 block.
+  the PR value comparison and its attached agreement baseline.
 
 Finish by telling the user the next step: plan mode for a multi-file change (the approved plan is
 saved locally as `docs/changes/<YYMMDD_NN>-<slug>/plan.md`; implementation commits carry
-`Plan-Ref: <YYMMDD_NN>-<slug>`), or `/__PREFIX__-implement` directly for a small one.
+`Plan-Ref: <YYMMDD_NN>-<slug>`), or, for a small one, use `__PREFIX__-agreement` to prepare exact scope and obtain hook-owned approval
+before `/__PREFIX__-implement`. Plan approval must include the completed applicable HTML;
+intent/spec approval does not authorize an unseen plan.

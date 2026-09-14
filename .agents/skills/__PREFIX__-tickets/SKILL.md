@@ -29,8 +29,10 @@ Then call the Skill tool with `to-tickets` and apply these overrides:
 - The only output is a `## 티켓` section appended to the end of
   `docs/changes/<YYMMDD_NN>-<slug>/plan.md`: one row per ticket, blockers first, each row starting
   with a checkbox column — `| [ ] | <제목> | <한 줄 범위> | <blocked-by> |`.
-  `/__PREFIX__-implement` ticks the checkbox when that ticket is done. No commit: `plan.md` is
-  local-only; the ticket table reaches the PR through `pr.md` 범위.
+  `/__PREFIX__-implement` records completion in `progress.md`, preserving approved plan bytes. No commit: `plan.md` is
+  local-only; the ticket scope reaches the PR value comparison. If a preserved agreement exists,
+  first prepare a new revision with `__PREFIX__-agreement` to revoke the grant before editing
+  the plan; prepare again and obtain approval of the changed draft before implementation.
 
 Finish by naming the frontier — the tickets with no open blockers — so the user can start
 `/__PREFIX__-implement` on one of them.

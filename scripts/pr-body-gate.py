@@ -10,6 +10,9 @@ PR description; this hook makes its shape a rule instead of a wish:
 - Stop: re-validate every remembered pr.md and require the deliverables the change needs
   (`artifact_chain.deliverables.required_when`) to exist next to it; block the turn otherwise.
 
+Agreement snapshots are validated against their recorded hashes, not authenticated approvals.
+Value status and evidence checks validate structure, not whether the claimed value is true.
+
 Shape rules come from `.agents/harness.yaml` `artifact_chain.pr_body`: `max_lines`,
 `max_evidence_lines`, `required_headings`, `max_look_items`, `max_title_chars`, `max_box_rows`.
 Fail-open on any parsing problem; a broken hook never blocks normal work.
@@ -138,11 +141,23 @@ def validate_body(text: str, rules: dict) -> list[str]:
                 out.append(l)
         return out
 
+    evidence = "\n".join(section("## 증거"))
+    blocks = re.findall(r"^```[^\n]*\n(.*?)^```\s*$", evidence, re.MULTILINE | re.DOTALL)
+    if len(blocks) != 1 or not blocks[0].strip():
+        problems.append("`## 증거` 에 실제 명령/관찰과 결과를 담은 비어 있지 않은 코드 블록 하나가 필요합니다.")
+    if "## 가치 확인" in headings:
+        value = "\n".join(section("## 가치 확인"))
+        statuses = rules.get("value_statuses", ["확인됨", "부분 확인", "미검증", "미달"])
+        if not any(re.search(re.escape(status) + r"\s*—\s*\S", value) for status in statuses):
+            problems.append("`## 가치 확인` 에 상태(확인됨/부분 확인/미검증/미달) — 근거·한계·후속 확인을 적으세요.")
+        if re.search(r"<[^>]+>", value):
+            problems.append("`## 가치 확인` 의 자리표시자를 실제 근거와 남은 검증으로 채우세요.")
+
     box = section("## 세 상자")
     rows = [l for l in box if l.strip().startswith("|") and not re.match(r"^\s*\|\s*-", l)]
     data_rows = rows[1:] if rows else []
     if not data_rows:
-        problems.append("`## 세 상자` 에 표 데이터 행이 없습니다(무엇이 바뀌었나 | 그래서 | 확인은).")
+        problems.append("`## 세 상자` 에 표 데이터 행이 없습니다(합의한 기대 | 실제 달라진 것 | 확인 근거).")
     elif len(data_rows) > max_rows:
         problems.append(f"`## 세 상자` 는 최대 {max_rows}행 — 지금 {len(data_rows)}행. 상자 하나가 원인→결과 한 줄입니다.")
     if any("| |" in re.sub(r"\s+", " ", r) or re.search(r"\|\s*\|", r) for r in data_rows):
@@ -163,7 +178,7 @@ def validate_body(text: str, rules: dict) -> list[str]:
 
 def changed_paths(repo: Path, base: str = DEFAULT_BASE) -> set[str]:
     paths: set[str] = set()
-    for args in (["diff", "--name-only", f"{base}...HEAD"], ["diff", "--name-only", "HEAD"], ["diff", "--name-only", "--cached"]):
+    for args in (["diff", "--name-only", f"{base}...HEAD"], ["diff", "--name-only", "HEAD"], ["diff", "--name-only", "--cached"], ["ls-files", "--others", "--exclude-standard"]):
         try:
             out = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=False).stdout
         except Exception:
@@ -205,9 +220,30 @@ def check_deliverables(repo: Path, rel_pr_md: str, deliv_rules: dict, base: str 
     folder = (repo / rel_pr_md).parent
     ddir = folder / deliv_rules.get("dir", "deliverables")
     problems: list[str] = []
-    for fname, reason in needs(deliv_rules, changed_paths(repo, base)).items():
+    required = needs(deliv_rules, changed_paths(repo, base))
+    for fname, reason in required.items():
         if not (ddir / fname).is_file():
             problems.append(f"{(ddir / fname).relative_to(repo).as_posix()} 가 없습니다 — {reason}이라 필수입니다. 만들어서 PR 에 첨부하세요.")
+    body = (repo / rel_pr_md).read_text(encoding="utf-8")
+    ref = re.search(r"^Agreement-Ref:\s*(agreements/[0-9]{3,})\s*$", body, re.MULTILINE)
+    if not ref:
+        if required or re.search(r"^Agreement-Ref:", body, re.MULTILINE):
+            problems.append("구현 전 합의본을 가리키는 `Agreement-Ref: agreements/001` 이 필요합니다.")
+        return problems
+    snapshot = folder / ref.group(1)
+    if (folder / "agreements").is_symlink() or snapshot.is_symlink():
+        return problems + ["합의본은 변경 폴더 안의 실제 디렉터리여야 합니다."]
+    helper = Path(__file__).parent / "harness/agreement-snapshot.py"
+    result = subprocess.run([sys.executable, str(helper), str(snapshot), "--check"],
+                            capture_output=True, text=True)
+    if result.returncode:
+        problems.append("합의본 검증 실패: " + (result.stdout + result.stderr).strip())
+        return problems
+    recorded = json.loads((snapshot / "snapshot.json").read_text(encoding="utf-8"))["files"]
+    for fname in required:
+        rel = (Path(deliv_rules.get("dir", "deliverables")) / fname).as_posix()
+        if rel not in recorded:
+            problems.append(f"합의본에 {rel} 가 없습니다. 범위 변경을 재합의하고 새 리비전을 보존하세요.")
     return problems
 
 

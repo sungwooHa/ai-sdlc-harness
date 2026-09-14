@@ -32,4 +32,10 @@
 
 ## Out of Scope
 
+## Agreement Drafts
+
+구현 전에 볼 HTML: 적용 조건과 초안 경로. 설명서를 입구로 목업·흐름·구조를 연결한다.
+V1/US1 같은 식별자로 합의할 기대 효과, 관찰 가능한 동작, 구현 후 측정할 가치를 연결한다.
+이 초안에 대한 합의와 계획의 구현 승인은 구분한다. 생성·보존 절차: `AGREEMENT_REVIEW.md`.
+
 ## Further Notes
