@@ -103,6 +103,48 @@ check("hooksPath 만 있고 러너가 없으면 경고한다", WARN in _err, Tru
 
 shutil.rmtree(_wired)
 
+
+# 이력 경로(local_only_roots)는 커밋되면 안 된다 — 하네스는 규칙만, 이력은 PR. .gitignore 를
+# `git add -f` 로 뚫거나 다른 브랜치에서 머지돼 들어온 파일을 pre-commit/CI 에서 거절한다.
+_hist = make_repo()
+(_hist / ".agents").mkdir(parents=True, exist_ok=True)
+(_hist / ".agents" / "harness.yaml").write_text(
+    '{"documentation_layout":{"active_roots":["docs/changes","docs/knowledge"],'
+    '"local_only_roots":{"globs":["docs/changes/*/**","docs/workbench/**"],'
+    '"allow":["docs/changes/README.md","docs/changes/_templates/**"]}}}\n',
+    encoding="utf-8",
+)
+(_hist / "docs" / "changes" / "260914_00-x").mkdir(parents=True)
+(_hist / "docs" / "changes" / "260914_00-x" / "plan.md").write_text("# plan\n", encoding="utf-8")
+subprocess.run(["git", "-C", str(_hist), "add", "-f", "docs/changes/260914_00-x/plan.md"], check=True)
+_code, _err = run(_hist, "--staged")
+check("staged 변경 폴더 파일(plan.md)을 거절한다", _code, 1)
+subprocess.run(["git", "-C", str(_hist), "rm", "-q", "--cached", "docs/changes/260914_00-x/plan.md"], check=True)
+
+(_hist / "docs" / "workbench" / "features").mkdir(parents=True)
+(_hist / "docs" / "workbench" / "features" / "note.md").write_text("scratch\n", encoding="utf-8")
+subprocess.run(["git", "-C", str(_hist), "add", "-f", "docs/workbench/features/note.md"], check=True)
+_code, _err = run(_hist, "--staged")
+check("staged workbench 파일을 거절한다", _code, 1)
+subprocess.run(["git", "-C", str(_hist), "rm", "-q", "--cached", "docs/workbench/features/note.md"], check=True)
+
+# 이력이 나가는 방향(삭제)은 막지 않는다 — workbench 일괄 제거 커밋이 바로 이 경로다.
+subprocess.run(["git", "-C", str(_hist), "add", "-f", "docs/workbench/features/note.md"], check=True)
+subprocess.run(["git", "-C", str(_hist), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "legacy"], check=True)
+subprocess.run(["git", "-C", str(_hist), "rm", "-q", "docs/workbench/features/note.md"], check=True)
+_code, _err = run(_hist, "--staged")
+check("staged workbench 삭제는 통과한다(이력이 나가는 방향)", _code, 0)
+
+(_hist / "docs" / "changes" / "_templates").mkdir(parents=True)
+(_hist / "docs" / "changes" / "_templates" / "pr.md").write_text("# pr\n", encoding="utf-8")
+(_hist / "docs" / "changes" / "README.md").write_text("# changes\n", encoding="utf-8")
+subprocess.run(["git", "-C", str(_hist), "add", "docs/changes/_templates/pr.md", "docs/changes/README.md"], check=True)
+_code, _err = run(_hist, "--staged")
+check("템플릿·README 는 규칙이라 통과한다", _code, 0)
+
+shutil.rmtree(_hist)
+
+
 if _failures:
     print(f"실패 {len(_failures)}건 / 통과 {_passed}건\n", file=sys.stderr)
     for f in _failures:

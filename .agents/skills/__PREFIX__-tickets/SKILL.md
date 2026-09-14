@@ -12,11 +12,10 @@ stop.
 Before calling it:
 
 1. Resolve the change folder (`$0` = the folder name `<YYMMDD_NN>-<slug>`, else the most recent
-   `docs/changes/<YYMMDD_NN>-<slug>/` with a `plan.md`, else `spec.md`; confirm with the user). Most
-   recent = the folder whose relevant document was added by the newest commit
-   (`git log -1 --format=%ct -- <path>`); the folder id sorts chronologically, so break a tie with
-   the larger id; if candidates are still ambiguous, ask the user. Read that document — it is the
-   source of the breakdown, not the conversation alone.
+   `docs/changes/<YYMMDD_NN>-<slug>/` with a `plan.md`, else `spec.md`; confirm with the user). The
+   folders are local and uncommitted, so most recent = the newest file mtime (`ls -t`); the folder
+   id sorts chronologically, so break a tie with the larger id; if candidates are still ambiguous,
+   ask the user. Read that document — it is the source of the breakdown, not the conversation alone.
 2. Read `docs/agents/issue-tracker.md`. There is no external tracker and no `ready-for-agent`
    label — skip those steps if the vendored skill asks.
 
@@ -30,7 +29,8 @@ Then call the Skill tool with `to-tickets` and apply these overrides:
 - The only output is a `## 티켓` section appended to the end of
   `docs/changes/<YYMMDD_NN>-<slug>/plan.md`: one row per ticket, blockers first, each row starting
   with a checkbox column — `| [ ] | <제목> | <한 줄 범위> | <blocked-by> |`.
-  `/__PREFIX__-implement` ticks the checkbox when that ticket is done.
+  `/__PREFIX__-implement` ticks the checkbox when that ticket is done. No commit: `plan.md` is
+  local-only; the ticket table reaches the PR through `pr.md` 범위.
 
 Finish by naming the frontier — the tickets with no open blockers — so the user can start
 `/__PREFIX__-implement` on one of them.
