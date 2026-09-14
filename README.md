@@ -172,3 +172,12 @@ ADR의 필요성이나 결정의 타당성을 기계적으로 승인하는 기�
 
 ADR을 직접 요청하지 않아도, 합의 준비 훅이 중요한 결정 후보를 에이전트에게 알려줍니다.
 에이전트가 실제 내용과 기존 ADR을 확인한 뒤 필요한 기록을 먼저 제안합니다. 제안은 선택 사항입니다.
+
+## Ponytail
+
+`/__PREFIX__-ponytail`(Claude) 또는 `$__PREFIX__-ponytail`(Codex)로 기존 코드·표준 라이브러리·
+플랫폼 기본 기능을 먼저 사용하는 구현 방식을 적용합니다. `__PREFIX__`는 프로젝트 접두사입니다.
+기본 full, 요청 시 lite/ultra를 사용하며 “stop ponytail”로 해제합니다.
+필수 HTML 합의 초안·ADR·PR 가치 리뷰·검증은 줄이지 않습니다. 핵심 스킬만 포함하며
+원본 플러그인의 상시 활성화·모드 추적 훅은 설치하지 않습니다.
+원본: https://github.com/DietrichGebert/ponytail · MIT · 고정 버전은 스킬 metadata.commit 참조.

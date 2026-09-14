@@ -26,7 +26,8 @@ Project adapter around the vendored `implement` skill.
 
 ## Implement and verify
 
-Call the Skill tool with `implement` and apply these overrides:
+Use `__PREFIX__-ponytail` to look for a simpler implementation within the approved outcomes,
+unless the user disabled Ponytail. Then call the Skill tool with `implement` and apply these overrides:
 
 - TDD at the agreed seams (`/tdd`); use the repo's narrow-to-wide test ladder. Run declared checks through `python3 scripts/agreement-gate.py verify` to record source-bound
   evidence. Show actual commands and results. Respect protected paths and the commit convention in `AGENTS.md`.

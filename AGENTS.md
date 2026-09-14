@@ -85,3 +85,6 @@ reached through the project adapters `__PREFIX__-intent` / `__PREFIX__-spec` / `
 __HUMAN_DOC_LANG__ output; do not call the vendored originals directly. Hooks are declared in
 `.agents/harness.yaml` and mirrored in `.claude/settings.json` / `.codex/hooks.json`. Change the
 harness only through `docs/standards/AGENT_HARNESS.md`, then run `__PACKAGE_MANAGER__ test:harness`.
+
+Ponytail is a code-simplification aid: use `__PREFIX__-ponytail` for project overrides. Its modes
+never waive agreed scope, required HTML/ADR/PR evidence, security, accessibility or verification.
