@@ -268,3 +268,13 @@ not the description.
    `.codex/hooks.json`, `.husky/pre-commit`).
 3. Run `__PACKAGE_MANAGER__ test:harness` and paste the result.
 4. Open a PR describing which layer changed and why the rule could not live one layer lower.
+
+## Ponytail simplification
+
+Use `__PREFIX__-ponytail` for the vendored Ponytail ladder: existing code, standard library,
+native platform features, installed dependencies, then minimal new code. This is a code-design
+aid, not authorization to shrink agreed requirements, skip HTML/ADR/value-review artifacts or
+replace the project's test/review requirements. The upstream skill is pinned by recorded commit
+and carries its MIT license. Only the main skill is installed; upstream lifecycle hooks, mode
+tracking, metrics and other plugin components are not registered in this harness.
+The project adapter preserves the original skill body and states harness-specific overrides.
