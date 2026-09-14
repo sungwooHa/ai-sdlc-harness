@@ -30,7 +30,7 @@
 - [ ] `/review-since <base>`가 plan.md·spec.md 대비로 통과했다
 - [ ] 계약 변경이 있으면 공유 계약(`packages/*` 등)과 소비 앱을 함께 갱신했다
 - [ ] UI 소스 파일을 건드렸으면 `/__PREFIX__-ui-review <base>`를 통과했다 — 리스크 절에 `시각 변경 없음`을 명시한 경우 생략 가능
-- [ ] 여러 앱·계약 변경이면 `설명서(eli5).html`, UI 경로 변경이면 `mockup.html` · `flow.html` · `architecture.html` 까지 만들어 PR 에 첨부했다 — 조건이 없으면 자동 면제
+- [ ] 여러 앱·계약 변경이면 `설명서(eli7).html`, UI 경로 변경이면 `mockup.html` · `flow.html` · `architecture.html` 까지 만들어 PR 에 첨부했다 — 조건이 없으면 자동 면제
 
 ## 티켓
 

@@ -41,7 +41,7 @@ flowchart LR
 - `intent.md` 와 `spec.md` 는 대화에 전문을 보여주고 사용자가 확인해야 합의로 친다(커밋하지 않는다).
 - Intent · Spec · Plan 단계의 질문은 선택형(`AskUserQuestion`)으로만 한다 — 한 라운드 4개 이하,
   추천 선택지 먼저. 질문 게이트 훅이 번호 나열식 질문을 거절한다.
-- Deliver 단계는 조건이 맞는 산출물만 만든다 — 여러 앱·공유 계약 변경이면 `설명서(eli5).html`,
+- Deliver 단계는 조건이 맞는 산출물만 만든다 — 여러 앱·공유 계약 변경이면 `설명서(eli7).html`,
   UI 변경이면 `mockup.html` · `flow.html` · `architecture.html` 까지. 30줄 이내 `pr.md` 와
   `plan.md` 의 Definition of Done 이 모두 채워져야 완료이고, 훅이 그 형태를 강제한다.
 
@@ -132,7 +132,7 @@ pnpm test:harness
 
 ## 더 읽기
 
-- [docs/standards/eli5-harness.html](./docs/standards/eli5-harness.html) — 하네스가 뭔지 그림으로 보는 설명. 사전 지식 없이 읽는다
+- [docs/standards/eli7-harness.html](./docs/standards/eli7-harness.html) — 하네스가 뭔지 그림으로 보는 설명. 사전 지식 없이 읽는다
 - [TEMPLATE_SETUP.md](./TEMPLATE_SETUP.md) — 템플릿 설정, 플레이스홀더 표, 무엇을 일부러 뺐는지
 - `docs/standards/AGENT_HARNESS.md` — 하네스 계약 해설. 하네스는 이 문서를 통해서만 바꾼다
 - `.agents/harness.yaml` — 기계 판독 계약 정본

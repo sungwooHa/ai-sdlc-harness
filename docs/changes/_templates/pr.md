@@ -3,7 +3,7 @@
 Plan-Ref: <YYMMDD_NN>-<slug>
 
 ## 그림
-첨부: 설명서(eli5).html (여러 앱·계약 변경 또는 UI 변경이면 필수) · mockup.html · flow.html · architecture.html (UI 변경이면)
+첨부: 설명서(eli7).html (여러 앱·계약 변경 또는 UI 변경이면 필수) · mockup.html · flow.html · architecture.html (UI 변경이면)
 
 ## 세 상자
 | 무엇이 바뀌었나 | 그래서 | 확인은 |

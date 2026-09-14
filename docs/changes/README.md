@@ -17,7 +17,7 @@ PR 설명란과 PR 첨부가 담는다. `.gitignore` 가 폴더를 무시하고,
 | `spec.md` | 요구 + 설계 결정, 우려 플래그 | `/__PREFIX__-spec` | PR 설명 "범위" |
 | `plan.md` | 파일·순서·테스트·리스크·완료 증거 | plan mode (`/__PREFIX__-tickets`로 분해) | PR 설명 "범위"·"검증 증거" + 커밋 `Plan-Ref:` |
 | (코드) | plan 대로 구현 | `/__PREFIX__-implement` | 커밋 |
-| `deliverables/` | `설명서(eli5).html`(여러 앱·계약 변경 또는 UI 변경) · `mockup.html` · `flow.html` · `architecture.html`(UI 변경) | `/__PREFIX__-implement` | PR 첨부 |
+| `deliverables/` | `설명서(eli7).html`(여러 앱·계약 변경 또는 UI 변경) · `mockup.html` · `flow.html` · `architecture.html`(UI 변경) | `/__PREFIX__-implement` | PR 첨부 |
 | `pr.md` | 한 문장 제목 · 그림 · 세 상자 · 볼 곳 3개 · 증거 10줄 — 30줄 이내 | `/__PREFIX__-implement` 마무리 (훅이 형태 강제) | PR 설명란에 붙임 |
 
 원칙:

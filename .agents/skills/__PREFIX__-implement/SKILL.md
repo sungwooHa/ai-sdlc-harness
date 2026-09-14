@@ -40,7 +40,7 @@ Then call the Skill tool with `implement` and apply these overrides:
   `plan.md`.
 - When a ticket's implementation is done, tick its checkbox in the `## 티켓` table of `plan.md`.
 
-Deliverables (`artifact_chain.deliverables.required_when`): `설명서(eli5).html` whenever the diff
+Deliverables (`artifact_chain.deliverables.required_when`): `설명서(eli7).html` whenever the diff
 spans two or more `apps/*` or touches a shared contract (the plan-scale case) or a UI path;
 `mockup.html`, `flow.html`, `architecture.html` only for a UI path (`__UI_SOURCE_GLOB__`).
 Nothing matches → say "산출물 없음" and skip. The `pr_body_gate` hook blocks Stop while a required
@@ -55,7 +55,8 @@ PR), in parallel subagents where possible:
 - `flow.html` — usage flow diagram; `architecture.html` — system structure with the changed parts
   highlighted. Budget a diagram before drawing it (split rather than iterate) and delete any
   temporary render artifacts before committing.
-- `설명서(eli5).html` — picture-first standalone HTML (inline SVG analogy, "누가 무엇을 보나" table,
+- `설명서(eli7).html` — picture-first standalone HTML for a curious 7-year-old: one cause→effect line per
+  box is fine, jargon is not (inline SVG analogy, "누가 무엇을 보나" table,
   3-box mechanism, checklist). Not Markdown.
 
 Only those files, no `/Users/...` paths, no external URLs, no external hosting. Tick the

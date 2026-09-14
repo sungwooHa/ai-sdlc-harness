@@ -29,7 +29,7 @@ MANIFEST = {
             "dir": "deliverables",
             "ui_glob": "apps/frontend/src/**/{ui,host,routes}/**",
             "required_when": {
-                "설명서(eli5).html": "plan-scale change (two or more apps/* or packages/*) or ui path",
+                "설명서(eli7).html": "plan-scale change (two or more apps/* or packages/*) or ui path",
                 "mockup.html": "ui path",
                 "flow.html": "ui path",
                 "architecture.html": "ui path",
@@ -44,7 +44,7 @@ GOOD = """# 팀장만 멤버 초대 버튼을 본다
 Plan-Ref: 260914_01-invite-gate
 
 ## 그림
-첨부: 설명서(eli5).html
+첨부: 설명서(eli7).html
 
 ## 세 상자
 | 무엇이 바뀌었나 | 그래서 | 확인은 |
@@ -158,12 +158,12 @@ def main() -> int:
         code, out, _ = run(root, stop())
         decision = json.loads(out) if out.strip() else {}
         check("two apps without 설명서: Stop blocks", decision.get("decision"), "block")
-        check("  ...names the missing file", "설명서(eli5).html" in decision.get("reason", ""), True)
+        check("  ...names the missing file", "설명서(eli7).html" in decision.get("reason", ""), True)
         check("  ...does not demand mockup", "mockup.html" in decision.get("reason", ""), False)
 
         ddir = root / pr_rel.replace("pr.md", "deliverables")
         ddir.mkdir(parents=True, exist_ok=True)
-        (ddir / "설명서(eli5).html").write_text("<title>x</title>", encoding="utf-8")
+        (ddir / "설명서(eli7).html").write_text("<title>x</title>", encoding="utf-8")
         check("with 설명서: Stop passes", run(root, stop())[1].strip(), "")
 
         # UI path → mockup/flow/architecture required too

@@ -77,7 +77,7 @@ mid-change goes through the PR, not through a commit.
   `/__PREFIX__-ui-review`, except when the approved `plan.md` states `시각 변경 없음` (a change that
   leaves copy, tokens, and layout untouched). The implement adapter names the waiver in its final
   report.
-- Deliverables (`artifact_chain.deliverables.required_when`, per file): `설명서(eli5).html` — the
+- Deliverables (`artifact_chain.deliverables.required_when`, per file): `설명서(eli7).html` — the
   reviewer's picture-first explainer — whenever the change spans two or more `apps/*` or touches a
   shared contract (plan scale) or a UI path; `mockup.html` (static wireframe + real-render
   walkthrough, screenshots embedded as base64), `flow.html` (usage flow) and `architecture.html`

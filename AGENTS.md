@@ -26,7 +26,7 @@ keeps rules only; the change's history goes to the PR (description from `_templa
 | Plan | change touches several files | plan mode; implementation commits carry `Plan-Ref: <YYMMDD_NN>-<slug>` | `plan.md` (local) |
 | Implement | plan approved | `/__PREFIX__-implement` (TDD at agreed seams), narrow tests while iterating | code + commits |
 | Review | before declaring done | `/review-since <base>` in a fresh subagent, checked against `plan.md` + `spec.md`; UI diffs also `/__PREFIX__-ui-review` unless `plan.md` says `시각 변경 없음` | findings fixed |
-| Deliver | review passed, before the completion report | `/__PREFIX__-implement` writes the short `pr.md` (title · 그림 · 세 상자 · 볼 곳 · 증거, hook-enforced) and the deliverables `harness.yaml` `required_when` demands (설명서(eli5) for multi-app/shared-contract or UI; mockup + flow/architecture for UI) to attach | `pr.md`, `deliverables/` (local → PR) |
+| Deliver | review passed, before the completion report | `/__PREFIX__-implement` writes the short `pr.md` (title · 그림 · 세 상자 · 볼 곳 · 증거, hook-enforced) and the deliverables `harness.yaml` `required_when` demands (설명서(eli7) for multi-app/shared-contract or UI; mockup + flow/architecture for UI) to attach | `pr.md`, `deliverables/` (local → PR) |
 
 Questions to the user in Intent, Spec, and plan mode go through `AskUserQuestion` only — at most 4
 per round, 3–4 options each with the recommended one first (`(추천)`), header limited to the stage's

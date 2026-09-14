@@ -46,12 +46,12 @@
         "mockup.html",
         "flow.html",
         "architecture.html",
-        "설명서(eli5).html"
+        "설명서(eli7).html"
       ],
       "rule": "Before /__PREFIX__-implement reports completion, every deliverable whose required_when matches the change is generated under <change folder>/deliverables/ (local, not committed) and attached to the PR; pr.md 그림 names them. No external hosting, no absolute paths, no external URLs. Presence next to pr.md is enforced at Stop by scripts/pr-body-gate.py; attachment to the PR is the reviewer's check (CI cannot read the PR body without a token).",
       "ui_glob": "__UI_SOURCE_GLOB__",
       "required_when": {
-        "설명서(eli5).html": "plan-scale change (two or more apps/* or any packages/*) or ui path (__UI_SOURCE_GLOB__) — the reviewer's low-load explainer",
+        "설명서(eli7).html": "plan-scale change (two or more apps/* or any packages/*) or ui path (__UI_SOURCE_GLOB__) — the reviewer's low-load explainer",
         "mockup.html": "ui path",
         "flow.html": "ui path",
         "architecture.html": "ui path"
@@ -155,7 +155,7 @@
     "standards_root_files": [
       "AGENT_HARNESS.md",
       "HARNESS_PRINCIPLES.md",
-      "eli5-harness.html"
+      "eli7-harness.html"
     ],
     "tracker_config": "docs/agents/issue-tracker.md"
   },
