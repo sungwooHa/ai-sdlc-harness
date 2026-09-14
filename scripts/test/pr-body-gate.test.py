@@ -23,7 +23,7 @@ MANIFEST = {
         "pr_body": {
             "template": "docs/changes/_templates/pr.md",
             "max_lines": 30, "max_evidence_lines": 10, "max_title_chars": 60, "max_look_items": 3, "max_box_rows": 3,
-            "required_headings": ["## 그림", "## 세 상자", "## 볼 곳", "## 증거"],
+            "required_headings": ["## 그림", "## 세 상자", "## 가치 확인", "## 볼 곳", "## 증거"],
         },
         "deliverables": {
             "dir": "deliverables",
@@ -51,6 +51,9 @@ Plan-Ref: 260914_01-invite-gate
 |---|---|---|
 | 초대 버튼에 권한 게이트 | 팀장 아닌 사람은 버튼이 없다 | 권한 테스트 3개 |
 | API 가 403 을 돌려준다 | 우회 호출도 막힌다 | 컨트롤러 테스트 |
+
+## 가치 확인
+- V1: 부분 확인 — 권한 제어는 검증됨; 문의 감소는 담당 미정, 배포 2주 후 문의 건수로 확인
 
 ## 볼 곳
 - `apps/frontend/src/domains/member/ui/InviteButton.tsx` — 게이트가 여기 하나
@@ -143,6 +146,13 @@ def main() -> int:
         no_look = GOOD.replace("- `apps/frontend/src/domains/member/ui/InviteButton.tsx` — 게이트가 여기 하나\n- `apps/backend/.../MemberInviteController.java` — 403 분기\n", "")
         check("no look items block", run(root, write(no_look))[0], 2)
 
+        check("empty evidence is refused", run(root, write(GOOD.replace(
+            "pnpm --dir apps/frontend test src/domains/member → 12 passed\n./gradlew test --tests '*MemberInvite*' → BUILD SUCCESSFUL", "")))[0], 2)
+        check("missing evidence fence is refused", run(root, write(GOOD.replace("```", "")))[0], 2)
+        check("honest unverified value passes", run(root, write(GOOD.replace("부분 확인", "미검증")))[0], 0)
+        check("empty value section is refused", run(root, write(GOOD.replace(
+            "- V1: 부분 확인 — 권한 제어는 검증됨; 문의 감소는 담당 미정, 배포 2주 후 문의 건수로 확인", "")))[0], 2)
+
         # --- Stop: remembered pr.md + deliverables requirement
         (root / pr_rel).parent.mkdir(parents=True, exist_ok=True)
         (root / pr_rel).write_text(GOOD, encoding="utf-8")
@@ -164,7 +174,17 @@ def main() -> int:
         ddir = root / pr_rel.replace("pr.md", "deliverables")
         ddir.mkdir(parents=True, exist_ok=True)
         (ddir / "설명서(eli7).html").write_text("<title>x</title>", encoding="utf-8")
-        check("with 설명서: Stop passes", run(root, stop())[1].strip(), "")
+        decision = json.loads(run(root, stop())[1])
+        check("result alone without agreement blocks", decision.get("decision"), "block")
+        change = (root / pr_rel).parent
+        (change / "spec.md").write_text("# approved spec\n", encoding="utf-8")
+        snapshot_helper = GATE.parent / "harness/agreement-snapshot.py"
+        subprocess.run([sys.executable, str(snapshot_helper), str(change), "--revision", "001",
+                        "--approval-ref", "test fixture: approval message 1"], check=True, capture_output=True)
+        agreed_good = GOOD.replace("Plan-Ref: 260914_01-invite-gate",
+                                   "Plan-Ref: 260914_01-invite-gate\nAgreement-Ref: agreements/001")
+        (root / pr_rel).write_text(agreed_good, encoding="utf-8")
+        check("with baseline and result: Stop passes", run(root, stop())[1].strip(), "")
 
         # UI path → mockup/flow/architecture required too
         commit_paths(root, "apps/frontend/src/domains/member/ui/InviteButton.tsx")
@@ -173,7 +193,30 @@ def main() -> int:
         check("  ...names mockup", "mockup.html" in decision.get("reason", ""), True)
         for f in ("mockup.html", "flow.html", "architecture.html"):
             (ddir / f).write_text("<title>x</title>", encoding="utf-8")
-        check("all four present: Stop passes", run(root, stop())[1].strip(), "")
+        check("new UI scope absent from approved snapshot blocks",
+              json.loads(run(root, stop())[1]).get("decision"), "block")
+        subprocess.run([sys.executable, str(snapshot_helper), str(change), "--revision", "002",
+                        "--approval-ref", "test fixture: scope amendment"], check=True, capture_output=True)
+        agreed_good = agreed_good.replace("agreements/001", "agreements/002")
+        (root / pr_rel).write_text(agreed_good, encoding="utf-8")
+        check("all four agreed and results present: Stop passes", run(root, stop())[1].strip(), "")
+        approved_mockup = change / "agreements/002/deliverables/mockup.html"
+        approved_mockup.write_text("changed after approval", encoding="utf-8")
+        check("changed baseline blocks", json.loads(run(root, stop())[1]).get("decision"), "block")
+        approved_mockup.write_text("<title>x</title>", encoding="utf-8")
+        check("baseline restored passes", run(root, stop())[1].strip(), "")
+
+        # Configured result directory must also be preserved and checked in the baseline.
+        custom = json.loads(json.dumps(MANIFEST))
+        custom["artifact_chain"]["deliverables"]["dir"] = "views"
+        (root / ".agents/harness.yaml").write_text(json.dumps(custom), encoding="utf-8")
+        ddir.rename(change / "views")
+        subprocess.run([sys.executable, str(snapshot_helper), str(change), "--revision", "003",
+                        "--approval-ref", "test fixture: configured views approval"], check=True, capture_output=True)
+        (root / pr_rel).write_text(agreed_good.replace("agreements/002", "agreements/003"), encoding="utf-8")
+        check("configured view directory works end to end", run(root, stop())[1].strip(), "")
+        (root / ".agents/harness.yaml").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        (change / "views").rename(ddir)
 
         # Stop re-validates shape too
         (root / pr_rel).write_text(long_body, encoding="utf-8")

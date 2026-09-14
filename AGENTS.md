@@ -22,11 +22,11 @@ keeps rules only; the change's history goes to the PR (description from `_templa
 | Stage | When | Do | Artifact |
 |---|---|---|---|
 | Intent | requirement is unclear or new | `/__PREFIX__-intent` (interviews you, looks up facts itself) | `intent.md` |
-| Spec | intent agreed | `/__PREFIX__-spec` (synthesizes from intent + conversation) | `spec.md` |
-| Plan | change touches several files | plan mode; implementation commits carry `Plan-Ref: <YYMMDD_NN>-<slug>` | `plan.md` (local) |
-| Implement | plan approved | `/__PREFIX__-implement` (TDD at agreed seams), narrow tests while iterating | code + commits |
-| Review | before declaring done | `/review-since <base>` in a fresh subagent, checked against `plan.md` + `spec.md`; UI diffs also `/__PREFIX__-ui-review` unless `plan.md` says `시각 변경 없음` | findings fixed |
-| Deliver | review passed, before the completion report | `/__PREFIX__-implement` writes the short `pr.md` (title · 그림 · 세 상자 · 볼 곳 · 증거, hook-enforced) and the deliverables `harness.yaml` `required_when` demands (설명서(eli7) for multi-app/shared-contract or UI; mockup + flow/architecture for UI) to attach | `pr.md`, `deliverables/` (local → PR) |
+| Spec | intent agreed | `/__PREFIX__-spec`; draft the applicable HTML views for human agreement | `spec.md`, draft `deliverables/` |
+| Plan / Agree | before nontrivial implementation | refine plan (or small-change spec) + HTML, present for approval, preserve agreed revision (see `AGREEMENT_REVIEW.md`) | `plan.md`, `agreements/<revision>/` |
+| Implement | presented plan/drafts approved and baseline preserved | `/__PREFIX__-implement` (TDD at agreed seams), narrow tests while iterating | code + commits |
+| Code review | after implementation, before value handoff | `/review-since <base>` in a fresh subagent, checked against the referenced agreement's spec/plan; UI diffs also `/__PREFIX__-ui-review` unless `plan.md` says `시각 변경 없음` | findings fixed |
+| PR value review | code review passed | compare agreed value with actual results; update working HTML, preserve the baseline, write short `pr.md` with unverified value and follow-up | result `deliverables/`, `pr.md` (local → PR) |
 
 Questions to the user in Intent, Spec, and plan mode go through `AskUserQuestion` only — at most 4
 per round, 3–4 options each with the recommended one first (`(추천)`), header limited to the stage's
@@ -34,12 +34,14 @@ categories declared in `harness.yaml` `question_gate`; a hook refuses numbered t
 and non-compliant calls.
 The `/__PREFIX__-*` skills are user-invoked: when a request is vague or product-facing and no
 `docs/changes/<YYMMDD_NN>-<slug>/intent.md` exists, do not start coding — say what is unclear and
-ask the user to run `/__PREFIX__-intent`. Skip stages that add nothing: a one-sentence diff needs no
-intent/spec/plan. Never skip Review for diffs that touch more than one app or any shared contract;
+ask the user to run `/__PREFIX__-intent`. Skip stages that add nothing: small changes may skip intent/plan and inapplicable HTML, but still need spec, scope and
+hook-owned agreement. Never skip Review for diffs that touch more than one app or any shared contract;
 CI warns when such a PR carries no `Plan-Ref` commit trailer.
-A change is not done until `pr.md` passes the `pr_body_gate` hook, the deliverables required by
-`harness.yaml` `artifact_chain.deliverables.required_when` exist beside it, and every Definition of
-Done box in `plan.md` is ticked — the completion report lists them. Never commit anything under a
+Before spec/plan agreement and PR delivery, read `docs/standards/AGREEMENT_REVIEW.md`.
+HTML is reviewed before implementation; the PR is the human value review.
+For artifact-chain changes, implementation handoff requires that `pr.md` passes the `pr_body_gate` hook, the deliverables required by
+`harness.yaml` `artifact_chain.deliverables.required_when` exist beside it, and every applicable Definition of
+Done criterion in the approved plan has a result in `progress.md` — unverified value stays explicit; it is not human acceptance. Never commit anything under a
 change folder (the fast guard refuses it; `local_only_roots`).
 
 Show evidence, not confidence: paste the test/typecheck command you ran and its result.
@@ -70,15 +72,15 @@ yours: compare against a clean checkout before claiming or fixing it.
   PRs target `__INTEGRATION_BRANCH__`.
 - Commit: `__COMMIT_FORMAT__` with type in
   feat | fix | docs | style | refactor | test | chore. Details: `.codex/rules/commit-convention.mdc`.
-- Pre-commit (husky) runs the harness fast guard. `git commit --no-verify` is for emergencies only;
-  say so in the PR.
+- Pre-commit (husky) runs the harness fast guard. the agreement gate requires scope, current verification and local PR value review; agent
+  `--no-verify` is blocked.
 
 ## Harness
 
 Skills live in `.agents/skills/` (single root; `.claude/skills` is a symlink mirror). Vendored
 workflow skills (`grilling`, `to-spec`, `to-tickets`, `implement`, `tdd`, `review-since`, ...) are
 reached through the project adapters `__PREFIX__-intent` / `__PREFIX__-spec` / `__PREFIX__-tickets` /
-`__PREFIX__-implement`, which supply the change-folder convention
+`__PREFIX__-agreement` / `__PREFIX__-implement`, which supply the change-folder convention
 (`docs/agents/issue-tracker.md`: no external tracker, slug folders), the `docs/changes` paths, and
 __HUMAN_DOC_LANG__ output; do not call the vendored originals directly. Hooks are declared in
 `.agents/harness.yaml` and mirrored in `.claude/settings.json` / `.codex/hooks.json`. Change the

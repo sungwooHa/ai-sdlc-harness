@@ -3,7 +3,7 @@
 이 저장소는 **에이전트 개발 하네스(agent development harness)** 의 재사용 가능한 GitHub 템플릿이다.
 Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관되게 움직이도록,
 ① 항상 로드되는 운영 계약(`AGENTS.md`), ② 스킬 계층(`.agents/skills/`),
-③ 모델 판단과 무관하게 도는 결정적 게이트(hooks · husky), ④ 변경마다 커밋되는 산출물 체인
+③ 모델 판단과 무관하게 도는 결정적 게이트(hooks · husky), ④ 구현 전 합의본을 보존하고 PR에서 가치를 검토하는 로컬 산출물 체인
 (`docs/changes/<YYMMDD_NN>-<slug>/`), ⑤ 그 전부를 기계적으로 검사하는 체커와 회귀 테스트를 묶어 놓았다.
 
 실제로 운영 중이던 폴리글랏 모노레포의 하네스에서 추출했다. 프로젝트 고유 지식은 모두 제거하고
@@ -107,6 +107,12 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
   그 문서 생성 시스템은 템플릿에 없다. 같은 이유로 fast-guard 회귀 테스트의 knowledge 섹션도 뺐다
   (husky 배선 회귀 케이스는 전부 남아 있다).
 
+## 합의와 가치 리뷰
+
+HTML은 구현 전 합의 초안이다. 합의 후 `agreement-snapshot.py`로 보존하고, 구현 후에는
+작업용 결과만 갱신한다. PR은 합의 대비 가치 리뷰다. `docs/standards/AGREEMENT_REVIEW.md`를 따른다.
+PR에 추가된 `## 가치 확인` 제목과 상태 문자열도 언어 변경 시 템플릿·계약과 함께 맞춘다.
+
 ## 게이트 추가하는 법
 
 - **커밋 게이트**: `.husky/pre-commit` 에 한 줄 추가(무엇을 막는지 + 끄는 법을 주석으로) →
@@ -122,13 +128,13 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 ```sh
 pnpm check:harness        # 하네스 계약 (읽기 전용)
 pnpm check:harness:fast   # 변경 파일 기준 빠른 가드 + husky 배선 점검
-pnpm check:plan           # 여러 apps/* 또는 packages/* 를 건드린 diff 에 plan.md 가 있는지 (warn)
+pnpm check:plan           # 여러 apps/* 또는 packages/* 변경의 Plan-Ref 트레일러 (warn)
 pnpm test:harness         # check:harness + 가드 회귀 테스트 전부
 pnpm evals:harness        # claude -p 행동 회귀 (모델 쿼터 소모, test:harness 에 포함되지 않음)
 ```
 
 `scripts/harness/check-plan-artifact.sh` 는 **모노레포 레이아웃을 가정한다** — `apps/<name>/...`
-경로 2개 이상이 바뀌었거나 `packages/<name>/...` 가 바뀌었는데 `docs/changes/*/plan.md` 가 없으면
+경로 2개 이상이 바뀌었거나 `packages/<name>/...` 가 바뀌었는데 커밋에 `Plan-Ref` 트레일러가 없으면
 경고한다. 레이아웃이 다르면 그 sed/grep 패턴을 프로젝트 구조에 맞게 고친다.
 기본 base 는 `origin/__INTEGRATION_BRANCH__`, 강제하려면 `PLAN_GATE=enforce`.
 

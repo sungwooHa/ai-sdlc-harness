@@ -38,7 +38,7 @@
       "spec.md",
       "plan.md"
     ],
-    "review_gate": "intent.md and spec.md are shown in full in the conversation and confirmed by the user before they are committed; the adapters enforce it.",
+    "review_gate": "Intent/spec confirmation and pre-implementation agreement are human decisions. Before product implementation, present the applicable HTML drafts and the plan, obtain approval of that revision, and preserve the baseline under agreements/<revision>/. Code review verifies implementation; the PR reviews realized value against that agreement.",
     "ui_review_waiver": "/__PREFIX__-ui-review is required for a diff under __UI_SOURCE_GLOB__ unless the approved plan.md states 시각 변경 없음 (no visual change); the implement adapter records the waiver in its final report.",
     "deliverables": {
       "dir": "deliverables",
@@ -48,7 +48,7 @@
         "architecture.html",
         "설명서(eli7).html"
       ],
-      "rule": "Before /__PREFIX__-implement reports completion, every deliverable whose required_when matches the change is generated under <change folder>/deliverables/ (local, not committed) and attached to the PR; pr.md 그림 names them. No external hosting, no absolute paths, no external URLs. Presence next to pr.md is enforced at Stop by scripts/pr-body-gate.py; attachment to the PR is the reviewer's check (CI cannot read the PR body without a token).",
+      "rule": "Keep all four HTML perspectives under the existing required_when conditions. Draft them in spec/plan before product implementation; present one explainer entrypoint linking the other required views. Preserve approved files in agreements/<revision>/deliverables/. After implementation update only the working deliverables/ with actual evidence and deviations; attach both the agreed baseline and the result for PR value review. See AGREEMENT_REVIEW.md.",
       "ui_glob": "__UI_SOURCE_GLOB__",
       "required_when": {
         "설명서(eli7).html": "plan-scale change (two or more apps/* or any packages/*) or ui path (__UI_SOURCE_GLOB__) — the reviewer's low-load explainer",
@@ -61,11 +61,11 @@
     "plan_gate": {
       "base": "origin/__INTEGRATION_BRANCH__",
       "evidence": "commit trailer `Plan-Ref: <YYMMDD_NN>-<slug>` on at least one commit in the PR range",
-      "rule": "A PR that touches more than one app or any packages/* contract must carry a Plan-Ref trailer; the plan itself is pasted into the PR description. CI check: scripts/harness/check-plan-artifact.sh (warn, PLAN_GATE=enforce to block)."
+      "rule": "A PR that touches more than one app or any packages/* contract must carry a Plan-Ref trailer; the PR compares value and refers to the attached agreement for the full plan. CI check: scripts/harness/check-plan-artifact.sh (warn, PLAN_GATE=enforce to block)."
     },
     "pr_body": {
       "template": "docs/changes/_templates/pr.md",
-      "shape": "one-sentence title (who · what · gains) → Plan-Ref → 그림 (attached explainer) → 세 상자 (≤3 rows: 무엇이 바뀌었나 | 그래서 | 확인은) → 볼 곳 (≤3 files, one reason each) → 증거 (fenced, ≤10 lines)",
+      "shape": "one-sentence value title → Plan-Ref and Agreement-Ref when applicable → 그림 (agreement vs actual result) → 세 상자 (agreed expectation | observed change | evidence) → 가치 확인 (status, remaining uncertainty, follow-up) → 볼 곳 (≤3 files) → 증거 (one nonempty fence, ≤10 lines); ≤30 nonempty prose lines",
       "max_lines": 30,
       "max_evidence_lines": 10,
       "max_title_chars": 60,
@@ -74,10 +74,23 @@
       "required_headings": [
         "## 그림",
         "## 세 상자",
+        "## 가치 확인",
         "## 볼 곳",
         "## 증거"
       ],
-      "rule": "/__PREFIX__-implement fills the template into <change folder>/pr.md before the completion report; the developer pastes it as the PR description. Enforced by scripts/pr-body-gate.py (hook intent pr_body_gate): Write of a pr.md that breaks the shape is refused, and Stop is blocked while a pr.md touched in the session breaks it or lacks a required deliverable."
+      "rule": "PR shape/value evidence remains checked by pr-body-gate. The agreement gate additionally requires the active PR, matching approval, current source-bound verification, and approved baseline/results at Stop and pre-commit. Actual semantic value and attachment remain human judgments.",
+      "value_statuses": [
+        "확인됨",
+        "부분 확인",
+        "미검증",
+        "미달"
+      ]
+    },
+    "agreement": {
+      "reference": "docs/standards/AGREEMENT_REVIEW.md",
+      "dir": "agreements",
+      "snapshot_command": "python3 scripts/agreement-gate.py prepare <change-folder-id> --revision 001",
+      "rule": "Prepare records exact scope, draft hashes and a challenge. The user approves that challenge through /__PREFIX__-agreement approve <challenge>; the hook creates the immutable-by-convention snapshot and grants scoped implementation. Self-written approval prose and invoking the Skill tool do not grant permission."
     }
   },
   "question_gate": {
@@ -139,7 +152,8 @@
     "active_roots": [
       "docs/standards",
       "docs/changes",
-      "docs/agents"
+      "docs/agents",
+      "docs/decisions"
     ],
     "local_only_roots": {
       "description": "Execution history that must never be committed: the harness keeps rules, the PR keeps history. Globs are matched against staged/changed paths by scripts/agent-harness-fast-guard.py (pre-commit and CI) and refused.",
@@ -155,7 +169,8 @@
     "standards_root_files": [
       "AGENT_HARNESS.md",
       "HARNESS_PRINCIPLES.md",
-      "eli7-harness.html"
+      "eli7-harness.html",
+      "AGREEMENT_REVIEW.md"
     ],
     "tracker_config": "docs/agents/issue-tracker.md"
   },
@@ -347,6 +362,52 @@
       "host_files": {
         "claude": ".claude/settings.json"
       }
+    },
+    {
+      "id": "agreement_runtime",
+      "event": "UserPromptSubmit|PreToolUse|Stop",
+      "required_scripts": [
+        "scripts/agreement-gate.py"
+      ],
+      "host_files": {
+        "claude": ".claude/settings.json",
+        "codex": ".codex/hooks.json"
+      },
+      "description": "Fail-closed agreement, scope and completion gate with host-observed user approval."
+    },
+    {
+      "id": "agreement_precommit",
+      "event": "pre-commit",
+      "required_scripts": [
+        "scripts/agreement-gate.py"
+      ],
+      "host_files": {
+        "husky": ".husky/pre-commit"
+      },
+      "description": "Check staged scope, current verification and PR against the approved revision."
+    },
+    {
+      "id": "adr_stop",
+      "event": "Stop",
+      "description": "Validate ADR records when their directory changed; pause and agreement-draft handoffs remain incomplete.",
+      "required_scripts": [
+        "scripts/adr-gate.py"
+      ],
+      "host_files": {
+        "claude": ".claude/settings.json",
+        "codex": ".codex/hooks.json"
+      }
+    },
+    {
+      "id": "adr_precommit",
+      "event": "pre-commit",
+      "description": "Validate ADRs from the staged tree, including reciprocal supersession references.",
+      "required_scripts": [
+        "scripts/adr-gate.py"
+      ],
+      "host_files": {
+        "husky": ".husky/pre-commit"
+      }
     }
   ],
   "stale_project_names": [
@@ -363,6 +424,113 @@
     "pipeline_file": null,
     "recommended_pipeline_substrings": [
       "scripts/check-agent-harness.py --format text"
+    ]
+  },
+  "agreement_gate": {
+    "enabled": true,
+    "skill": "__PREFIX__-agreement",
+    "state": "worktree Git directory: harness-agreement.json",
+    "verification_timeout_seconds": 300,
+    "scope_template": "docs/changes/_templates/scope.json",
+    "fallback_hosts": [
+      "husky pre-commit"
+    ],
+    "rule": "Skills prepare drafts and exact scope. UserPromptSubmit approve <challenge> grants the matching draft. PreToolUse blocks unapproved/out-of-scope mutations; verify runs declared argv commands and binds results to source. Stop and pre-commit require current verification and the active PR even when pr.md was never touched. Hook errors fail closed. Trusted checkout/commands, not an OS sandbox.",
+    "runtime_hosts": [
+      "claude",
+      "codex"
+    ]
+  },
+  "adr_gate": {
+    "root": "docs/decisions",
+    "skill": "__PREFIX__-adr",
+    "template": "docs/decisions/_template.md",
+    "required_sections": [
+      "배경",
+      "결정",
+      "검토한 대안",
+      "결과와 감수한 비용",
+      "재검토 조건",
+      "근거"
+    ],
+    "statuses": [
+      "proposed",
+      "accepted",
+      "superseded"
+    ],
+    "rule": "Opt-in ADR authoring through the skill. Validate changed ADRs at Stop and pre-commit: structure, IDs, status and reciprocal supersession links. No universal ADR requirement and no semantic approval claim."
+  },
+  "adr_suggestions": {
+    "enabled": true,
+    "max_candidates": 3,
+    "state": "worktree Git directory: harness-adr-advice/",
+    "rule": "Advisory only, before agreement prepare through PreToolUse. Match planned paths, let the ADR skill assess actual decision content and existing records, suggest briefly when useful. Never block, accept a decision, or require an ADR merely because a path matched. Suppress repeats for the same change and matched paths.",
+    "rules": [
+      {
+        "id": "harness-policy",
+        "topic": "하네스 승인·검증 정책",
+        "globs": [
+          ".agents/harness.yaml",
+          ".claude/settings.json",
+          ".codex/hooks.json",
+          ".husky/**",
+          "scripts/*gate*.py",
+          "scripts/*guard*.py"
+        ]
+      },
+      {
+        "id": "auth-policy",
+        "topic": "인증·권한 경계",
+        "globs": [
+          "auth/**",
+          "**/auth/**",
+          "permissions/**",
+          "**/permissions/**",
+          "security/**",
+          "**/security/**"
+        ]
+      },
+      {
+        "id": "data-contract",
+        "topic": "데이터·공유 계약",
+        "globs": [
+          "packages/**",
+          "migrations/**",
+          "**/migrations/**",
+          "**/schema.prisma",
+          "**/schema.sql",
+          "**/*.proto",
+          "openapi.*",
+          "**/openapi.*"
+        ]
+      },
+      {
+        "id": "runtime-dependency",
+        "topic": "주요 의존성·실행 환경",
+        "globs": [
+          "package.json",
+          "**/package.json",
+          "pyproject.toml",
+          "**/pyproject.toml",
+          "requirements.txt",
+          "**/requirements.txt",
+          "Cargo.toml",
+          "go.mod"
+        ]
+      },
+      {
+        "id": "operations",
+        "topic": "배포·운영 방식",
+        "globs": [
+          "infra/**",
+          "terraform/**",
+          ".github/workflows/**",
+          "Dockerfile",
+          "**/Dockerfile",
+          "compose*.yml",
+          "compose*.yaml"
+        ]
+      }
     ]
   }
 }

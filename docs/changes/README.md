@@ -11,14 +11,21 @@ PR 설명란과 PR 첨부가 담는다. `.gitignore` 가 폴더를 무시하고,
 시작하는 폴더 수를 세어 부여한다. 이 id 는 구현 커밋의 `Plan-Ref:` 트레일러와 PR 설명란 머리에 적어
 커밋 ↔ 계획을 잇는다(브랜치는 `feature/<slug>`).
 
-| 파일 | 만드는 단계 | 도구 | 어디로 가나 |
-|---|---|---|---|
-| `intent.md` | 무엇을 왜 하는지 요청자의 말로 | `/__PREFIX__-intent` (grilling 인터뷰, 선택형 질문) | PR 설명 "의도" |
-| `spec.md` | 요구 + 설계 결정, 우려 플래그 | `/__PREFIX__-spec` | PR 설명 "범위" |
-| `plan.md` | 파일·순서·테스트·리스크·완료 증거 | plan mode (`/__PREFIX__-tickets`로 분해) | PR 설명 "범위"·"검증 증거" + 커밋 `Plan-Ref:` |
-| (코드) | plan 대로 구현 | `/__PREFIX__-implement` | 커밋 |
-| `deliverables/` | `설명서(eli7).html`(여러 앱·계약 변경 또는 UI 변경) · `mockup.html` · `flow.html` · `architecture.html`(UI 변경) | `/__PREFIX__-implement` | PR 첨부 |
-| `pr.md` | 한 문장 제목 · 그림 · 세 상자 · 볼 곳 3개 · 증거 10줄 — 30줄 이내 | `/__PREFIX__-implement` 마무리 (훅이 형태 강제) | PR 설명란에 붙임 |
+| 파일 | 만드는 단계 | 역할 |
+|---|---|---|
+| `intent.md` | 의도 | 문제·바라는 결과·가치 가설 |
+| `spec.md` | 명세 | 사용자 시나리오와 수용 기준 |
+| `deliverables/` 초안 | 명세·계획 | 설명서·목업·흐름·구조를 구현 전에 검토 |
+| `plan.md` | 계획·합의 | 초안과 함께 구현 방향·검증·기대 가치를 승인 |
+| `scope.json` | 합의 준비 | 정확한 변경 파일·실행할 검증 명령; agreement 스킬로 승인 준비 |
+| `progress.md` | 구현·검증 | 합의본을 수정하지 않고 티켓·완료 조건 결과 기록 |
+| `agreements/<revision>/` | 승인 후, 구현 전 | spec/plan/HTML과 승인 참조·해시를 보존 |
+| 코드·작업용 `deliverables/` | 구현·검증 | 실제 동작·증거·합의와의 차이; 합의본은 유지 |
+| `pr.md` | 가치 리뷰 준비 | 합의한 기대·실제 결과·미검증 가치·후속 확인 |
+
+HTML 적용 조건은 유지한다. 전체 절차는 `../standards/AGREEMENT_REVIEW.md`.
+`Agreement-Ref: agreements/001`로 합의 리비전을 지정한다. PR 첨부는 합의본과 결과,
+해시 목록을 디렉터리 구조가 유지되는 묶음으로 전달한다. 사용자의 가치 승인은 구현 완료와 별도다.
 
 원칙:
 

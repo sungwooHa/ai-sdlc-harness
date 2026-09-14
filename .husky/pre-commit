@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+set -e
+
 # Each line is one gate. Escape hatch for every gate: git commit --no-verify (emergencies only).
 
 # Agent harness fast guard — docs outside the active roots declared in .agents/harness.yaml,
@@ -9,3 +11,9 @@ python3 "$(git rev-parse --show-toplevel)/scripts/agent-harness-fast-guard.py" -
 # turn it off. Declare it in .agents/harness.yaml shared_hook_intents so the harness check
 # fails when it is removed from here. Example:
 # "$(git rev-parse --show-toplevel)/scripts/lint-changed.sh"
+
+# Agreement, verified source, and PR value handoff must exist before commit.
+python3 "$(git rev-parse --show-toplevel)/scripts/agreement-gate.py" check-staged
+
+# Validate ADR structure and replacement links from the staged tree.
+python3 "$(git rev-parse --show-toplevel)/scripts/adr-gate.py" --staged

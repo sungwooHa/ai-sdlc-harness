@@ -6,8 +6,44 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash -lc 'repo=\"$(git rev-parse --show-toplevel)\" || exit 2; exec python3 \"$repo/scripts/agreement-gate.py\" --repo-root \"$repo\" hook'",
+            "timeout": 30
+          },
+          {
+            "type": "command",
             "command": "bash -lc 'repo=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; script=\"$repo/scripts/agent-harness-fast-guard.py\"; [ -f \"$script\" ] || exit 0; exec python3 \"$script\" --repo-root \"$repo\" --quiet-unless-relevant'",
             "timeout": 60
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'repo=\"$(git rev-parse --show-toplevel)\" || exit 2; exec python3 \"$repo/scripts/adr-gate.py\" --repo-root \"$repo\" --hook'",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'repo=\"$(git rev-parse --show-toplevel)\" || exit 2; exec python3 \"$repo/scripts/agreement-gate.py\" --repo-root \"$repo\" hook'",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'repo=\"$(git rev-parse --show-toplevel)\" || exit 2; exec python3 \"$repo/scripts/agreement-gate.py\" --repo-root \"$repo\" hook'",
+            "timeout": 30
           }
         ]
       }
