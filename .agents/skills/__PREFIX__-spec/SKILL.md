@@ -14,7 +14,9 @@ Before calling it:
 1. Resolve the change folder. Use `$0` (the folder name `<YYMMDD_NN>-<slug>`) when given; otherwise
    pick the most recent `docs/changes/<YYMMDD_NN>-<slug>/` that has `intent.md` but no `spec.md`,
    and confirm it with the user. The folders are local and uncommitted, so most recent = the newest
-   file mtime (`ls -t docs/changes/*/intent.md`); the folder id sorts chronologically, so break a
+   file mtime (`rg --files --no-ignore --sortr modified -g intent.md docs/changes`, newest first;
+   the agreement gate refuses unquoted globs such as `ls -t docs/changes/*/intent.md`, and
+   `_templates` is not a change folder); the folder id sorts chronologically, so break a
    tie with the larger id; if candidates are still ambiguous, ask the user. If no intent exists,
    stop and tell the user to run `/__PREFIX__-intent` first.
 2. Read `docs/changes/<YYMMDD_NN>-<slug>/intent.md` and `docs/agents/issue-tracker.md`. There is no

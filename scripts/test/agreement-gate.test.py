@@ -216,7 +216,10 @@ with tempfile.TemporaryDirectory() as tmp:
         'git diff --no-index a b',
     )])
     configure()  # the default list
-    failures += wrong([('git log --oneline -- scripts/agreement-gate.py', 0)] + [(c, 2) for c in ('git -C . status', 'git -c core.pager=x log', 'GIT_PAGER=x git log',
+    # The spec skill finds the newest intent.md with rg, since an unquoted glob (ls -t …/*/…) is refused.
+    failures += wrong([('git log --oneline -- scripts/agreement-gate.py', 0),
+                       ('rg --files --no-ignore --sortr modified -g intent.md docs/changes', 0),
+                       ('ls -t docs/changes/*/intent.md', 2)] + [(c, 2) for c in ('git -C . status', 'git -c core.pager=x log', 'GIT_PAGER=x git log',
                                          'git diff -Oorder.txt', 'git log --output=leak.txt')])
     assert not failures, failures
     configure(allowed_subagents=None)  # A missing list opens nothing.
