@@ -2,7 +2,8 @@
 """Regression tests for scripts/commit-msg-gate.py and its .husky/commit-msg wiring.
 
 First line: checked against `commit_message.format` unless that is still a template placeholder;
-git-written first lines (Merge, Revert ", fixup!, squash!) pass. Trailers: checked always; only
+git-written first lines (Merge branch/branches/pull request/remote-tracking branch/tag/commit, Revert ",
+Reapply ", fixup!, squash!, amend!) pass; a comment line first is refused. Trailers: checked always; only
 `allowed_trailers` pass while `forbid_other_trailers` is on (the default).
 """
 
@@ -49,12 +50,24 @@ def main() -> int:
             ("fix: 오타 수정\n", True),  # the bracketed field may be left out
             ("feat: [Harness] 검사 추가\n\n왜 필요한지 한 줄.\n\nPlan-Ref: 261008_00-harness-baseline\n", True),
             ("feat: x\n# Please enter the commit message.\n# Co-Authored-By: commented out\n", True),
-            ("\n# Write the message below.\nfeat: x\n", True),  # the first line git stores, not a comment
+            # A comment line first: -m/-F keep it (whitespace cleanup) as the stored subject, so it is
+            # refused rather than skipped (`git commit -m "# wip" -m "feat: x"`).
+            ("# wip\n\nfeat: [x] y\n", False),
+            ("\n# Write the message below.\nfeat: x\n", False),
             ("feat: x\n# ------------------------ >8 ------------------------\n\nCo-Authored-By: below scissors\n", True),
             ("Merge branch 'feature/x' into main\n", True),
+            ("Merge branches 'a' and 'b'\n", True),
+            ("Merge pull request #12 from org/feature-x\n", True),
+            ("Merge remote-tracking branch 'origin/main'\n", True),
+            ("Merge tag 'v1.0'\n", True),
+            ("Merge commit '0123abc'\n", True),
             ('Revert "feat: x"\n\nThis reverts commit 0123abc.\n', True),
+            ('Reapply "feat: x"\n\nThis reverts commit 0123abc.\n', True),  # git 2.43+: revert of a revert
             ("fixup! feat: x\n", True),
             ("squash! anything goes here\n", True),
+            ("amend! feat: x\n\nfeat: x 고친 제목\n\nPlan-Ref: 261008_00-a\n", True),  # git commit --fixup=amend:<rev>
+            ("Mergesort rewrite\n", False),  # only git's own merge subjects skip the format
+            ("Merge stuff quickly\n", False),
             ("update stuff\n", False),
             ("feature: [x] y\n", False),
             ("Feat: y\n", False),

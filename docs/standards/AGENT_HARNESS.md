@@ -188,9 +188,11 @@ is shared):
 /.agents/skills/local-*
 ```
 
-The harness check skips the prefix in the mirror check and the content scan; the exclude keeps the
-folders out of commits and out of the agreement gate's scope check. The exclude file is shared by
-all worktrees of the clone, but the folders are not: recreate them in each new worktree.
+The harness check skips the prefix in the mirror check and the content scan, and reports a
+committed `local-*` file as `tracked_local_skill` (the skip is for untracked clones only); the
+exclude keeps the folders out of commits and out of the agreement gate's scope check. The exclude
+file is shared by all worktrees of the clone, but the folders are not: recreate them in each new
+worktree.
 
 ## Hooks and gates
 
@@ -253,8 +255,8 @@ that resolves to this repo's `.husky/_` is normalized back by `ensure-husky.sh`,
 accept either form when judging wiring.
 
 **Commit message gate** (`commit_message`). `.husky/commit-msg` checks the first line against
-`format` (skipped while it is still the template placeholder; merge, revert, `fixup!` and `squash!`
-first lines pass) and refuses trailers outside `allowed_trailers` while `forbid_other_trailers` is
+`format` (skipped while it is still the template placeholder; git's own merge, revert, reapply,
+`fixup!`, `squash!` and `amend!` first lines pass; a `#` first line is refused) and refuses trailers outside `allowed_trailers` while `forbid_other_trailers` is
 true. `docs/standards/COMMIT_CONVENTION.md` is the rule text. `.claude/settings.json` `attribution`
 is empty so Claude Code adds no co-author trailer or PR footer; an instruction in a memory or
 `CLAUDE.md` file can still ask for one, so the hook is the fence.

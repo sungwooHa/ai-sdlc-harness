@@ -57,7 +57,11 @@ One logical change per commit; split unrelated work.
 
 - The first line against the format above. `{type}` is one of `commit_message.types`, any other
   field is nonempty text. Skipped while the format is still the template placeholder.
-- First lines git writes itself pass: `Merge`, `Revert "`, `fixup!`, `squash!`.
+- First lines git writes itself pass: `Merge branch`, `Merge pull request`,
+  `Merge remote-tracking branch`, `Merge tag`, `Merge commit`, `Revert "`, `Reapply "`, `fixup!`,
+  `squash!`, `amend!`. Any other first line follows the format.
+- A first line that starts with `#` is refused: with `-m`/`-F` git keeps it as the subject, and the
+  hook cannot tell that from an editor comment.
 - Trailers as git reads them (the last paragraph of `Key: value` lines), on every commit.
 
 `git commit --no-verify` (or `-n`) skips it. Use it only in an emergency and say so in the PR.

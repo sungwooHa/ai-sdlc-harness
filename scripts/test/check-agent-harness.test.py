@@ -77,6 +77,9 @@ def main() -> int:
             ("wired", 'python3 "$(git rev-parse --show-toplevel)/scripts/guard.py" --staged', {}, False),
             ("husky commented out", '# python3 "$(git rev-parse --show-toplevel)/scripts/guard.py" --staged', {}, True),
             ("json mentions script outside command", "", {"note": "scripts/guard.py"}, True),
+            # the declared path exactly, not a substring of another path
+            ("husky runs another directory's copy", "python3 apps/web/scripts/guard.py --staged", {}, True),
+            ("husky runs a backup copy", 'python3 "$(git rev-parse --show-toplevel)/scripts/guard.py.bak"', {}, True),
         ):
             root = Path(temp_dir) / f"wiring-{label.replace(' ', '-')}"
             root.mkdir()
@@ -129,7 +132,7 @@ def main() -> int:
         codex_line = "bash -lc 'repo=\"$(git rev-parse --show-toplevel)\"; exec python3 \"$repo/scripts/{}\"'"
         for label, intents, hooks, husky_files, codex_script, expect in (
             ("declared", declared, claude_hooks, {"pre-commit": husky}, None, {}),
-            # migration-check.sh is wired in husky without a declaration (the inax case); guard.py is
+            # migration-check.sh is wired in husky without a declaration (a real case); guard.py is
             # declared for Claude and husky but also wired in Codex; shim2.sh hides under a subfolder.
             ("undeclared", declared,
              {**claude_hooks, "SessionStart": [{"hooks": [
@@ -207,7 +210,8 @@ def main() -> int:
         # A personal skill (`local-<name>`) is a real directory under .claude/skills with a relative
         # symlink in .agents/skills. skills.local_prefix makes both checker spots skip it: the mirror
         # check and the content scan (a retired-root reference inside the skill). Without it, both fail.
-        for label, with_prefix in (("prefix", True), ("no-prefix", False)):
+        # A personal skill that got committed is not personal any more: the skip must not hide it.
+        for label, with_prefix, tracked in (("prefix", True, False), ("no-prefix", False, False), ("tracked", True, True)):
             root = Path(temp_dir) / f"local-skill-{label}"
             root.mkdir()
             build_fixture(root, f"{IMPORT_LINE}\n")
@@ -221,10 +225,15 @@ def main() -> int:
                 "# local demo\nNotes live in docs/retired/notes.md\n", encoding="utf-8"
             )
             (root / ".agents/skills/local-demo").symlink_to("../../.claude/skills/local-demo", target_is_directory=True)
+            if tracked:
+                subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+                subprocess.run(["git", "add", ".claude/skills/local-demo/SKILL.md"], cwd=root, check=True)
             code, out = run(root)
             payload = json.loads(out)
             codes = {item["code"] for item in payload["errors"]}
-            if with_prefix:
+            if tracked:
+                assert code == 1 and "tracked_local_skill" in codes, f"{label}: exit={code}, errors={payload['errors']}"
+            elif with_prefix:
                 assert code == 0 and payload["errors"] == [], f"{label}: exit={code}, errors={payload['errors']}"
             else:
                 assert code == 1, f"{label}: exit={code}"

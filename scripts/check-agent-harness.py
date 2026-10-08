@@ -148,6 +148,15 @@ class HarnessCheck:
         names = sorted(p.name for p in root.iterdir() if p.is_dir())
         if local_prefix:
             names = [name for name in names if not name.startswith(local_prefix)]
+            # The skip covers untracked clones only; a committed personal skill is shared surface.
+            code, tracked = self._run(["git", "ls-files", "--", f"{root_rel}/{local_prefix}*", f"{mirror_rel}/{local_prefix}*"])
+            for rel in tracked.splitlines() if code == 0 else []:
+                self._error(
+                    "tracked_local_skill",
+                    rel,
+                    f"`{local_prefix}*` skills are personal: `git rm --cached` it and hide it in .git/info/exclude "
+                    "(docs/standards/AGENT_HARNESS.md, Personal skills)",
+                )
         for name in names:
             skill_dir = root / name
             if not ((skill_dir / "SKILL.md").is_file() or (skill_dir / "SKILL.md.disabled").is_file()):
@@ -308,10 +317,12 @@ class HarnessCheck:
                 if wiring is None:
                     continue  # reported as invalid_host_config
                 # Each declared event must run the script; without an event, anywhere in the file.
+                # Compare exact repo-root paths, as the reverse direction does: `apps/web/scripts/x.py`
+                # or `scripts/x.py.bak` does not run `scripts/x.py`.
                 for event in self._intent_events(intent) or [None]:
                     text = wiring.get(event, "") if event else "\n".join(wiring.values())
                     for script in scripts:
-                        if script not in text:
+                        if script not in self._script_refs(text):
                             on = f" on {event}" if event else ""
                             self._error(
                                 "unwired_hook_intent",

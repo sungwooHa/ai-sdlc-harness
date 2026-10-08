@@ -19,8 +19,9 @@ from pathlib import Path
 
 MANIFEST_REL = ".agents/harness.yaml"
 CONVENTION = "docs/standards/COMMIT_CONVENTION.md"
-# First lines git writes itself for merges, reverts and autosquash.
-GIT_WRITTEN = ("Merge", 'Revert "', "fixup!", "squash!")
+# First lines git writes itself for merges, reverts (and reverts of reverts) and autosquash.
+GIT_WRITTEN = ("Merge branch", "Merge pull request", "Merge remote-tracking branch", "Merge tag", "Merge commit",
+               'Revert "', 'Reapply "', "fixup!", "squash!", "amend!")
 PLACEHOLDER = re.compile(r"__[A-Z0-9_]+__")
 TEXT = r"\S(?:.*?\S)?"  # nonempty, no surrounding blanks
 # `[{field}]` or `({field})` (optional, with the space after it) | `{field}`
@@ -71,16 +72,24 @@ def problems(message: str, cfg: dict) -> list[str]:
     found = []
     fmt = cfg.get("format")
     # An unreplaced placeholder (this template repository itself) has no format to check yet.
-    if isinstance(fmt, str) and fmt and not PLACEHOLDER.fullmatch(fmt) and not subject.startswith(GIT_WRITTEN):
+    if isinstance(fmt, str) and fmt and not PLACEHOLDER.fullmatch(fmt):
+        # The hook cannot see the cleanup mode: `-m`/`-F` keep `#` lines, so a comment line first
+        # would be stored as the subject unchecked. Refuse it instead of guessing.
+        if next((line for line in message.splitlines() if line.strip()), "").startswith("#"):
+            found.append("first line starts with `#`; with -m/-F git keeps it as the subject — write the subject first")
+            return found + trailer_problems(text, cfg)
         types = [t for t in cfg.get("types") or [] if isinstance(t, str)]
-        if not subject_pattern(fmt, types).fullmatch(subject):
+        if not subject.startswith(GIT_WRITTEN) and not subject_pattern(fmt, types).fullmatch(subject):
             found.append(f"first line `{subject}` does not match `{fmt}`" + (f" (type: {' | '.join(types)})" if types else ""))
-    if cfg.get("forbid_other_trailers", True):
-        allowed = [t for t in cfg.get("allowed_trailers", ["Plan-Ref"]) if isinstance(t, str)]
-        for key in trailer_keys(text):
-            if key.lower() not in {a.lower() for a in allowed}:
-                found.append(f"trailer `{key}` is not allowed (allowed: {', '.join(allowed) or 'none'})")
-    return found
+    return found + trailer_problems(text, cfg)
+
+
+def trailer_problems(text: str, cfg: dict) -> list[str]:
+    if not cfg.get("forbid_other_trailers", True):
+        return []
+    allowed = [t for t in cfg.get("allowed_trailers", ["Plan-Ref"]) if isinstance(t, str)]
+    return [f"trailer `{key}` is not allowed (allowed: {', '.join(allowed) or 'none'})"
+            for key in trailer_keys(text) if key.lower() not in {a.lower() for a in allowed}]
 
 
 def main() -> int:
