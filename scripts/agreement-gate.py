@@ -82,8 +82,11 @@ def relative(repo, value, cwd=None):
     if '..' in path.parts:
         raise Blocked('parent traversal is not allowed')
     raw = path if path.is_absolute() else (cwd or repo) / path
+    # The checkout may be spelled through a symlinked ancestor (macOS /var -> /private/var):
+    # anchor at the shortest prefix that resolves to it. Links inside the checkout stay refused.
+    base = next((p for p in (*reversed(raw.parents), raw) if p.resolve() == repo), repo)
     try:
-        rel = raw.relative_to(repo)
+        rel = raw.relative_to(base)
         for i in range(1, len(rel.parts) + 1):
             if repo.joinpath(*rel.parts[:i]).is_symlink():
                 raise Blocked('symlink targets need an explicit separate workflow')

@@ -101,6 +101,15 @@ with tempfile.TemporaryDirectory() as tmp:
              'verification_commands': [[sys.executable, '-c', 'print("fixture verified")']]}
     (folder / 'scope.json').write_text(json.dumps(scope))
     assert event(root, 'PreToolUse', 'Write', {'file_path': str(folder / 'spec.md'), 'content': 'draft'}).returncode == 0
+    # A symlinked ancestor (macOS /var -> /private/var) still names this checkout; links inside it do not.
+    with tempfile.TemporaryDirectory() as other:
+        alias = Path(other) / 'alias'
+        alias.symlink_to(root.resolve(), target_is_directory=True)
+        via_alias = alias / folder.relative_to(root) / 'spec.md'
+        assert event(root, 'PreToolUse', 'Write', {'file_path': str(via_alias), 'content': 'draft'}).returncode == 0
+    (root / 'docs/link').symlink_to(folder, target_is_directory=True)
+    assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / 'docs/link/spec.md'), 'content': 'draft'}).returncode == 2
+    (root / 'docs/link').unlink()
     assert run(root, 'prepare', folder.name).returncode == 1  # HTML cannot be deferred to delivery.
     views = folder / 'deliverables'
     views.mkdir()
