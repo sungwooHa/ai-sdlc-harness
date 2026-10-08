@@ -338,6 +338,33 @@ def read_only_shell(argv, cfg):
                    for a in argv[1:])
 
 
+# git commit options whose value is the next token even when it starts with - (git 2.50: `-m -n` is the
+# message "-n"). Only exact names: an unlisted spelling reads its value as an option, refusing more, never less.
+COMMIT_VALUE_SHORT = 'mFCc'
+COMMIT_VALUE_LONG = ('--message', '--file', '--reuse-message', '--reedit-message')
+
+
+def commit_skips_hooks(args):
+    """Hooks carry the agreement check: -n anywhere in a short cluster before a value letter (-n, -nm, -anm),
+    and every --no-* option but --no-edit (--no-verify and its abbreviations), wherever they stand."""
+    rest = iter(args)
+    for arg in rest:
+        if arg in COMMIT_VALUE_LONG:
+            next(rest, None)
+        elif arg.startswith('--'):
+            if arg != '--no-edit' and arg.startswith(('--no-', '--config', '--exec')):
+                return True
+        elif arg.startswith('-'):
+            for i, letter in enumerate(arg[1:], 1):
+                if letter == 'n':
+                    return True
+                if letter in COMMIT_VALUE_SHORT:  # the rest of the cluster, or else the next token, is the value
+                    if i == len(arg) - 1:
+                        next(rest, None)
+                    break
+    return False
+
+
 def unquoted(command):
     """The command text outside quotes (backslash, `$` and backquote are refused before this runs)."""
     out, quote = [], None
@@ -536,16 +563,13 @@ def pretool(repo, payload):
             return
         if argv[:2] == ['git', 'commit']:
             approved(repo)
-            # Hooks carry the agreement check: refuse --no-verify and its abbreviations (--no-*), and any
-            # short-option cluster with n (-n, -nm, -anm), wherever it stands. Message values never start with -.
-            if any(a.startswith(('--no-', '--config', '--exec')) or (a[:1] == '-' and a[1:2] != '-' and 'n' in a)
-                   for a in argv[2:]):
-                raise Blocked('git commit must run its hooks: -n, --no-verify (or an abbreviation) and short '
-                              'clusters containing n are refused')
+            if commit_skips_hooks(argv[2:]):
+                raise Blocked('git commit must run its hooks: -n, --no-verify (or an abbreviation), other --no-* '
+                              'options except --no-edit, and short clusters with n before a value are refused')
             check_scope(repo, approved(repo))
             delivery(repo, staged=True)
             return
-        if argv[0] != 'git' and any('agreement-gate' in a for a in argv):
+        if argv[:1] != ['git'] and any('agreement-gate' in a for a in argv):
             raise Blocked('the agreement gate runs only as `python3 scripts/agreement-gate.py prepare|status|verify|'
                           'remove|move`; read its files with Read/Grep or cat/rg')
         raise Blocked('shell execution needs a declared verification command; use agreement-gate.py verify')

@@ -263,9 +263,9 @@ is empty so Claude Code adds no co-author trailer or PR footer; an instruction i
 `CLAUDE.md` file can still ask for one, so the hook is the fence.
 
 `--no-verify` is for emergencies and must be declared in the PR. For agents the agreement gate
-refuses `git push` and every hook-skipping spelling of `git commit` it parses (`-n` in any short
-cluster, `--no-verify` and its abbreviations, environment prefixes, git options before the
-subcommand). `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` repeat the
+refuses `git push` and every hook-skipping spelling of `git commit` it parses (`-n` as an option,
+alone or in a short cluster, `--no-verify` and its abbreviations, environment prefixes, git options
+before the subcommand; message values are values). `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` repeat the
 common spellings for when a hook times out; they match command text, so they are a partial second
 fence (see `AGREEMENT_REVIEW.md`). A human terminal is outside both.
 

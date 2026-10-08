@@ -2,6 +2,7 @@
 """Exercise real hook payloads, approval forgery attempts, stale evidence and staged drift."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -80,6 +81,17 @@ with tempfile.TemporaryDirectory() as tmp:
                                     input=json.dumps(payload), capture_output=True,
                                     env={**os.environ, 'CLAUDE_PROJECT_DIR': str(root)})
             assert result.returncode == (2 if hook_name == 'PreToolUse' else 0), (settings, result.stderr)
+    # N9: Claude's deny rules glob over the whole command text, quotes included; they must not refuse a message
+    # that mentions -n. Approximation of the host matcher (`*` = any text); the host itself is not run here.
+    deny = [re.escape(rule[5:-1]).replace(r'\*', '.*') for rule in json.loads(
+        (GATE.parents[1] / '.claude/settings.json').read_text())['permissions']['deny'] if rule.startswith('Bash(')]
+    fence = [(c, True) for c in ('git commit -n -m x', 'git commit -nm x', 'git commit -an -m x', 'git commit -m x -n',
+                                 'git commit --no-verify -m x', 'git commit -m x --no-verify', 'HUSKY=0 git commit -m x',
+                                 'git push')] + [(c, False) for c in (
+        'git commit -m "fix: rg -n output"', 'git commit -m "feat: x" -m "- head -n 5 -an"', 'git commit --amend --no-edit',
+        'git commit -m x')]
+    misfenced = [(c, want) for c, want in fence if any(re.fullmatch(d, c) for d in deny) != want]
+    assert not misfenced, misfenced
     for space in (' ', '\t'):
         sneaky = '*** Begin Patch\n*** Add File: docs/changes/260914_99-probe/spec.md\n+draft\n' + space + '*** Add File: outside.py\n+unauthorized\n*** End Patch'
         assert event(root, 'PreToolUse', 'apply_patch', {'command': sneaky}).returncode == 2
@@ -249,6 +261,8 @@ with tempfile.TemporaryDirectory() as tmp:
     configure(read_only_commands=[['git'], ['python3']])  # Running the gate another way says what runs it.
     result = event(root, 'PreToolUse', 'Bash', {'command': 'python3 ./scripts/agreement-gate.py approve fake'})
     assert result.returncode == 2 and 'runs only as' in result.stderr, result.stderr
+    result = event(root, 'PreToolUse', 'Bash', {'command': ' '})  # nothing to run: the usual refusal, not a crash
+    assert result.returncode == 2 and 'declared verification command' in result.stderr, result.stderr
     configure(allowed_subagents=None)  # A missing list opens nothing.
     assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'Explore'}).returncode == 2
     # An empty prefix would open every command; a script named by a prefix would take any argument.
@@ -323,6 +337,13 @@ with tempfile.TemporaryDirectory() as tmp:
         'git -c core.hooksPath=/dev/null commit -m x', 'git -C . commit -m x', 'git --git-dir=.git commit -m x',
         'git --work-tree=. commit -m x', 'git --exec-path=/opt/git commit -m x', 'git --config-env=core.hooksPath=X commit -m x',
         'git --no-pager commit -m x', 'git -p commit -m x',
+        # N8: values of -m/-F/-C/-c are skipped as values, options around them are still read
+        'git commit --amend --no-edit -n', 'git commit -m "- note" -n', 'git commit --message x -n',
+        'git commit -m x -anm y', 'git commit --no-e', 'git commit --no-edit --no-verify', 'git commit -C HEAD -n',
+    )] + [(c, 0) for c in (
+        # N8: --no-edit, and message values that start with - and contain n (git reads -mn as -m with the value n)
+        'git commit --amend --no-edit', 'git commit -m "- note"', 'git commit -am "- note"',
+        'git commit -m "feat: x" -m "- rg -n output"', 'git commit --message "- note"', 'git commit -mn',
     )])
     assert not failures, failures
     product.write_text('unstaged new content')

@@ -180,10 +180,13 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
 (`prefix_rule(decision="forbidden")`) repeat part of the gate without the hook: `git push`;
 `git commit` with `--no-verify` (or an abbreviation) or `-n`, `-nm`, `-an...` clusters; git `-c`,
 `-C`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env` before the subcommand. Claude rules
-glob over the command text, so they also catch `-n`/`--no-verify` later in the command and behind
-`VAR=value` or `env`. Codex rules compare whole tokens from the start, so `git commit -m x
+glob over the whole command text, quotes included, so they cannot tell a message from an option:
+they match `-n`/`-an` clusters only right after `git commit` or as the last word (a message such as
+`-m "fix: rg -n output"` passes), `--no-v...` anywhere (a message containing ` --no-v` is refused
+there; reword it), and `VAR=value` or `env` before `git commit`/`git push`. So `git commit -m x -n
+-q` passes Claude's fence. Codex rules compare whole tokens from the start, so `git commit -m x
 --no-verify`, `git commit -qn`, `git --git-dir=.git commit` and environment prefixes pass Codex's
-fence. The gate stays primary and refuses all of them.
+fence. The gate is the precise layer: it parses the commit options and refuses all of them.
 
 **`enabled: false` is not off.** The gate treats a disabled or missing `agreement_gate` as broken
 wiring and fails closed: every PreToolUse call is refused (exit 2), UserPromptSubmit refuses every

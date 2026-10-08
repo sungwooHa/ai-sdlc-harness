@@ -55,16 +55,11 @@ git status --porcelain
 If nothing is staged or you want to group changes differently:
 
 ```bash
-# Stage specific files
 git add path/to/file1 path/to/file2
-
-# Stage by pattern
-git add *.test.*
-git add src/components/*
-
-# Interactive staging
-git add -p
 ```
+
+Name each file exactly. The agreement gate refuses globs (`*.test.*`), directories, files outside the
+approved scope and options such as `-p` or `-A`.
 
 **Never commit secrets** (.env, credentials.json, private keys).
 
