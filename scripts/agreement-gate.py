@@ -416,7 +416,8 @@ def pretool(repo, payload):
                 return
         raise Blocked('shell execution needs a declared verification command; use agreement-gate.py verify')
     # A subagent's own tool calls pass this same hook, so a listed reviewer gains no edit path.
-    if tool in ('Agent', 'Task') and args.get('subagent_type') in listed(
+    # Without subagent_type the host starts its default general-purpose agent; match that name.
+    if tool in ('Agent', 'Task') and (args.get('subagent_type') or 'general-purpose') in listed(
             config(repo)[1], 'allowed_subagents', lambda name: isinstance(name, str) and name):
         return
     raise Blocked(f'unsupported tool {tool!r}: no verified mutation contract; add an explicit adapter')

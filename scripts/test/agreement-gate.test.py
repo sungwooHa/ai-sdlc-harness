@@ -97,10 +97,15 @@ with tempfile.TemporaryDirectory() as tmp:
     # harness.yaml lists open reviewers and read-only commands before approval; edits stay refused,
     # also when a subagent makes them (its tool calls pass the same PreToolUse hook).
     assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'verifier', 'prompt': 'review'}).returncode == 0
-    for kind in ('general-purpose', None):
-        assert event(root, 'PreToolUse', 'Agent', {'subagent_type': kind, 'prompt': 'x'}).returncode == 2, kind
-    assert event(root, 'PreToolUse', 'Write', write, agent_id='a1', agent_type='verifier').returncode == 2
-    assert event(root, 'PreToolUse', 'Bash', {'command': 'git diff --stat'}, agent_id='a1', agent_type='verifier').returncode == 0
+    # /review-since starts untyped subagents: no subagent_type means the host default general-purpose.
+    for args in ({'subagent_type': 'general-purpose', 'prompt': 'x'}, {'prompt': 'x'}, {'subagent_type': None, 'prompt': 'x'}):
+        assert event(root, 'PreToolUse', 'Agent', args).returncode == 0, args
+    assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'statusline-setup', 'prompt': 'x'}).returncode == 2
+    edit = {'file_path': str(product), 'old_string': 'before', 'new_string': 'after'}
+    for kind in ('verifier', 'general-purpose'):  # Starting a subagent opens no edit path for it.
+        for tool, args in (('Write', write), ('Edit', edit), ('Bash', {'command': 'touch apps/web/src/ui/screen.tsx'})):
+            assert event(root, 'PreToolUse', tool, args, agent_id='a1', agent_type=kind).returncode == 2, (kind, tool)
+        assert event(root, 'PreToolUse', 'Bash', {'command': 'git diff --stat'}, agent_id='a1', agent_type=kind).returncode == 0, kind
     for command in ('python3 scripts/check-agent-harness.py --format text', 'agent-browser snapshot -i',
                     'agent-browser open http://localhost:3000/login', 'agent-browser screenshot'):
         assert event(root, 'PreToolUse', 'Bash', {'command': command}).returncode == 0, command
@@ -116,6 +121,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     configure(allowed_subagents=['Explore'], read_only_commands=[['make', 'lint']])
     assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'verifier'}).returncode == 2
+    assert event(root, 'PreToolUse', 'Agent', {'prompt': 'x'}).returncode == 2  # The default type is listed data too.
     assert event(root, 'PreToolUse', 'Bash', {'command': 'make lint --quiet'}).returncode == 0
     assert event(root, 'PreToolUse', 'Bash', {'command': 'git status'}).returncode == 2
     configure(read_only_commands=[['git'], ['python3']])  # Even a too-broad list cannot reopen gate-owned commands.
@@ -216,8 +222,9 @@ with tempfile.TemporaryDirectory() as tmp:
     for branch, code in (('feature/x/api', 0), ('feature/x/api/v2', 0), ('feature/X', 2), ('feature/x//api', 2),
                          ('feature/x/', 2), ('release/x', 2), ('feature', 2)):
         assert event(root, 'PreToolUse', 'Bash', {'command': f'git switch -c {branch}'}).returncode == code, branch
-    assert event(root, 'PreToolUse', 'Write', write, agent_id='a1', agent_type='verifier').returncode == 0
-    assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / 'other.py')}, agent_id='a1', agent_type='verifier').returncode == 2
+    for kind in ('verifier', 'general-purpose'):
+        assert event(root, 'PreToolUse', 'Write', write, agent_id='a1', agent_type=kind).returncode == 0, kind
+        assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / 'other.py')}, agent_id='a1', agent_type=kind).returncode == 2, kind
     assert event(root, 'PreToolUse', 'Bash', {'command': 'python3 scripts/agreement-gate.py status'}, cwd=str(folder)).returncode == 2
     assert event(root, 'PreToolUse', 'Bash', {'command': 'python3 scripts/agreement-gate.py remove other.py'}).returncode == 2
     assert run(root, 'remove', 'other.py').returncode == 1

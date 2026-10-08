@@ -452,11 +452,12 @@
       "claude",
       "codex"
     ],
-    "lists_rule": "Data the gate reads; approval, scope and verification logic stay in the gate. allowed_subagents: subagent types the Agent/Task tool may start (their own tool calls pass the same hook). read_only_commands: exact argv prefixes that run before and after approval; no wildcards; shell metacharacters, unsafe rg/git flags and gate-owned commands stay refused; a listed command never records verification. branch_pattern: regex (full match) for `git switch -c <branch>` after approval. A missing list opens nothing; a malformed one blocks. See docs/standards/AGREEMENT_REVIEW.md.",
+    "lists_rule": "Data the gate reads; approval, scope and verification logic stay in the gate. allowed_subagents: subagent types the Agent/Task tool may start (their own tool calls pass the same hook); a call without subagent_type counts as general-purpose, the host default. read_only_commands: exact argv prefixes that run before and after approval; no wildcards; shell metacharacters, unsafe rg/git flags and gate-owned commands stay refused; a listed command never records verification. branch_pattern: regex (full match) for `git switch -c <branch>` after approval. A missing list opens nothing; a malformed one blocks. See docs/standards/AGREEMENT_REVIEW.md.",
     "allowed_subagents": [
       "Explore",
       "Plan",
-      "verifier"
+      "verifier",
+      "general-purpose"
     ],
     "read_only_commands": [
       ["pwd"],

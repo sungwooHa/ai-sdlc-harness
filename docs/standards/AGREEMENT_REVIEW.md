@@ -122,9 +122,10 @@ not establish coverage for every host version. See the official host hook docume
 verification decisions stay in `scripts/agreement-gate.py`. `check:harness` validates all three.
 A missing list opens nothing; a malformed one blocks the call.
 
-- `allowed_subagents` (default `Explore`, `Plan`, `verifier`): subagent types the Agent/Task tool
-  may start. A subagent's own tool calls pass the same PreToolUse hook (the payload carries
-  `agent_id`/`agent_type`), so a listed reviewer gains no edit path.
+- `allowed_subagents` (default `Explore`, `Plan`, `verifier`, `general-purpose`): subagent types
+  the Agent/Task tool may start. A call without `subagent_type` counts as `general-purpose`, the
+  host default that `/review-since` starts. A subagent's own tool calls pass the same PreToolUse
+  hook (the payload carries `agent_id`/`agent_type`), so a listed type gains no edit path.
 - `read_only_commands`: exact argv prefixes that run before and after approval, no wildcards.
   Shell metacharacters (`; & | > < $`, backquote, backslash, newline), unsafe `rg`/`git` flags and
   gate-owned commands (`agreement-gate.py`, `git add|commit|switch|push`) stay refused whatever
