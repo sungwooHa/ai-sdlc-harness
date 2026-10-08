@@ -80,7 +80,7 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 `-tickets`/`-implement`/`-ui-review`), `docs/agents/issue-tracker.md`,
 `docs/standards/AGENT_HARNESS.md`, `.claude/settings.json`, `.husky/pre-commit`,
 `.codex/rules/commit-convention.mdc`, `apps/__APP__/AGENTS.md`, `package.json`,
-`.claude/evals/cases.jsonl`.
+`.claude/evals/cases.jsonl`, `REVIEW.md`(제품 고유 검사 줄을 빼고 일반화).
 
 ### C. 일부러 뺀 것 (프로젝트 고유)
 
@@ -90,7 +90,7 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
   `ledger-update.sh`(데스크톱 capability ledger), `brs-skill-sync-check.sh`,
   `frontend-quality-check.sh` 와 그 테스트들 — husky 훅과 `.claude/settings.json` 에서도 뺐다.
 - `docs/standards/<domain>/**`, `docs/knowledge/**`(생성 인덱스 시스템 포함), `docs/adr/**`,
-  실제 변경 폴더 `docs/changes/<날짜>-*`, `REVIEW.md`, `ui-critic`/`agent-thread-inspector`
+  실제 변경 폴더 `docs/changes/<날짜>-*`, `ui-critic`/`agent-thread-inspector`
   서브에이전트, `bitbucket-pipelines.yml`.
 - 원본 evals 9케이스(하드코딩된 색상 hex, `*.generated.ts` 등 프로젝트 규칙을 검사) → 일반 3케이스로 교체.
 

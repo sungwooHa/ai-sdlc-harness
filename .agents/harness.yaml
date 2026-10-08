@@ -39,6 +39,7 @@
       "plan.md"
     ],
     "review_gate": "Intent/spec confirmation and pre-implementation agreement are human decisions. Before product implementation, present the applicable HTML drafts and the plan, obtain approval of that revision, and preserve the baseline under agreements/<revision>/. Code review verifies implementation; the PR reviews realized value against that agreement.",
+    "review_policy": "REVIEW.md",
     "ui_review_waiver": "/__PREFIX__-ui-review is required for a diff under __UI_SOURCE_GLOB__ unless the approved plan.md states 시각 변경 없음 (no visual change); the implement adapter records the waiver in its final report.",
     "deliverables": {
       "dir": "deliverables",

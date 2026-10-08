@@ -25,7 +25,7 @@ keeps rules only; the change's history goes to the PR (description from `_templa
 | Spec | intent agreed | `/__PREFIX__-spec`; draft the applicable HTML views for human agreement | `spec.md`, draft `deliverables/` |
 | Plan / Agree | before nontrivial implementation | refine plan (or small-change spec) + HTML, present for approval, preserve agreed revision (see `AGREEMENT_REVIEW.md`) | `plan.md`, `agreements/<revision>/` |
 | Implement | presented plan/drafts approved and baseline preserved | `/__PREFIX__-implement` (TDD at agreed seams), narrow tests while iterating | code + commits |
-| Code review | after implementation, before value handoff | `/review-since <base>` in a fresh subagent, checked against the referenced agreement's spec/plan; UI diffs also `/__PREFIX__-ui-review` unless `plan.md` says `시각 변경 없음` | findings fixed |
+| Code review | after implementation, before value handoff | `/review-since <base>` in a fresh subagent, checked against the referenced agreement's spec/plan and `REVIEW.md`; UI diffs also `/__PREFIX__-ui-review` unless `plan.md` says `시각 변경 없음` | findings fixed |
 | PR value review | code review passed | compare agreed value with actual results; update working HTML, preserve the baseline, write short `pr.md` with unverified value and follow-up | result `deliverables/`, `pr.md` (local → PR) |
 
 Questions to the user in Intent, Spec, and plan mode go through `AskUserQuestion` only — at most 4

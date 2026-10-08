@@ -34,11 +34,13 @@ unless the user disabled Ponytail. Then call the Skill tool with `implement` and
 - Implementation commits carry `Plan-Ref: <YYMMDD_NN>-<slug>`; the first commit supplies the
   trailer checked by CI. Keep the entire change folder local and uncommitted.
 - Run `/review-since <branch-base>` in a fresh subagent against the referenced agreement's
-  spec/plan. This is code correctness review. Run `/__PREFIX__-ui-review <branch-base>` for UI
-  changes unless the approved plan explicitly says `시각 변경 없음`; report the waiver.
-- Repair blockers and majors. Record DoD and completed tickets in `progress.md` when a plan exists.
-  For spec-only work, record acceptance results against its User Stories in the PR. Deferred or
-  failed acceptance criteria remain explicit; changing their scope requires renewed agreement.
+  spec/plan, with `REVIEW.md` as a standards source. This is code correctness review. Run
+  `/__PREFIX__-ui-review <branch-base>` for UI changes unless the approved plan explicitly says
+  `시각 변경 없음`; report the waiver.
+- Repair blockers and majors as `REVIEW.md` defines them. Record DoD and completed tickets in
+  `progress.md` when a plan exists. For spec-only work, record acceptance results against its
+  User Stories in the PR. Deferred or failed acceptance criteria remain explicit; changing their
+  scope requires renewed agreement.
 
 ## Prepare the PR value review
 

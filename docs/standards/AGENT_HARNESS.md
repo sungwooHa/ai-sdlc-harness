@@ -35,6 +35,7 @@ not in a document.
 | `.agents/skills/` | Single skill root |
 | `.claude/skills` | Symlink mirror of the skill root (one symlink per skill) |
 | `.agents/harness.yaml` | Machine-readable harness contract |
+| `REVIEW.md` | Review passes and severities shared by every reviewer (`artifact_chain.review_policy`) |
 | `.claude/settings.json`, `.codex/hooks.json` | Host hook adapters |
 | `.codex/config.toml`, `.codex/rules/commit-convention.mdc`, `.codex/rules/harness.rules` | Codex host files |
 | `.husky/pre-commit` | Commit-time gates |
