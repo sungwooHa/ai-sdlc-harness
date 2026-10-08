@@ -18,7 +18,7 @@ The harness keeps agent behaviour consistent across hosts by splitting guidance 
 | Per-app | Rules loaded when work happens under that app (≤ 80 lines each) | `apps/<app>/AGENTS.md` |
 | On-demand | Skills invoked by name for a specific job | `.agents/skills/**` |
 | Subagents | Claude-only reviewer personas (`verifier`) | `.claude/agents/*.md` |
-| Deterministic | Hooks and gates that run without the model deciding to | `.claude/settings.json`, `.codex/hooks.json`, `.husky/pre-commit` |
+| Deterministic | Hooks and gates that run without the model deciding to | `.claude/settings.json`, `.codex/hooks.json`, `.husky/pre-commit`, `.husky/commit-msg` |
 | Artifact chain | Local working record of what a change intends, specifies, and plans (never committed; the PR carries it) | `docs/changes/**` |
 | Evals | Behavioural regression cases: does an agent follow the rules above? | `.claude/evals/**`, `scripts/harness/run-evals.py` |
 
@@ -37,8 +37,9 @@ not in a document.
 | `.agents/harness.yaml` | Machine-readable harness contract |
 | `REVIEW.md` | Review passes and severities shared by every reviewer (`artifact_chain.review_policy`) |
 | `.claude/settings.json`, `.codex/hooks.json` | Host hook adapters |
-| `.codex/config.toml`, `.codex/rules/commit-convention.mdc`, `.codex/rules/harness.rules` | Codex host files |
-| `.husky/pre-commit` | Commit-time gates |
+| `.codex/config.toml`, `.codex/rules/harness.rules` | Codex host files |
+| `.husky/pre-commit`, `.husky/commit-msg` | Commit-time gates (staged files; commit message) |
+| `docs/standards/COMMIT_CONVENTION.md` | Commit message rules; `commit_message` in the manifest holds the values the commit-msg hook checks |
 | `docs/changes/<YYMMDD_NN>-<slug>/` | Artifact chain per change — local-only working folder, gitignored, never committed |
 | `docs/changes/_templates/` | `intent.md`, `spec.md`, `plan.md`, `pr.md` templates (the only tracked files under `docs/changes/` besides its README) |
 | `docs/decisions/` | Tracked ADRs: durable decisions, alternatives and consequences; see its README |
@@ -213,6 +214,7 @@ by several intents (`agreement-gate.py` at runtime and at pre-commit) is told ap
 | `harness_fast_guard_precommit` | pre-commit | `scripts/agent-harness-fast-guard.py` | `.husky/pre-commit` |
 | `agreement_precommit` | pre-commit | `scripts/agreement-gate.py` (`check-staged`) | `.husky/pre-commit` |
 | `adr_precommit` | pre-commit | `scripts/adr-gate.py` (`--staged`) | `.husky/pre-commit` |
+| `commit_msg_gate` | commit-msg | `scripts/commit-msg-gate.py` | `.husky/commit-msg` |
 
 Add a project gate by writing it as one line in `.husky/pre-commit` (or one hook entry in
 `.claude/settings.json`) **and** declaring it as a `shared_hook_intents` entry — the check then
@@ -249,6 +251,13 @@ when hooks are still unwired instead of only warning. `core.hooksPath` is repo-l
 the relative `.husky/_` husky writes, so each worktree runs its own hook files; an absolute value
 that resolves to this repo's `.husky/_` is normalized back by `ensure-husky.sh`, and both scripts
 accept either form when judging wiring.
+
+**Commit message gate** (`commit_message`). `.husky/commit-msg` checks the first line against
+`format` (skipped while it is still the template placeholder; merge, revert, `fixup!` and `squash!`
+first lines pass) and refuses trailers outside `allowed_trailers` while `forbid_other_trailers` is
+true. `docs/standards/COMMIT_CONVENTION.md` is the rule text. `.claude/settings.json` `attribution`
+is empty so Claude Code adds no co-author trailer or PR footer; an instruction in a memory or
+`CLAUDE.md` file can still ask for one, so the hook is the fence.
 
 `--no-verify` is for emergencies and must be declared in the PR. Agents cannot run it or `git push`:
 `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` refuse both even when
@@ -299,7 +308,7 @@ not the description.
 
 1. Edit `.agents/harness.yaml` first — it is the contract, the host files are adapters.
 2. Mirror the change into every host file the intent declares (`.claude/settings.json`,
-   `.codex/hooks.json`, `.husky/pre-commit`).
+   `.codex/hooks.json`, `.husky/*`).
 3. Run `__PACKAGE_MANAGER__ test:harness` and paste the result.
 4. Open a PR describing which layer changed and why the rule could not live one layer lower.
 

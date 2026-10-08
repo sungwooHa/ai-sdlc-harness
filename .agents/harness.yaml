@@ -14,7 +14,8 @@
     "deterministic": [
       ".claude/settings.json",
       ".codex/hooks.json",
-      ".husky/pre-commit"
+      ".husky/pre-commit",
+      ".husky/commit-msg"
     ],
     "artifacts": "docs/changes (local-only working folder; history lives on the PR)",
     "evals": ".claude/evals",
@@ -171,7 +172,8 @@
       "AGENT_HARNESS.md",
       "HARNESS_PRINCIPLES.md",
       "eli7-harness.html",
-      "AGREEMENT_REVIEW.md"
+      "AGREEMENT_REVIEW.md",
+      "COMMIT_CONVENTION.md"
     ],
     "tracker_config": "docs/agents/issue-tracker.md"
   },
@@ -280,7 +282,6 @@
       "required_files": [
         ".codex/config.toml",
         ".codex/hooks.json",
-        ".codex/rules/commit-convention.mdc",
         ".codex/rules/harness.rules"
       ],
       "absolute_path_scan_files": [
@@ -422,8 +423,37 @@
       "host_files": {
         "husky": ".husky/pre-commit"
       }
+    },
+    {
+      "id": "commit_msg_gate",
+      "event": "commit-msg",
+      "description": "Refuse a commit whose first line breaks commit_message.format or that carries a trailer outside commit_message.allowed_trailers. Rules: docs/standards/COMMIT_CONVENTION.md.",
+      "required_scripts": [
+        "scripts/commit-msg-gate.py"
+      ],
+      "host_files": {
+        "husky": ".husky/commit-msg"
+      }
     }
   ],
+  "commit_message": {
+    "convention": "docs/standards/COMMIT_CONVENTION.md",
+    "format": "__COMMIT_FORMAT__",
+    "types": [
+      "feat",
+      "fix",
+      "docs",
+      "style",
+      "refactor",
+      "test",
+      "chore"
+    ],
+    "forbid_other_trailers": true,
+    "allowed_trailers": [
+      "Plan-Ref"
+    ],
+    "rule": "Checked at commit-msg by scripts/commit-msg-gate.py. First line: `format` read as a pattern — `{type}` is one of `types`, any other `{field}` is nonempty text, a field written as `[{field}]` or `({field})` may be left out with the space after it; while `format` is still an unreplaced placeholder (the template repository itself) this part is skipped. First lines git writes for merges, reverts and autosquash (`Merge`, `Revert \"`, `fixup!`, `squash!`) pass. Trailers are read as git reads them (`git interpret-trailers --parse`) on every message: with forbid_other_trailers (default true) only allowed_trailers pass; false allows any trailer and is the human decision to make together with `.claude/settings.json` `attribution`."
+  },
   "stale_project_names": [
     "__PROJECT_NAME__-old"
   ],

@@ -49,7 +49,7 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 | `__APPS_OVERVIEW__` | AGENTS.md 첫 문단: 앱 목록과 스택 한 덩어리 | "Polyglot monorepo … pnpm 9, Node ≥ 22.12." |
 | `__PACKAGE_MANAGER__` | 문서에 적히는 패키지 매니저 명령 | `pnpm` |
 | `__NODE_VERSION__` | `package.json` engines.node 하한 | `22.12.0` |
-| `__COMMIT_FORMAT__` | 커밋 메시지 포맷 한 줄 | `{type}: [{모듈명}] {변경 내용}` |
+| `__COMMIT_FORMAT__` | 커밋 메시지 첫 줄 형식. `COMMIT_CONVENTION.md` 와 commit-msg 훅(`commit_message.format`)이 같은 값을 쓴다 — `{type}` 은 `commit_message.types` 중 하나, `[{…}]`·`({…})` 칸은 생략 가능, 나머지 `{…}` 는 빈칸 아닌 글 | `{type}: [{모듈명}] {변경 내용}` (기본값) |
 | `__DEFAULT_BRANCH__` | 운영 브랜치 | `main` |
 | `__INTEGRATION_BRANCH__` | 통합 브랜치 (PR 대상, plan 게이트 기본 base). 트렁크면 기본 브랜치와 같다 | `main` (기본값) |
 | `__UI_SOURCE_GLOB__` | UI 리뷰가 필요한 소스 범위 | `apps/frontend/src/**/{ui,host,routes}/**` |
@@ -61,6 +61,8 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 `.agents/harness.yaml` 이 문자열로 참조한다.
 `__PACKAGE_MANAGER__` 를 pnpm 이외로 바꾸면 `package.json` 의 `test:harness` 스크립트 본문과
 `packageManager` 필드도 직접 고친다(치환 대상이 아니다).
+커밋 트레일러는 기본이 `Plan-Ref` 외 금지다(`commit_message.forbid_other_trailers: true` — commit-msg 훅이
+거절하고, `.claude/settings.json` `attribution` 이 Claude Code 꼬리말을 끈다). 허용하기로 정하면 둘을 함께 바꾼다.
 
 ## 무엇이 들어 있나 (A/B 버킷)
 
@@ -69,7 +71,7 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 - 벤더 스킬 18종: `grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`, `to-spec`,
   `to-tickets`, `implement`, `tdd`, `review-since`, `diagnosing-bugs`, `prototype`,
   `writing-for-agents`, `handoff`, `web-design-guidelines`, `review-animations`,
-  `animation-vocabulary`, `git-commit`, `draw-diagram`.
+  `animation-vocabulary`, `git-commit`(커밋 규칙 절만 `COMMIT_CONVENTION.md` 참조로 바꿈), `draw-diagram`.
 - `scripts/harness/`: `vendor-skills.py`, `run-evals.py`, `ensure-husky.sh`, `check-plan-artifact.sh`.
 - `scripts/`: `check-agent-harness.py`, `agent-harness-fast-guard.py`, `protected-paths-guard.py`.
 - `scripts/test/`: 하네스 가드 회귀 테스트 7종.
@@ -81,8 +83,12 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 `AGENTS.md`, `CLAUDE.md`, `.agents/harness.yaml`, 어댑터 스킬 5종(`__PREFIX__-intent`/`-spec`/
 `-tickets`/`-implement`/`-ui-review`), `docs/agents/issue-tracker.md`,
 `docs/standards/AGENT_HARNESS.md`, `.claude/settings.json`, `.husky/pre-commit`,
-`.codex/rules/commit-convention.mdc`, `apps/__APP__/AGENTS.md`, `package.json`,
-`.claude/evals/cases.jsonl`, `REVIEW.md`(제품 고유 검사 줄을 빼고 일반화).
+`apps/__APP__/AGENTS.md`, `package.json`, `.claude/evals/cases.jsonl`.
+
+원본을 일반화해 다시 쓴 것: `REVIEW.md`(제품 고유 검사 줄을 뺌), `docs/standards/COMMIT_CONVENTION.md`
+(원본의 커밋 규칙 문서와 `.codex/rules/commit-convention.mdc` 를 한 곳으로 모음 — `.mdc` 는 Codex 가 읽지 않아 지웠다).
+템플릿에서 새로 쓴 것: `.codex/rules/harness.rules`(`git push`·`--no-verify` 두 번째 울타리),
+`.husky/commit-msg` + `scripts/commit-msg-gate.py`(커밋 메시지 첫 줄·트레일러 검사).
 
 ### C. 일부러 뺀 것 (프로젝트 고유)
 

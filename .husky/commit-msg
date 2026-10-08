@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -e
+
+# Commit message gate — first line in the format of docs/standards/COMMIT_CONVENTION.md and no
+# trailer but Plan-Ref (values: .agents/harness.yaml commit_message). Merge, Revert, fixup! and
+# squash! first lines pass. Turn it off by deleting this file and the commit_msg_gate intent together.
+# Escape hatch: git commit --no-verify (emergencies only; agents cannot run it).
+python3 "$(git rev-parse --show-toplevel)/scripts/commit-msg-gate.py" "$1"

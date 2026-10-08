@@ -3,90 +3,15 @@ name: git-commit
 description: 'Execute git commit with conventional commit message analysis, intelligent staging, and message generation. Use when user asks to commit changes, create a git commit, or mentions "/commit". Supports: (1) Auto-detecting type and scope from changes, (2) Generating conventional commit messages from diff, (3) Interactive commit with optional type/scope/description overrides, (4) Intelligent file staging for logical grouping'
 ---
 
-# Git Commit with Conventional Commits
+# Git Commit
 
 ## Overview
 
-Create standardized, semantic git commits using the Conventional Commits specification. Analyze the actual diff to determine appropriate type, scope, and message.
+Create git commits that follow this repository's commit convention. Analyze the actual diff to determine the type, the optional module or scope, and the message.
 
-## Project-Specific Message Policy
+## Project Commit Convention
 
-When this workspace uses this project's commit convention, prefer the project format below over a generic Conventional Commit summary:
-
-```text
-{type}: [모듈명] {변경 내용}
-```
-
-Allowed simplified variant:
-
-```text
-{type}: {변경 내용}
-```
-
-Apply these rules when generating the final commit message:
-
-- Write `{변경 내용}` in Korean
-- Keep `type` lowercase
-- Use `[모듈명]` only when the change clearly belongs to one domain or feature area
-- Keep the summary clear and concise; 50-72 characters is preferred
-- Prefer one logical change per commit and split unrelated work into separate commits
-
-Preferred project types:
-
-- `feat`
-- `fix`
-- `docs`
-- `style`
-- `refactor`
-- `test`
-- `chore`
-
-Examples:
-
-```text
-feat: [통합훈련] 채팅 훈련 실습 대화 종료 기능 구현
-fix: [통합훈련] 채팅 입력창 Enter 중복 전송 버그 수정
-refactor: 전역 스타일 정리
-chore: 빌드 설정 업데이트
-```
-
-## Conventional Commit Format
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-## Commit Types
-
-| Type       | Purpose                        |
-| ---------- | ------------------------------ |
-| `feat`     | New feature                    |
-| `fix`      | Bug fix                        |
-| `docs`     | Documentation only             |
-| `style`    | Formatting/style (no logic)    |
-| `refactor` | Code refactor (no feature/fix) |
-| `perf`     | Performance improvement        |
-| `test`     | Add/update tests               |
-| `build`    | Build system/dependencies      |
-| `ci`       | CI/config changes              |
-| `chore`    | Maintenance/misc               |
-| `revert`   | Revert commit                  |
-
-## Breaking Changes
-
-```
-# Exclamation mark after type/scope
-feat!: remove deprecated endpoint
-
-# BREAKING CHANGE footer
-feat: allow config to extend other configs
-
-BREAKING CHANGE: `extends` key behavior changed
-```
+Read `docs/standards/COMMIT_CONVENTION.md` before writing the message. It is the only source for the first-line format, the types, the body and the trailers, and it wins over any generic Conventional Commits habit. The commit-msg hook (`scripts/commit-msg-gate.py`) refuses a first line outside that format and any trailer other than `Plan-Ref`.
 
 ## Workflow
 
@@ -147,41 +72,24 @@ git add -p
 
 Analyze the diff to determine:
 
-- **Type**: What kind of change is this?
-- **Scope**: What area/module is affected?
-- **Description**: One-line summary of what changed (present tense, imperative mood, <72 chars)
-
-When the repository expects the project-specific commit format:
-
-- Prefer the project type set (`feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`)
-- Convert the final description to concise Korean
-- Add `[모듈명]` only when it improves clarity
-- Include the issue number when the task is associated with one
+- **Type**: What kind of change is this? Use only the convention's types.
+- **Module or scope**: Which one area is affected? Leave it out when the change spans several.
+- **Summary**: One line saying what changed, in the language and length the convention sets.
+- **Body and trailers**: Only what the convention allows.
 
 ### 4. Execute Commit
 
+Pass each paragraph as its own `-m`; agent shells refuse newlines and command substitution:
+
 ```bash
-# Single line
-git commit -m "<type>[scope]: <description>"
-
-# Multi-line with body/footer
-git commit -m "$(cat <<'EOF'
-<type>[scope]: <description>
-
-<optional body>
-
-<optional footer>
-EOF
-)"
+git commit -m "<first line>"
+git commit -m "<first line>" -m "<why>" -m "Plan-Ref: <YYMMDD_NN>-<slug>"
 ```
 
 ## Best Practices
 
 - One logical change per commit
-- Present tense: "add" not "added"
-- Imperative mood: "fix bug" not "fixes bug"
-- Reference issues: `Closes #123`, `Refs #456`
-- Keep description under 72 characters
+- When the hook refuses a message, fix the message and commit again
 
 ## Git Safety Protocol
 

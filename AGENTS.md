@@ -70,8 +70,8 @@ yours: compare against a clean checkout before claiming or fixing it.
 
 - Branches: `__DEFAULT_BRANCH__` (production), `__INTEGRATION_BRANCH__` (integration), `feature/*`.
   PRs target `__INTEGRATION_BRANCH__`.
-- Commit: `__COMMIT_FORMAT__` with type in
-  feat | fix | docs | style | refactor | test | chore. Details: `.codex/rules/commit-convention.mdc`.
+- Commit messages: read `docs/standards/COMMIT_CONVENTION.md` before your first commit (a
+  commit-msg hook checks it).
 - Pre-commit (husky) runs the harness fast guard. the agreement gate requires scope, current verification and local PR value review; agent
   `--no-verify` is blocked.
 
