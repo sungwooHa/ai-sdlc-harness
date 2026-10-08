@@ -191,6 +191,8 @@
     "root": ".agents/skills",
     "claude_mirror": ".claude/skills",
     "mirror_mode": "symlink",
+    "local_prefix": "local-",
+    "local_prefix_note": "Personal skills named `local-<name>`: the real directory lives under the claude_mirror root, `.agents/skills/local-<name>` is a relative symlink to it, both are excluded per clone through `.git/info/exclude` (never `.gitignore`), and the harness check skips them. Prefer user scope first; see docs/standards/AGENT_HARNESS.md \"Personal skills\".",
     "vendored": [
       {
         "source": "github.com/mattpocock/skills",

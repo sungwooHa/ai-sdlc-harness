@@ -139,8 +139,13 @@ class HarnessCheck:
             self._error("missing_skill_root", root_rel, "skill root directory is missing")
             return
         exemptions = set(self.manifest.get("local_artifacts", {}).get("claude_skill_symlink_exemptions", []))
+        # Personal skills (`local-*`) are per clone: the real directory lives under the mirror root,
+        # the skill-root entry links back to it, and .git/info/exclude hides both. Not harness surface.
+        local_prefix = skills.get("local_prefix")
 
         names = sorted(p.name for p in root.iterdir() if p.is_dir())
+        if local_prefix:
+            names = [name for name in names if not name.startswith(local_prefix)]
         for name in names:
             skill_dir = root / name
             if not ((skill_dir / "SKILL.md").is_file() or (skill_dir / "SKILL.md.disabled").is_file()):
@@ -158,6 +163,8 @@ class HarnessCheck:
             for entry in sorted(mirror_root.iterdir(), key=lambda p: p.name):
                 rel = f"{mirror_rel}/{entry.name}"
                 if rel in exemptions:
+                    continue
+                if local_prefix and entry.name.startswith(local_prefix):
                     continue
                 mirrored.add(entry.name)
                 expected = f"../../{root_rel}/{entry.name}"
@@ -490,6 +497,12 @@ class HarnessCheck:
     def _scan_files(self) -> Iterable[tuple[str, str]]:
         excluded = self.manifest.get("local_artifacts", {}).get("scan_excluded_paths", [])
         excluded_prefixes = tuple(item.split("**")[0] for item in excluded if isinstance(item, str))
+        skills = self.manifest.get("skills", {})
+        local_prefix = skills.get("local_prefix")
+        if local_prefix:
+            skill_root = skills.get("root", ".agents/skills")
+            skill_mirror = skills.get("claude_mirror", ".claude/skills")
+            excluded_prefixes += (f"{skill_root}/{local_prefix}", f"{skill_mirror}/{local_prefix}")
         # Per-app AGENTS.md files are the most-read layer; the artifact chain and
         # tracker config are agent-facing too. Scan them along with the static set.
         per_app = tuple(p for p in self.manifest.get("layers", {}).get("per_app", []) if isinstance(p, str))

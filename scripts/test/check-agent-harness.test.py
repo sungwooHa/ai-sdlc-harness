@@ -130,6 +130,32 @@ def main() -> int:
             assert bool(errors) == expect_error, f"{label}: errors={payload['errors']}"
             assert (code == 1) == expect_error, f"{label}: exit={code}"
 
+        # A personal skill (`local-<name>`) is a real directory under .claude/skills with a relative
+        # symlink in .agents/skills. skills.local_prefix makes both checker spots skip it: the mirror
+        # check and the content scan (a retired-root reference inside the skill). Without it, both fail.
+        for label, with_prefix in (("prefix", True), ("no-prefix", False)):
+            root = Path(temp_dir) / f"local-skill-{label}"
+            root.mkdir()
+            build_fixture(root, f"{IMPORT_LINE}\n")
+            manifest = json.loads(json.dumps(MANIFEST))
+            manifest["documentation_layout"] = {"retired_roots": ["docs/retired"]}
+            if with_prefix:
+                manifest["skills"]["local_prefix"] = "local-"
+            (root / ".agents/harness.yaml").write_text(json.dumps(manifest), encoding="utf-8")
+            (root / ".claude/skills/local-demo").mkdir()
+            (root / ".claude/skills/local-demo/SKILL.md").write_text(
+                "# local demo\nNotes live in docs/retired/notes.md\n", encoding="utf-8"
+            )
+            (root / ".agents/skills/local-demo").symlink_to("../../.claude/skills/local-demo", target_is_directory=True)
+            code, out = run(root)
+            payload = json.loads(out)
+            codes = {item["code"] for item in payload["errors"]}
+            if with_prefix:
+                assert code == 0 and payload["errors"] == [], f"{label}: exit={code}, errors={payload['errors']}"
+            else:
+                assert code == 1, f"{label}: exit={code}"
+                assert {"claude_skill_not_symlink", "retired_root_reference"} <= codes, f"{label}: errors={payload['errors']}"
+
         # agreement_gate lists are data the gate trusts: exact argv prefixes without wildcards,
         # named subagents, and a branch pattern that compiles.
         gate = {"enabled": True, "allowed_subagents": ["Explore"], "read_only_commands": [["git", "status"]],

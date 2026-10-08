@@ -172,6 +172,25 @@ only.
 `harness.yaml` `skills.disabled` with `reason` and `replacement`, so the next agent learns why
 instead of re-enabling it.
 
+**Personal skills.** Keep a skill that is yours, not the team's, out of shared files. Prefer user
+scope: Claude Code reads `~/.claude/skills/`, Codex reads `~/.agents/skills/`; neither reads the
+other's folder, so keep the real directory in one and symlink it from the other. A user-scope skill
+shows in every repository and, in Claude Code, wins over a project skill of the same name, so never
+reuse a team skill's name. Only a skill that makes sense in this repository alone goes here, named
+with `skills.local_prefix` (`local-<name>`): the real directory at `.claude/skills/local-<name>/`,
+a relative symlink `.agents/skills/local-<name>` → `../../.claude/skills/local-<name>` so Codex
+reads it too, and both hidden in this clone through `.git/info/exclude` (never `.gitignore`, which
+is shared):
+
+```
+/.claude/skills/local-*
+/.agents/skills/local-*
+```
+
+The harness check skips the prefix in the mirror check and the content scan; the exclude keeps the
+folders out of commits and out of the agreement gate's scope check. The exclude file is shared by
+all worktrees of the clone, but the folders are not: recreate them in each new worktree.
+
 ## Hooks and gates
 
 `shared_hook_intents` in `harness.yaml` declares intent once; each host file implements it. The
