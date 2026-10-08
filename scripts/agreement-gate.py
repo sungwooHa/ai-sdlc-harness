@@ -305,6 +305,9 @@ GATE_FILE_READERS = ('cat', 'head', 'tail', 'wc', 'rg', 'grep', 'ls')
 ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
 # A token naming a script or a path: such an entry takes any later argument as a prefix, so it must be exact.
 SCRIPT_TOKEN = re.compile(r'/|\.(py|sh|[cm]?js|ts|rb|pl)$')
+# A runner with one more word (`pnpm check:harness`, `npm run x`, `python3 -m pkg`) names a script that takes
+# any later argument, so that entry is exact too. A bare runner is a whole program (reviewed_whole_programs).
+SCRIPT_RUNNERS = ('pnpm', 'npm', 'npx', 'yarn', 'bun', 'node', 'python', 'python3', 'bash', 'sh', 'uv', 'poetry')
 
 
 def listed(cfg, key, valid):
@@ -322,7 +325,8 @@ def command_entry(item):
     """["git", "log"]: an argv prefix. {"exact": [...]}: the whole argv. A script is named only exactly."""
     if isinstance(item, dict):
         return list(item) == ['exact'] and argv_list(item['exact'])
-    return argv_list(item) and not any(SCRIPT_TOKEN.search(s) for s in item)
+    return argv_list(item) and not any(SCRIPT_TOKEN.search(s) for s in item) and not (
+        item[0] in SCRIPT_RUNNERS and len(item) > 1)
 
 
 def read_only_shell(argv, cfg):
@@ -338,31 +342,54 @@ def read_only_shell(argv, cfg):
                    for a in argv[1:])
 
 
-# git commit options whose value is the next token even when it starts with - (git 2.50: `-m -n` is the
-# message "-n"). Only exact names: an unlisted spelling reads its value as an option, refusing more, never less.
-COMMIT_VALUE_SHORT = 'mFCc'
-COMMIT_VALUE_LONG = ('--message', '--file', '--reuse-message', '--reedit-message')
+# Every `git commit` option of git 2.50.1: the option lines of `git commit -h`, the hidden --allow-empty and
+# --allow-empty-message from its usage lines, and --no-edit, the one --no-* negation opened. "value" takes
+# `=value` or the rest of a short cluster, else the next token even when it starts with - (`-m -n` is the
+# message "-n"); "optional" takes only an attached value (-Skey, -uno, --gpg-sign=key); "flag" takes none;
+# "skip" bypasses hooks. Any other spelling (abbreviations such as --amen or --no-verif, other --no-*, unknown
+# options) is refused, so the gate never reads a token differently from git. scripts/test/agreement-gate.test.py
+# compares this table with the installed `git commit -h`; when it fails after a git upgrade, add the new option
+# with the shape its help line shows (`<arg>` value, `[=<arg>]` optional, none flag) and bump the version.
+COMMIT_OPTIONS = {
+    'quiet': 'flag', 'verbose': 'flag', 'file': 'value', 'author': 'value', 'date': 'value', 'message': 'value',
+    'reedit-message': 'value', 'reuse-message': 'value', 'fixup': 'value', 'squash': 'value', 'reset-author': 'flag',
+    'trailer': 'value', 'signoff': 'flag', 'template': 'value', 'edit': 'flag', 'no-edit': 'flag', 'cleanup': 'value',
+    'status': 'flag', 'gpg-sign': 'optional', 'all': 'flag', 'include': 'flag', 'interactive': 'flag', 'patch': 'flag',
+    'only': 'flag', 'no-verify': 'skip', 'verify': 'flag', 'dry-run': 'flag', 'short': 'flag', 'branch': 'flag',
+    'ahead-behind': 'flag', 'porcelain': 'flag', 'long': 'flag', 'null': 'flag', 'amend': 'flag',
+    'no-post-rewrite': 'skip', 'post-rewrite': 'flag', 'untracked-files': 'optional', 'pathspec-from-file': 'value',
+    'pathspec-file-nul': 'flag', 'allow-empty': 'flag', 'allow-empty-message': 'flag',
+}
+COMMIT_SHORT = {'q': 'quiet', 'v': 'verbose', 'F': 'file', 'm': 'message', 'c': 'reedit-message', 'C': 'reuse-message',
+                's': 'signoff', 't': 'template', 'e': 'edit', 'S': 'gpg-sign', 'a': 'all', 'i': 'include', 'p': 'patch',
+                'o': 'only', 'n': 'no-verify', 'z': 'null', 'u': 'untracked-files'}
 
 
 def commit_skips_hooks(args):
-    """Hooks carry the agreement check: -n anywhere in a short cluster before a value letter (-n, -nm, -anm),
-    and every --no-* option but --no-edit (--no-verify and its abbreviations), wherever they stand."""
+    """The first option that skips the hooks or that COMMIT_OPTIONS does not read as git does, else None.
+    A short cluster is read letter by letter: a value letter takes the rest of the cluster (or else the next
+    token), an optional one only the rest. Options after a pathspec still count; nothing after `--` does."""
     rest = iter(args)
     for arg in rest:
-        if arg in COMMIT_VALUE_LONG:
-            next(rest, None)
-        elif arg.startswith('--'):
-            if arg != '--no-edit' and arg.startswith(('--no-', '--config', '--exec')):
-                return True
+        if arg == '--':
+            return None
+        if arg.startswith('--'):
+            name, attached, _ = arg[2:].partition('=')
+            kind = COMMIT_OPTIONS.get(name)
+            if kind in (None, 'skip') or (attached and kind == 'flag'):
+                return arg
+            if kind == 'value' and not attached:
+                next(rest, None)
         elif arg.startswith('-'):
             for i, letter in enumerate(arg[1:], 1):
-                if letter == 'n':
-                    return True
-                if letter in COMMIT_VALUE_SHORT:  # the rest of the cluster, or else the next token, is the value
-                    if i == len(arg) - 1:
+                kind = COMMIT_OPTIONS.get(COMMIT_SHORT.get(letter))
+                if kind in (None, 'skip'):
+                    return arg
+                if kind != 'flag':
+                    if kind == 'value' and i == len(arg) - 1:
                         next(rest, None)
                     break
-    return False
+    return None
 
 
 def unquoted(command):
@@ -563,9 +590,11 @@ def pretool(repo, payload):
             return
         if argv[:2] == ['git', 'commit']:
             approved(repo)
-            if commit_skips_hooks(argv[2:]):
-                raise Blocked('git commit must run its hooks: -n, --no-verify (or an abbreviation), other --no-* '
-                              'options except --no-edit, and short clusters with n before a value are refused')
+            refused = commit_skips_hooks(argv[2:])
+            if refused:
+                raise Blocked(f'git commit {refused} is refused: commits run their hooks (-n, --no-verify, --no-* '
+                              'except --no-edit), and options are spelled in full as `git commit -h` lists them '
+                              '(no abbreviations or unknown options)')
             check_scope(repo, approved(repo))
             delivery(repo, staged=True)
             return

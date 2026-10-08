@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise real hook payloads, approval forgery attempts, stale evidence and staged drift."""
+import importlib.util
 import json
 import os
 import re
@@ -52,6 +53,40 @@ def blocked_stop(repo, **extra):
     result = event(repo, 'Stop', **extra)
     assert json.loads(result.stdout)['decision'] == 'block', (result.stdout, result.stderr)
     return json.loads(result.stdout)['reason']
+
+
+def commit_table_gaps(options, short):
+    """Options of the installed `git commit -h` that the table misses or shapes unlike git's help."""
+    text = subprocess.run(['git', 'commit', '-h'], capture_output=True, text=True,
+                          env={**os.environ, 'LC_ALL': 'C', 'LANGUAGE': ''}).stdout
+    lines = [line for line in text.splitlines() if re.match(r' {4}-', line)]
+    shape = re.compile(r' {4}(?:-(?P<short>[A-Za-z]), )?--(?:\[no-\])?(?P<name>[a-z][a-z0-9-]*)(?P<after>.*)')
+    gaps = [] if len(lines) > 20 else [f'only {len(lines)} option lines in git commit -h']
+    for line in lines:
+        match = shape.fullmatch(line)
+        if not match:
+            gaps.append(f'unparsed: {line}')
+            continue
+        name, after = match['name'], match['after']
+        kind = 'optional' if after.startswith('[=') else 'value' if re.match(r' [<\[]', after) else 'flag'
+        if options.get(name) not in (kind, 'skip' if kind == 'flag' else kind):
+            gaps.append(f'--{name}: git {kind}, table {options.get(name)}')
+        if match['short'] and short.get(match['short']) != name:
+            gaps.append(f'-{match["short"]}: git --{name}, table {short.get(match["short"])}')
+    names = set(re.findall(r'--(?:\[no-\])?([a-z][a-z0-9-]*)', text))  # usage lines carry hidden ones too
+    return gaps + [f'--{name}: missing' for name in sorted(names - set(options))]
+
+
+# V1: the gate reads every git commit option with the value shape git gives it. A git upgrade that adds an
+# option fails here until COMMIT_OPTIONS classifies it (refresh steps: the comment above COMMIT_OPTIONS).
+spec = importlib.util.spec_from_file_location('agreement_gate', GATE)
+gate_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate_module)
+version = subprocess.run(['git', '--version'], capture_output=True, text=True).stdout.strip()
+gaps = commit_table_gaps(gate_module.COMMIT_OPTIONS, gate_module.COMMIT_SHORT)
+assert not gaps, (version, gaps)
+assert commit_table_gaps({**gate_module.COMMIT_OPTIONS, 'trailer': 'flag'}, gate_module.COMMIT_SHORT)  # not vacuous
+assert commit_table_gaps({k: v for k, v in gate_module.COMMIT_OPTIONS.items() if k != 'trailer'}, gate_module.COMMIT_SHORT)
 
 
 with tempfile.TemporaryDirectory() as tmp:
@@ -257,6 +292,8 @@ with tempfile.TemporaryDirectory() as tmp:
         'rg --pre=cat x scripts/agreement-gate.py')])
     configure(read_only_commands=[{'exact': ['git', 'status']}])
     failures += wrong([('git status', 0), ('git status --short', 2)])
+    configure(read_only_commands=[{'exact': ['pnpm', 'check:harness']}])  # V2: a script alias, exactly
+    failures += wrong([('pnpm check:harness', 0), ('pnpm check:harness --repo-root /tmp/x', 2)])
     assert not failures, failures
     configure(read_only_commands=[['git'], ['python3']])  # Running the gate another way says what runs it.
     result = event(root, 'PreToolUse', 'Bash', {'command': 'python3 ./scripts/agreement-gate.py approve fake'})
@@ -265,9 +302,11 @@ with tempfile.TemporaryDirectory() as tmp:
     assert result.returncode == 2 and 'declared verification command' in result.stderr, result.stderr
     configure(allowed_subagents=None)  # A missing list opens nothing.
     assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'Explore'}).returncode == 2
-    # An empty prefix would open every command; a script named by a prefix would take any argument.
+    # An empty prefix would open every command; a script named by a prefix (V2: also through a runner) would
+    # take any argument.
     for bad in ([[]], [['git', '']], 'git status', [['python3', 'scripts/check-agent-harness.py']], [{'exact': []}],
-                [{'exact': ['git', 'status'], 'prefix': True}], [['git', 'status'], {'exact': 'git status'}]):
+                [{'exact': ['git', 'status'], 'prefix': True}], [['git', 'status'], {'exact': 'git status'}],
+                [['pnpm', 'check:harness']], [['npm', 'run', 'x']], [['python3', '-m', 'pkg']]):
         configure(read_only_commands=bad)
         result = event(root, 'PreToolUse', 'Bash', {'command': 'git status'})
         assert result.returncode == 2 and 'read_only_commands' in result.stderr, (bad, result.stderr)
@@ -340,10 +379,21 @@ with tempfile.TemporaryDirectory() as tmp:
         # N8: values of -m/-F/-C/-c are skipped as values, options around them are still read
         'git commit --amend --no-edit -n', 'git commit -m "- note" -n', 'git commit --message x -n',
         'git commit -m x -anm y', 'git commit --no-e', 'git commit --no-edit --no-verify', 'git commit -C HEAD -n',
+        # V1: every value option takes the next token, even -m; abbreviations, unknown options and other
+        # hook skips are refused
+        'git commit --trailer -m -n -m x', 'git commit --trail -m -n -m x', 'git commit --author -m -n -m x',
+        'git commit --date -m -n -m x', 'git commit -t -m -n -m x', 'git commit --template --message -n -m x',
+        'git commit --fixup -F -n', 'git commit --squash -C -n', 'git commit --cleanup -m -n',
+        'git commit --pathspec-from-file -m -n -m x', 'git commit -Sm -n -m x', 'git commit -uc -n', 'git commit -tm -n',
+        'git commit -S -n -m x', 'git commit --gpg-sign -n -m x', 'git commit --amen -m x', 'git commit --bogus -m x',
+        'git commit -k -m x', 'git commit --amend=x -m y', 'git commit --no-status -m x', 'git commit --no-post-rewrite -m x',
     )] + [(c, 0) for c in (
         # N8: --no-edit, and message values that start with - and contain n (git reads -mn as -m with the value n)
         'git commit --amend --no-edit', 'git commit -m "- note"', 'git commit -am "- note"',
         'git commit -m "feat: x" -m "- rg -n output"', 'git commit --message "- note"', 'git commit -mn',
+        # V1: values of the other value options, attached optional values, pathspecs after --
+        'git commit --trailer "Plan-Ref: x" -m "feat: x"', 'git commit --date 2026-10-08 -m x',
+        'git commit -m x --cleanup=strip', 'git commit -uno -m x', 'git commit -m x -- -n',
     )])
     assert not failures, failures
     product.write_text('unstaged new content')

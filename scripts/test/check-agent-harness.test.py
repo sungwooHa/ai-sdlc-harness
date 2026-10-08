@@ -274,6 +274,12 @@ def main() -> int:
             ("exact empty", {"read_only_commands": [{"exact": []}]}, True),
             ("exact extra key", {"read_only_commands": [{"exact": ["git", "status"], "prefix": True}]}, True),
             ("exact wildcard", {"read_only_commands": [{"exact": ["git", "*"]}]}, True),
+            # V2: a script runner plus a script alias or module passes later arguments to it, so it is exact too
+            ("runner script as prefix", {"read_only_commands": [["pnpm", "check:harness"]]}, True),
+            ("npm run as prefix", {"read_only_commands": [["npm", "run", "check"]]}, True),
+            ("python module as prefix", {"read_only_commands": [["python3", "-m", "pkg"]]}, True),
+            ("runner script exact", {"read_only_commands": [{"exact": ["pnpm", "check:harness"]}]}, False),
+            ("bare runner reviewed", {"read_only_commands": [["pnpm"]], "reviewed_whole_programs": ["pnpm"]}, False),
         ):
             root = Path(temp_dir) / f"gate-{label.replace(' ', '-')}"
             root.mkdir()

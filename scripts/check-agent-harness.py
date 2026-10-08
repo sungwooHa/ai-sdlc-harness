@@ -39,6 +39,8 @@ USER_PATH_PATTERNS = (
 SELF_REL = "scripts/check-agent-harness.py"
 # A `scripts/…` path in a hook command (see HarnessCheck._script_refs for which ones count).
 SCRIPT_REF = re.compile(r"scripts/[\w./-]*\w")
+# Script runners, as scripts/agreement-gate.py SCRIPT_RUNNERS: with one more word the entry must be exact.
+SCRIPT_RUNNERS = ("pnpm", "npm", "npx", "yarn", "bun", "node", "python", "python3", "bash", "sh", "uv", "poetry")
 
 
 @dataclass
@@ -538,7 +540,8 @@ class HarnessCheck:
                 "agreement_gate_lists",
                 MANIFEST_REL,
                 'agreement_gate.read_only_commands must list argv prefixes (["git", "log"]) or {"exact": [argv]}; '
-                "no wildcards; an entry naming a script or path must be exact",
+                "no wildcards; an entry naming a script or path, or a script runner with more words "
+                "(pnpm check:harness), must be exact",
             )
         # A one-token entry opens every subcommand and argument of that program (`git` → `git ci -n`
         # through an alias, `python3` → any code), so it must be named in reviewed_whole_programs too.
@@ -587,11 +590,13 @@ class HarnessCheck:
     @staticmethod
     def _command_entry(entry: object) -> bool:
         """["git", "log"] opens that argv prefix; {"exact": [...]} only that whole argv. A prefix entry
-        naming a script or path would pass it any argument (`--repo-root <elsewhere>`), so those are exact."""
+        naming a script or path would pass it any argument (`--repo-root <elsewhere>`), so those are exact;
+        so is a script runner with one more word (`pnpm check:harness`), as the gate's SCRIPT_RUNNERS."""
         argv = entry.get("exact") if isinstance(entry, dict) and list(entry) == ["exact"] else entry
         if not (isinstance(argv, list) and argv and all(isinstance(s, str) and s and "*" not in s for s in argv)):
             return False
-        return isinstance(entry, dict) or not any(re.search(r"/|\.(py|sh|[cm]?js|ts|rb|pl)$", s) for s in argv)
+        runner = argv[0] in SCRIPT_RUNNERS and len(argv) > 1
+        return isinstance(entry, dict) or not (runner or any(re.search(r"/|\.(py|sh|[cm]?js|ts|rb|pl)$", s) for s in argv))
 
     @staticmethod
     def _browser_flags(flags: object) -> bool:

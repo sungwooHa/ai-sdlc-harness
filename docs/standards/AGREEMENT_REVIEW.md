@@ -137,7 +137,9 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
   an argv prefix (`["git", "log"]`: any later argument opens) or `{"exact": [...]}` (only that
   whole argv). An entry that names a script or a path must be exact (`check:harness` and the gate
   both refuse it as a prefix): a prefix would hand the script any argument, such as
-  `--repo-root <another checkout>`. The default list opens
+  `--repo-root <another checkout>`. So must an entry that starts with a script runner (`pnpm`,
+  `npm`, `npx`, `yarn`, `bun`, `node`, `python`, `python3`, `bash`, `sh`, `uv`, `poetry`) and names
+  more than the runner (`pnpm check:harness`, `npm run x`, `python3 -m pkg`). The default list opens
   `python3 scripts/check-agent-harness.py --format text` exactly, and `git merge-base` for
   `__PREFIX__-ui-review`. These stay refused whatever the list says: unsafe flags (`rg --pre`/`--hostname-bin`; git
   `--output`, `--ext-diff`, `--textconv`, `--no-index`, `--open-files-in-pager`, and `-O` in any
@@ -186,7 +188,8 @@ they match `-n`/`-an` clusters only right after `git commit` or as the last word
 there; reword it), and `VAR=value` or `env` before `git commit`/`git push`. So `git commit -m x -n
 -q` passes Claude's fence. Codex rules compare whole tokens from the start, so `git commit -m x
 --no-verify`, `git commit -qn`, `git --git-dir=.git commit` and environment prefixes pass Codex's
-fence. The gate is the precise layer: it parses the commit options and refuses all of them.
+fence. The gate is the precise layer: it reads every `git commit` option as git does (abbreviated or
+unknown options are refused) and refuses all of them.
 
 **`enabled: false` is not off.** The gate treats a disabled or missing `agreement_gate` as broken
 wiring and fails closed: every PreToolUse call is refused (exit 2), UserPromptSubmit refuses every
