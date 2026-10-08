@@ -144,7 +144,18 @@ with tempfile.TemporaryDirectory() as tmp:
         f'agent-browser trace stop {qa}/trace.json', f'agent-browser screenshot --screenshot-dir {qa}',
         f'agent-browser open http://localhost:3000 --download-path {qa}/downloads',
         f'agent-browser diff screenshot --baseline {qa}/a.png -o {qa}/d.png',
+        'agent-browser scroll down 300 -s .list', 'agent-browser wait --text Done', 'agent-browser network requests --filter api',
     )] + [(c, 2) for c in (
+        # N1: agent-browser reads its global options anywhere (0.27.0, progress.md 11), so an option value
+        # that starts with - would hide one; only negative numbers pass
+        f'agent-browser scroll down -s --profile {root}/.git/p', f'agent-browser snapshot -s --profile {root}/.git/p',
+        f'agent-browser snapshot --selector --download-path {root}', f'agent-browser wait --text --download-path {root}',
+        f'agent-browser wait --url --screenshot-dir {root}', f'agent-browser find --name --screenshot-dir {root} role button click',
+        'agent-browser scroll down -s --session-name x', 'agent-browser cookies --url --allow-file-access',
+        'agent-browser network route http://x --body --proxy', 'agent-browser network requests --filter --state',
+        f'agent-browser diff screenshot -s --profile {root}/p --baseline {shot}', 'agent-browser wait --fn -x',
+        # N4: a relative path, even one that resolves inside the artifact directory from the checkout
+        f'agent-browser screenshot {os.path.relpath(qa / "rel.png", root)}',
         # file writes outside the artifact directory: the checkout, .git, relative, .., a link, ~, ~user
         f'agent-browser screenshot {root}/.git/config', 'agent-browser screenshot shot.png',
         f'agent-browser pdf {root}/out.pdf', f'agent-browser download @e5 {root}/.git/hooks/pre-commit',
@@ -173,6 +184,9 @@ with tempfile.TemporaryDirectory() as tmp:
     qa.mkdir(mode=0o700, exist_ok=True)
     (qa / 'link').symlink_to(root, target_is_directory=True)
     failures = wrong(browser_cases)
+    qa.chmod(0o755)  # N5: an existing directory others can open is refused for file writes
+    failures += [('0755', *f) for f in wrong([(f'agent-browser screenshot {shot}', 2), ('agent-browser snapshot', 0)])]
+    qa.chmod(0o700)
     (root / 'agent-browser.json').write_text('{}')  # project config: every call refused while it exists
     failures += wrong([('agent-browser snapshot', 2)])
     (root / 'agent-browser.json').unlink()

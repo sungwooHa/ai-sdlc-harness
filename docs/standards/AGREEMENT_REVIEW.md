@@ -149,17 +149,24 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
   allowed command words (one to three, e.g. `set viewport`) to their `flags` and `args`;
   `global_flags` apply to every command. A flag's value shape is `""` (switch), `"path"`, or a regex
   the value must fully match. `args` is `null` for free text (selectors, URLs, typed text) or a
-  list of slots `path`, `path?` (optional) and `text`. A `path` value must resolve, after `..` and
-  symlinks, inside `artifact_dir` (`$TMPDIR/<name>`: created 0700, owned by you, never a symlink,
-  never inside or around the checkout); `~` paths are refused because quoting decides whether the
-  shell expands them. The refusal message prints the resolved directory to use. `batch`, `chat`,
+  list of slots `path`, `path?` (optional) and `text`. A `path` value must be absolute and resolve,
+  after `..` and symlinks, inside `artifact_dir` (`$TMPDIR/<name>`: mode 0700, owned by you, never a
+  symlink, never inside or around the checkout; the gate creates it 0700 and refuses an existing one
+  with any group or other permission). Relative and `~` paths are refused: the agent-browser daemon
+  resolves a relative path from its own working directory, and quoting decides whether the shell
+  expands `~`. The refusal message prints the resolved directory to use. `batch`, `chat`,
   `connect`, `upload` and `--cdp`, `--auto-connect`, `-p`/`--provider`, `--executable-path`,
   `--args`, `--extension`, `--config`, `--init-script` stay refused whatever the lists say, and every
   call is refused while `./agent-browser.json` exists (it can set all of those). `read_only_commands`
-  never opens `agent-browser`. Not opened by design: element screenshots (a lone `screenshot`
-  argument may be read as a path) and text arguments that start with `-`. A download a page starts
-  by itself lands in agent-browser's default location, which the gate does not see; Stop and
-  pre-commit still refuse new files in the checkout outside scope.
+  never opens `agent-browser`. agent-browser takes its global options from any position, so an
+  option value or text argument that starts with `-` is refused (negative numbers such as
+  `mouse wheel -50 0` excepted); otherwise `scroll down -s --profile <dir>` would hide a profile
+  directory inside a selector slot. Not opened by design: element screenshots (a lone `screenshot`
+  argument may be read as a path). A download a page starts by itself lands in agent-browser's
+  default location, which the gate does not see. After approval, Stop and pre-commit refuse
+  changed or new non-ignored files in the working tree outside scope (`git diff` plus untracked
+  files `git ls-files --others --exclude-standard` lists); they do not see writes under `.git/`,
+  ignored paths or outside the checkout, and Stop checks no files while a draft is pending.
 - `branch_pattern`: full-match regex for `git switch -c <branch>` after approval.
 
 **Second fence.** A hook that times out or fails to start does not block the tool call.

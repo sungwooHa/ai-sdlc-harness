@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import tempfile
@@ -345,11 +346,13 @@ NEGATIVE_NUMBER = re.compile(r'-\d+(\.\d+)?')
 
 
 def browser_root(repo, browser):
-    """The one directory agent-browser may write to: own, real, outside the checkout (created 0700)."""
+    """The one directory agent-browser may write to: own, mode 0700, real, outside the checkout."""
     path = Path(tempfile.gettempdir()) / browser['artifact_dir'][len('$TMPDIR/'):]
     if path.is_symlink():
         raise Blocked(f'agent-browser artifact directory {path} must not be a symlink')
     path.mkdir(mode=0o700, exist_ok=True)
+    if stat.S_IMODE(path.lstat().st_mode) & 0o077:
+        raise Blocked(f'agent-browser artifact directory {path} must be mode 0700 (chmod 700 it)')
     root = path.resolve()
     if root.stat().st_uid != os.getuid() or root == repo or repo in root.parents or root in repo.parents:
         raise Blocked(f'agent-browser artifact directory {root} must be your own directory outside the checkout')
@@ -358,8 +361,9 @@ def browser_root(repo, browser):
 
 def browser_path(repo, browser, value):
     root = browser_root(repo, browser)
-    target = (repo / value).resolve()  # relative to the guarded root; .. and symlinks resolved
-    if value.startswith('~') or (target != root and root not in target.parents):
+    # Absolute only: agent-browser's daemon resolves a relative path from its own working directory.
+    target = Path(value).resolve()  # .. and symlinks resolved
+    if not Path(value).is_absolute() or (target != root and root not in target.parents):
         raise Blocked(f'agent-browser writes files only under {root} (absolute path); got {value}')
 
 
@@ -395,6 +399,10 @@ def browser_command(repo, argv, cfg):
             value = next(rest, None)
             if value is None:
                 raise Blocked(f'agent-browser option {token} needs a value')
+            # agent-browser takes its global options from any position, also from a value slot.
+            if value.startswith('-') and not NEGATIVE_NUMBER.fullmatch(value):
+                raise Blocked(f'agent-browser {token} value {value!r} starts with -: values that look like '
+                              'options are refused (negative numbers excepted)')
         if shape == 'path':
             browser_path(repo, browser, value)
         elif shape and not re.fullmatch(shape, value):
