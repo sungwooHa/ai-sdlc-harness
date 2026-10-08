@@ -1,0 +1,18 @@
+# Second fence behind scripts/agreement-gate.py: these hold when the hook times out or fails.
+# Rules match command text only (`git -C . push` is not matched). See docs/standards/AGREEMENT_REVIEW.md.
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "forbidden",
+    justification = "Pushing is a human step after PR value review.",
+    match = ["git push", "git push origin main"],
+    not_match = ["git status"],
+)
+
+prefix_rule(
+    pattern = ["git", "commit", ["--no-verify", "-n"]],
+    decision = "forbidden",
+    justification = "Commit hooks carry the agreement check; skipping them is a declared human emergency step.",
+    match = ["git commit --no-verify -m x", "git commit -n -m x"],
+    not_match = ["git commit -m x"],
+)

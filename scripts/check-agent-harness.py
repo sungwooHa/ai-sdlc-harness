@@ -70,6 +70,7 @@ class HarnessCheck:
         self._check_protected_paths()
         self._check_documentation_layout()
         self._check_artifact_chain()
+        self._check_agreement_gate()
         self._check_repo_wide_terms()
         self._check_ci()
 
@@ -436,6 +437,32 @@ class HarnessCheck:
                     continue
                 if not case.get("id") or not case.get("prompt") or not isinstance(case.get("expect"), dict):
                     self._error("invalid_eval_case", f"{cases}:{index}", "case needs id, prompt, and an expect object")
+
+    # ------------------------------------------------------- agreement gate
+    def _check_agreement_gate(self) -> None:
+        """The gate opens exactly what these lists say, so a typo must fail here, not widen access."""
+        gate = self.manifest.get("agreement_gate")
+        if not isinstance(gate, dict):
+            return
+        subagents = gate.get("allowed_subagents")
+        if not isinstance(subagents, list) or not all(isinstance(s, str) and s for s in subagents):
+            self._error("agreement_gate_lists", MANIFEST_REL, "agreement_gate.allowed_subagents must list subagent type names")
+        commands = gate.get("read_only_commands")
+        if not isinstance(commands, list) or not all(
+            isinstance(p, list) and p and all(isinstance(s, str) and s and "*" not in s for s in p) for p in commands
+        ):
+            self._error(
+                "agreement_gate_lists",
+                MANIFEST_REL,
+                "agreement_gate.read_only_commands must list nonempty exact argv prefixes (no wildcards)",
+            )
+        pattern = gate.get("branch_pattern")
+        try:
+            valid = isinstance(pattern, str) and bool(re.compile(pattern))
+        except re.error:
+            valid = False
+        if not valid:
+            self._error("agreement_gate_lists", MANIFEST_REL, "agreement_gate.branch_pattern must be a valid regex")
 
     # ----------------------------------------------------------- repo scans
     def _check_repo_wide_terms(self) -> None:

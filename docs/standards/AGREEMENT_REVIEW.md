@@ -61,8 +61,9 @@ that gap, present the current state, and agree the remaining work explicitly.
 The implement adapter reads the referenced snapshot and implements only the approved file scope.
 Use Write/Edit or Codex apply_patch for edits. For deletion/rename use the scoped helper commands
 `python3 scripts/agreement-gate.py remove <path>` or `move <source> <target>`. Arbitrary mutation
-shell commands and unsupported tools are refused. A simple `git switch -c feature/<name>` is
-allowed after approval. Prepare isolated checkouts outside this flow; use one change per worktree.
+shell commands and unsupported tools are refused. A simple `git switch -c <branch>` whose name
+fully matches `agreement_gate.branch_pattern` (default `feature/<slug>(/<part>)*`) is allowed
+after approval. Prepare isolated checkouts outside this flow; use one change per worktree.
 Run `python3 scripts/agreement-gate.py verify` to execute the declared checks and record their
 exit codes against current source hashes. Editing source invalidates that evidence. Run fresh
 read-only code review and repair findings, then verify again if source changed. Code review assesses correctness against the
@@ -114,3 +115,43 @@ fallback exists for hosts without UserPromptSubmit and must be described as weak
 Do not claim that a matching approval command proves the human read or understood the HTML.
 Native host behavior and trust settings require a deployment smoke test; payload tests alone do
 not establish coverage for every host version. See the official host hook documentation.
+
+## Gate configuration and switching off
+
+`agreement_gate` in `.agents/harness.yaml` holds the lists the gate reads; approval, scope and
+verification decisions stay in `scripts/agreement-gate.py`. `check:harness` validates all three.
+A missing list opens nothing; a malformed one blocks the call.
+
+- `allowed_subagents` (default `Explore`, `Plan`, `verifier`): subagent types the Agent/Task tool
+  may start. A subagent's own tool calls pass the same PreToolUse hook (the payload carries
+  `agent_id`/`agent_type`), so a listed reviewer gains no edit path.
+- `read_only_commands`: exact argv prefixes that run before and after approval, no wildcards.
+  Shell metacharacters (`; & | > < $`, backquote, backslash, newline), unsafe `rg`/`git` flags and
+  gate-owned commands (`agreement-gate.py`, `git add|commit|switch|push`) stay refused whatever
+  the list says. List a subcommand, never a bare interpreter such as `python3`: that opens any code.
+  `agent-browser` is listed whole for screen checks. Its output never records verification; only
+  `agreement-gate.py verify` does. Files it writes are not checked before the call, and Stop and
+  pre-commit still refuse changed files outside scope, so write screenshots outside the checkout.
+- `branch_pattern`: full-match regex for `git switch -c <branch>` after approval.
+
+**Second fence.** A hook that times out or fails to start does not block the tool call.
+`.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules`
+(`prefix_rule(decision="forbidden")`) refuse `git push` and `git commit --no-verify`/`-n` without
+the hook. They match command text only (`git -C . push` passes), so they cover the gap; the
+gate's own checks stay primary.
+
+**`enabled: false` is not off.** The gate treats a disabled or missing `agreement_gate` as broken
+wiring and fails closed: every PreToolUse call is refused (exit 2), UserPromptSubmit refuses every
+prompt (on Claude the prompt never reaches the model), Stop exits 2 so the host keeps the session
+going, and `check-staged` refuses every commit. To switch the gate off, remove wiring and
+declaration in one change:
+
+1. `.claude/settings.json` and `.codex/hooks.json`: the `agreement-gate.py` entries under
+   `UserPromptSubmit`, `PreToolUse` and `Stop`.
+2. `.husky/pre-commit`: the `agreement-gate.py check-staged` line.
+3. `.agents/harness.yaml`: the `agreement_runtime` and `agreement_precommit` entries in
+   `shared_hook_intents` (left alone, `check:harness` reports them unwired).
+4. `package.json` `test:harness`: drop `scripts/test/agreement-gate.test.py`, which asserts the wiring.
+
+Update `AGENTS.md` and the agreement skill in the same change; they describe the gate. The second
+fence is independent: keep or remove it deliberately.

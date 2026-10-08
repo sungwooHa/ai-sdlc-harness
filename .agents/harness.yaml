@@ -277,7 +277,8 @@
       "required_files": [
         ".codex/config.toml",
         ".codex/hooks.json",
-        ".codex/rules/commit-convention.mdc"
+        ".codex/rules/commit-convention.mdc",
+        ".codex/rules/harness.rules"
       ],
       "absolute_path_scan_files": [
         ".codex/config.toml",
@@ -449,7 +450,31 @@
     "runtime_hosts": [
       "claude",
       "codex"
-    ]
+    ],
+    "lists_rule": "Data the gate reads; approval, scope and verification logic stay in the gate. allowed_subagents: subagent types the Agent/Task tool may start (their own tool calls pass the same hook). read_only_commands: exact argv prefixes that run before and after approval; no wildcards; shell metacharacters, unsafe rg/git flags and gate-owned commands stay refused; a listed command never records verification. branch_pattern: regex (full match) for `git switch -c <branch>` after approval. A missing list opens nothing; a malformed one blocks. See docs/standards/AGREEMENT_REVIEW.md.",
+    "allowed_subagents": [
+      "Explore",
+      "Plan",
+      "verifier"
+    ],
+    "read_only_commands": [
+      ["pwd"],
+      ["ls"],
+      ["cat"],
+      ["head"],
+      ["tail"],
+      ["wc"],
+      ["rg"],
+      ["git", "status"],
+      ["git", "diff"],
+      ["git", "log"],
+      ["git", "show"],
+      ["git", "ls-files"],
+      ["git", "rev-parse"],
+      ["python3", "scripts/check-agent-harness.py"],
+      ["agent-browser"]
+    ],
+    "branch_pattern": "feature/[a-z0-9-]+(/[a-z0-9-]+)*"
   },
   "adr_gate": {
     "root": "docs/decisions",

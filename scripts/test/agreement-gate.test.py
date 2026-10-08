@@ -94,6 +94,41 @@ with tempfile.TemporaryDirectory() as tmp:
     assert event(root, 'PreToolUse', 'PowerShell', {'command': 'write something'}).returncode == 2
     assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / '.git/harness-agreement.json'),
                                            'content': '{"phase":"approved"}'}).returncode == 2
+    # harness.yaml lists open reviewers and read-only commands before approval; edits stay refused,
+    # also when a subagent makes them (its tool calls pass the same PreToolUse hook).
+    assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'verifier', 'prompt': 'review'}).returncode == 0
+    for kind in ('general-purpose', None):
+        assert event(root, 'PreToolUse', 'Agent', {'subagent_type': kind, 'prompt': 'x'}).returncode == 2, kind
+    assert event(root, 'PreToolUse', 'Write', write, agent_id='a1', agent_type='verifier').returncode == 2
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'git diff --stat'}, agent_id='a1', agent_type='verifier').returncode == 0
+    for command in ('python3 scripts/check-agent-harness.py --format text', 'agent-browser snapshot -i',
+                    'agent-browser open http://localhost:3000/login', 'agent-browser screenshot'):
+        assert event(root, 'PreToolUse', 'Bash', {'command': command}).returncode == 0, command
+    for command in ('python3 scripts/check-agent-harness.py.bak', 'npx agent-browser snapshot',
+                    'agent-browser open "http://localhost:3000/?a=1&b=2"', 'agent-browser snapshot; touch x',
+                    'git log --output=leak.txt', 'git switch -c feature/x/api'):
+        assert event(root, 'PreToolUse', 'Bash', {'command': command}).returncode == 2, command
+    gate_cfg = MANIFEST['agreement_gate']
+
+    def configure(**changes):
+        cfg = {key: value for key, value in {**gate_cfg, **changes}.items() if value is not None}
+        (root / '.agents/harness.yaml').write_text(json.dumps({**MANIFEST, 'agreement_gate': cfg}))
+
+    configure(allowed_subagents=['Explore'], read_only_commands=[['make', 'lint']])
+    assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'verifier'}).returncode == 2
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'make lint --quiet'}).returncode == 0
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'git status'}).returncode == 2
+    configure(read_only_commands=[['git'], ['python3']])  # Even a too-broad list cannot reopen gate-owned commands.
+    for command in ('python3 scripts/agreement-gate.py approve fake', 'git push', 'git commit --no-verify -m x',
+                    'git add apps/web/src/ui/screen.tsx', 'git switch -c anything'):
+        assert event(root, 'PreToolUse', 'Bash', {'command': command}).returncode == 2, command
+    configure(allowed_subagents=None)  # A missing list opens nothing.
+    assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'Explore'}).returncode == 2
+    for bad in ([[]], [['git', '']], 'git status'):  # An empty prefix would open every command.
+        configure(read_only_commands=bad)
+        result = event(root, 'PreToolUse', 'Bash', {'command': 'git status'})
+        assert result.returncode == 2 and 'read_only_commands' in result.stderr, (bad, result.stderr)
+    (root / '.agents/harness.yaml').write_text(json.dumps(MANIFEST))
     folder = root / 'docs/changes/260914_00-agreement'
     folder.mkdir(parents=True)
     (folder / 'spec.md').write_text('# Agreed specification\n')
@@ -178,6 +213,11 @@ with tempfile.TemporaryDirectory() as tmp:
     next_challenge = json.loads(amendment.stdout)['approval_command'].split()[-1]
     assert event(root, 'UserPromptSubmit', prompt=f"${MANIFEST['agreement_gate']['skill']} approve {next_challenge}").returncode == 0
     assert event(root, 'PreToolUse', 'Bash', {'command': 'git switch -c feature/agreed'}).returncode == 0
+    for branch, code in (('feature/x/api', 0), ('feature/x/api/v2', 0), ('feature/X', 2), ('feature/x//api', 2),
+                         ('feature/x/', 2), ('release/x', 2), ('feature', 2)):
+        assert event(root, 'PreToolUse', 'Bash', {'command': f'git switch -c {branch}'}).returncode == code, branch
+    assert event(root, 'PreToolUse', 'Write', write, agent_id='a1', agent_type='verifier').returncode == 0
+    assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / 'other.py')}, agent_id='a1', agent_type='verifier').returncode == 2
     assert event(root, 'PreToolUse', 'Bash', {'command': 'python3 scripts/agreement-gate.py status'}, cwd=str(folder)).returncode == 2
     assert event(root, 'PreToolUse', 'Bash', {'command': 'python3 scripts/agreement-gate.py remove other.py'}).returncode == 2
     assert run(root, 'remove', 'other.py').returncode == 1
@@ -206,5 +246,12 @@ with tempfile.TemporaryDirectory() as tmp:
         result = subprocess.run([sys.executable, str(GATE), '--repo-root', str(root), 'hook'],
                                 input=bad, text=True, capture_output=True)
         assert result.returncode == 2, (bad, result.stderr)
+    # enabled: false is not "off": every hook call and commit check is refused (AGREEMENT_REVIEW.md).
+    configure(enabled=False)
+    assert event(root, 'PreToolUse', 'Read', {'file_path': str(product)}).returncode == 2
+    assert event(root, 'UserPromptSubmit', prompt='hello').returncode == 2
+    result = event(root, 'Stop')  # Read before the payload: exit 2, which a Stop hook treats as "keep going".
+    assert result.returncode == 2 and 'disabled' in result.stderr, (result.stdout, result.stderr)
+    assert run(root, 'check-staged').returncode == 1
 
 print('PASS: agreement gate lifecycle and bypass regression tests')

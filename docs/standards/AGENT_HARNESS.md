@@ -36,7 +36,7 @@ not in a document.
 | `.claude/skills` | Symlink mirror of the skill root (one symlink per skill) |
 | `.agents/harness.yaml` | Machine-readable harness contract |
 | `.claude/settings.json`, `.codex/hooks.json` | Host hook adapters |
-| `.codex/config.toml`, `.codex/rules/commit-convention.mdc` | Codex host files |
+| `.codex/config.toml`, `.codex/rules/commit-convention.mdc`, `.codex/rules/harness.rules` | Codex host files |
 | `.husky/pre-commit` | Commit-time gates |
 | `docs/changes/<YYMMDD_NN>-<slug>/` | Artifact chain per change — local-only working folder, gitignored, never committed |
 | `docs/changes/_templates/` | `intent.md`, `spec.md`, `plan.md`, `pr.md` templates (the only tracked files under `docs/changes/` besides its README) |
@@ -221,7 +221,9 @@ the relative `.husky/_` husky writes, so each worktree runs its own hook files; 
 that resolves to this repo's `.husky/_` is normalized back by `ensure-husky.sh`, and both scripts
 accept either form when judging wiring.
 
-`--no-verify` is for emergencies and must be declared in the PR.
+`--no-verify` is for emergencies and must be declared in the PR. Agents cannot run it or `git push`:
+`.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` refuse both even when
+a hook times out (second fence; see `AGREEMENT_REVIEW.md`).
 
 **Wiring check.** The harness check reads only the executable surface of a host file — `command`
 strings in JSON adapters, non-comment lines in shell hooks — so a commented-out invocation counts as

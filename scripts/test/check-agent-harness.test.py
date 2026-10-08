@@ -130,6 +130,30 @@ def main() -> int:
             assert bool(errors) == expect_error, f"{label}: errors={payload['errors']}"
             assert (code == 1) == expect_error, f"{label}: exit={code}"
 
+        # agreement_gate lists are data the gate trusts: exact argv prefixes without wildcards,
+        # named subagents, and a branch pattern that compiles.
+        gate = {"enabled": True, "allowed_subagents": ["Explore"], "read_only_commands": [["git", "status"]],
+                "branch_pattern": "feature/[a-z0-9-]+(/[a-z0-9-]+)*"}
+        for label, change, expect_error in (
+            ("valid", {}, False),
+            ("missing", {"read_only_commands": None}, True),
+            ("wildcard", {"read_only_commands": [["git", "*"]]}, True),
+            ("empty prefix", {"read_only_commands": [[]]}, True),
+            ("unnamed subagent", {"allowed_subagents": [""]}, True),
+            ("bad pattern", {"branch_pattern": "feature/("}, True),
+        ):
+            root = Path(temp_dir) / f"gate-{label.replace(' ', '-')}"
+            root.mkdir()
+            build_fixture(root, f"{IMPORT_LINE}\n")
+            manifest = json.loads(json.dumps(MANIFEST))
+            manifest["agreement_gate"] = {k: v for k, v in {**gate, **change}.items() if v is not None}
+            (root / ".agents/harness.yaml").write_text(json.dumps(manifest), encoding="utf-8")
+            code, out = run(root)
+            payload = json.loads(out)
+            errors = [item for item in payload["errors"] if item["code"] == "agreement_gate_lists"]
+            assert bool(errors) == expect_error, f"{label}: errors={payload['errors']}"
+            assert (code == 1) == expect_error, f"{label}: exit={code}"
+
     print("PASS: check-agent-harness smoke tests")
     return 0
 

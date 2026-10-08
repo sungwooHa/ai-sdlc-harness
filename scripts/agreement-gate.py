@@ -292,17 +292,27 @@ def draft_target(repo, rel):
     return target.parent == views and target.suffix == '.html'
 
 
-def read_only_shell(argv):
-    if not argv:
+# Flags that make a listed program write files or run other programs stay refused whatever the list opens.
+UNSAFE_FLAGS = {'rg': ('--pre', '--hostname-bin'), 'git': ('--output', '--ext-diff', '--textconv', '--no-index')}
+# Commands the gate itself admits or refuses; no read_only_commands entry can open them.
+GATE_OWNED = (['python3', 'scripts/agreement-gate.py'], ['git', 'add'], ['git', 'commit'], ['git', 'switch'],
+              ['git', 'push'])
+
+
+def listed(cfg, key, valid):
+    value = cfg.get(key, [])  # A missing list opens nothing.
+    if not isinstance(value, list) or not all(valid(item) for item in value):
+        raise Blocked(f'agreement_gate.{key} is malformed; see docs/standards/AGREEMENT_REVIEW.md')
+    return value
+
+
+def read_only_shell(argv, cfg):
+    # Exact argv prefixes: an empty prefix or an empty token would open more than its author wrote.
+    prefixes = listed(cfg, 'read_only_commands',
+                      lambda p: isinstance(p, list) and p and all(isinstance(s, str) and s for s in p))
+    if not argv or any(argv[:len(p)] == p for p in GATE_OWNED) or not any(argv[:len(p)] == p for p in prefixes):
         return False
-    if argv[0] in ('pwd', 'ls', 'cat', 'head', 'tail', 'wc'):
-        return True
-    if argv[0] == 'rg':
-        return not any(a.startswith(('--pre', '--hostname-bin')) for a in argv[1:])
-    if argv[0] == 'git' and len(argv) > 1:
-        return argv[1] in ('status', 'diff', 'log', 'show', 'ls-files', 'rev-parse') and not any(
-            a.startswith(('--output', '--ext-diff', '--textconv', '--no-index')) for a in argv[2:])
-    return False
+    return not any(a.startswith(UNSAFE_FLAGS.get(argv[0], ())) for a in argv[1:])
 
 
 def pretool(repo, payload):
@@ -355,7 +365,8 @@ def pretool(repo, payload):
         if not isinstance(command, str) or any(c in command for c in '\n\r;&|><`$\\'):
             raise Blocked('use one direct command; compound shells and substitutions cannot be scope-checked')
         argv = shlex.split(command)
-        if read_only_shell(argv):
+        _, cfg = config(repo)
+        if read_only_shell(argv, cfg):
             return
         if argv in (['python3', 'scripts/adr-gate.py'], ['python3', 'scripts/adr-gate.py', '--all']):
             return  # Read-only structure check; verification still needs a recorded execution.
@@ -393,7 +404,8 @@ def pretool(repo, payload):
             targets = argv[2:]
             if targets and all(not p.startswith('-') and relative(repo, p) in data['scope']['paths'] for p in targets):
                 return
-        if len(argv) == 4 and argv[:3] == ['git', 'switch', '-c'] and re.fullmatch(r'feature/[a-z0-9-]+', argv[3]):
+        branch = cfg.get('branch_pattern')  # Missing: no branch creation.
+        if len(argv) == 4 and argv[:3] == ['git', 'switch', '-c'] and isinstance(branch, str) and re.fullmatch(branch, argv[3]):
             approved(repo)
             return
         if argv[:2] == ['git', 'commit']:
@@ -403,7 +415,9 @@ def pretool(repo, payload):
                 delivery(repo, staged=True)
                 return
         raise Blocked('shell execution needs a declared verification command; use agreement-gate.py verify')
-    if tool in ('Agent', 'Task') and args.get('subagent_type') in ('Explore', 'Plan'):
+    # A subagent's own tool calls pass this same hook, so a listed reviewer gains no edit path.
+    if tool in ('Agent', 'Task') and args.get('subagent_type') in listed(
+            config(repo)[1], 'allowed_subagents', lambda name: isinstance(name, str) and name):
         return
     raise Blocked(f'unsupported tool {tool!r}: no verified mutation contract; add an explicit adapter')
 
