@@ -202,6 +202,23 @@ with tempfile.TemporaryDirectory() as tmp:
     for command in ('python3 scripts/agreement-gate.py approve fake', 'git push', 'git commit --no-verify -m x',
                     'git add apps/web/src/ui/screen.tsx', 'git switch -c anything'):
         assert event(root, 'PreToolUse', 'Bash', {'command': command}).returncode == 2, command
+    # M2: other spellings of gate-owned commands, git options before the subcommand, env prefixes and
+    # options that write files or start a pager stay refused whatever the list says.
+    failures = wrong([('git log --oneline', 0), ('git status', 0), ('git diff -- scripts/agreement-gate.py', 0)] + [(c, 2) for c in (
+        'git -C . push origin main', 'git -c core.hooksPath=/dev/null commit -m x', 'git --no-pager commit -n -m x',
+        'git -C . add apps/web/src/ui/screen.tsx', 'git -C . switch -c release/x', 'git --git-dir=.git push',
+        'git --work-tree=. status', 'git --exec-path=/opt/git status', 'git --config-env=core.pager=X log',
+        'git -p log', 'git --paginate log', 'git checkout -b feature/x', 'git checkout main',
+        'python3 ./scripts/agreement-gate.py approve fake', 'python3 scripts//agreement-gate.py approve fake',
+        f'python3 {root}/scripts/agreement-gate.py approve fake', 'python3 -u scripts/agreement-gate.py approve fake',
+        'GIT_PAGER=x git log', 'GIT_DIR=.git git status', 'git grep -O pattern', 'git grep -iO pattern',
+        'git grep --open-files-in-pager pattern', 'git diff --output=x', 'git log --ext-diff', 'git show --textconv',
+        'git diff --no-index a b',
+    )])
+    configure()  # the default list
+    failures += wrong([('git log --oneline -- scripts/agreement-gate.py', 0)] + [(c, 2) for c in ('git -C . status', 'git -c core.pager=x log', 'GIT_PAGER=x git log',
+                                         'git diff -Oorder.txt', 'git log --output=leak.txt')])
+    assert not failures, failures
     configure(allowed_subagents=None)  # A missing list opens nothing.
     assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'Explore'}).returncode == 2
     for bad in ([[]], [['git', '']], 'git status'):  # An empty prefix would open every command.
@@ -266,6 +283,16 @@ with tempfile.TemporaryDirectory() as tmp:
     assert run(root, 'verify').returncode == 0
     git(root, 'add', str(product))
     assert run(root, 'check-staged').returncode == 0
+    # M1: with approval, verification and pr.md in place a plain commit passes; no spelling skips the hooks.
+    failures = wrong([('git commit -m "feat: x"', 0)] + [(c, 2) for c in (
+        'git commit -nm x', 'git commit -anm x', 'git commit -qn -m x', 'git commit -m x -n', 'git commit -m x -vn',
+        'git commit -m x --no-verify', 'git commit --no-verif -m x', 'git commit -m x --no-ver',
+        'HUSKY=0 git commit -m x', 'GIT_CONFIG_COUNT=1 git commit -m x', 'env HUSKY=0 git commit -m x',
+        'git -c core.hooksPath=/dev/null commit -m x', 'git -C . commit -m x', 'git --git-dir=.git commit -m x',
+        'git --work-tree=. commit -m x', 'git --exec-path=/opt/git commit -m x', 'git --config-env=core.hooksPath=X commit -m x',
+        'git --no-pager commit -m x', 'git -p commit -m x',
+    )])
+    assert not failures, failures
     product.write_text('unstaged new content')
     assert run(root, 'verify').returncode == 0
     assert 'unstaged' in run(root, 'check-staged').stderr

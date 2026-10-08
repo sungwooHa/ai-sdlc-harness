@@ -119,22 +119,31 @@ not establish coverage for every host version. See the official host hook docume
 ## Gate configuration and switching off
 
 `agreement_gate` in `.agents/harness.yaml` holds the lists the gate reads; approval, scope and
-verification decisions stay in `scripts/agreement-gate.py`. `check:harness` validates all four.
+verification decisions stay in `scripts/agreement-gate.py`. `check:harness` validates them.
 A missing list opens nothing; a malformed one blocks the call.
 
 Every shell command must be one direct command: shell metacharacters (`; & | > < $`, backquote,
 backslash, newline) and unquoted `* ? [ ] { } ( )` are refused, because globs, brace expansion and
 zsh glob qualifiers add arguments (or run code) the gate never sees. Quote such arguments.
+Environment assignments before the command (`HUSKY=0 git commit`) and git options before the
+subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env`, `-p`,
+`--no-pager`, ...) are refused for every command, listed or not.
 
 - `allowed_subagents` (default `Explore`, `Plan`, `verifier`, `general-purpose`): subagent types
   the Agent/Task tool may start. A call without `subagent_type` counts as `general-purpose`, the
   host default that `/review-since` starts. A subagent's own tool calls pass the same PreToolUse
   hook (the payload carries `agent_id`/`agent_type`), so a listed type gains no edit path.
 - `read_only_commands`: exact argv prefixes that run before and after approval, no wildcards.
-  Unsafe `rg`/`git` flags and gate-owned commands (`agreement-gate.py`, `git add|commit|switch|push`)
-  stay refused whatever the list says. List a subcommand, never a bare interpreter such as `python3`:
-  that opens any code. A listed command never records verification; only `agreement-gate.py verify`
-  does.
+  These stay refused whatever the list says: unsafe flags (`rg --pre`/`--hostname-bin`; git
+  `--output`, `--ext-diff`, `--textconv`, `--no-index`, `--open-files-in-pager`, and `-O` in any
+  short cluster) and gate-owned commands in any spelling (`git add|commit|switch|push|checkout`;
+  any non-git command with an argument naming `agreement-gate`). A listed command never records
+  verification; only `agreement-gate.py verify` does.
+- `reviewed_whole_programs`: a one-token `read_only_commands` entry (`["rg"]`) opens every argument
+  of that program, so `check:harness` refuses it unless the program is named here too. Add a name
+  only after checking that no argument of the program writes files, runs code, or reaches a
+  gate-owned command: a bare `git` reaches `git ci -n` through an alias, a bare `python3` runs any
+  code. Prefer listing the subcommand (`["git", "log"]`).
 - `agent_browser`: screen checks with `agent-browser`, before and after approval. Write the command
   words first and options after them (`agent-browser snapshot -i --json`). `commands` maps the
   allowed command words (one to three, e.g. `set viewport`) to their `flags` and `args`;
@@ -155,9 +164,13 @@ zsh glob qualifiers add arguments (or run code) the gate never sees. Quote such 
 
 **Second fence.** A hook that times out or fails to start does not block the tool call.
 `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules`
-(`prefix_rule(decision="forbidden")`) refuse `git push` and `git commit --no-verify`/`-n` without
-the hook. They match command text only (`git -C . push` passes), so they cover the gap; the
-gate's own checks stay primary.
+(`prefix_rule(decision="forbidden")`) repeat part of the gate without the hook: `git push`;
+`git commit` with `--no-verify` (or an abbreviation) or `-n`, `-nm`, `-an...` clusters; git `-c`,
+`-C`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env` before the subcommand. Claude rules
+glob over the command text, so they also catch `-n`/`--no-verify` later in the command and behind
+`VAR=value` or `env`. Codex rules compare whole tokens from the start, so `git commit -m x
+--no-verify`, `git commit -qn`, `git --git-dir=.git commit` and environment prefixes pass Codex's
+fence. The gate stays primary and refuses all of them.
 
 **`enabled: false` is not off.** The gate treats a disabled or missing `agreement_gate` as broken
 wiring and fails closed: every PreToolUse call is refused (exit 2), UserPromptSubmit refuses every

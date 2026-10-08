@@ -1,5 +1,7 @@
 # Second fence behind scripts/agreement-gate.py: these hold when the hook times out or fails.
-# Rules match command text only (`git -C . push` is not matched). See docs/standards/AGREEMENT_REVIEW.md.
+# Rules compare whole argv tokens from the start of the command: no wildcard inside a token and no
+# later position, so `git commit -m x --no-verify`, `git commit -qn -m x`, `git --git-dir=.git commit`
+# and `HUSKY=0 git commit` pass here and only the gate refuses them. See docs/standards/AGREEMENT_REVIEW.md.
 
 prefix_rule(
     pattern = ["git", "push"],
@@ -10,9 +12,19 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern = ["git", "commit", ["--no-verify", "-n"]],
+    pattern = ["git", "commit", ["--no-verify", "--no-verif", "--no-veri", "-n", "-nm", "-mn", "-an", "-na",
+                                 "-anm", "-amn", "-nam", "-nma", "-man", "-mna"]],
     decision = "forbidden",
     justification = "Commit hooks carry the agreement check; skipping them is a declared human emergency step.",
-    match = ["git commit --no-verify -m x", "git commit -n -m x"],
-    not_match = ["git commit -m x"],
+    match = ["git commit --no-verify -m x", "git commit -n -m x", "git commit -nm x", "git commit -anm x",
+             "git commit --no-verif -m x"],
+    not_match = ["git commit -m x", "git commit -am x"],
+)
+
+prefix_rule(
+    pattern = ["git", ["-c", "-C", "--git-dir", "--work-tree", "--exec-path", "--config-env"]],
+    decision = "forbidden",
+    justification = "Options before the subcommand can point git at other hooks, config or repositories.",
+    match = ["git -c core.hooksPath=/dev/null commit -m x", "git -C . push", "git --git-dir .git commit -m x"],
+    not_match = ["git status", "git log -c"],
 )

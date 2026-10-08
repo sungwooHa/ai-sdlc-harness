@@ -259,9 +259,12 @@ true. `docs/standards/COMMIT_CONVENTION.md` is the rule text. `.claude/settings.
 is empty so Claude Code adds no co-author trailer or PR footer; an instruction in a memory or
 `CLAUDE.md` file can still ask for one, so the hook is the fence.
 
-`--no-verify` is for emergencies and must be declared in the PR. Agents cannot run it or `git push`:
-`.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` refuse both even when
-a hook times out (second fence; see `AGREEMENT_REVIEW.md`).
+`--no-verify` is for emergencies and must be declared in the PR. For agents the agreement gate
+refuses `git push` and every hook-skipping spelling of `git commit` it parses (`-n` in any short
+cluster, `--no-verify` and its abbreviations, environment prefixes, git options before the
+subcommand). `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` repeat the
+common spellings for when a hook times out; they match command text, so they are a partial second
+fence (see `AGREEMENT_REVIEW.md`). A human terminal is outside both.
 
 **Wiring check.** The harness check reads only the executable surface of a host file — `command`
 strings under `hooks.<Event>` in JSON adapters, non-comment lines in shell hooks — so a commented-out

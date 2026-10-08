@@ -530,6 +530,20 @@ class HarnessCheck:
                 MANIFEST_REL,
                 "agreement_gate.read_only_commands must list nonempty exact argv prefixes (no wildcards)",
             )
+        # A one-token entry opens every subcommand and argument of that program (`git` → `git ci -n`
+        # through an alias, `python3` → any code), so it must be named in reviewed_whole_programs too.
+        reviewed = gate.get("reviewed_whole_programs", [])
+        if not isinstance(reviewed, list) or not all(isinstance(s, str) and s for s in reviewed):
+            self._error("agreement_gate_lists", MANIFEST_REL, "agreement_gate.reviewed_whole_programs must list program names")
+            reviewed = []
+        for prefix in commands if isinstance(commands, list) else []:
+            if isinstance(prefix, list) and len(prefix) == 1 and prefix[0] not in reviewed:
+                self._error(
+                    "agreement_gate_lists",
+                    MANIFEST_REL,
+                    f"agreement_gate.read_only_commands entry {prefix} opens every argument of `{prefix[0]}`; "
+                    "list a subcommand, or add it to reviewed_whole_programs after review (AGREEMENT_REVIEW.md)",
+                )
         pattern = gate.get("branch_pattern")
         try:
             valid = isinstance(pattern, str) and bool(re.compile(pattern))

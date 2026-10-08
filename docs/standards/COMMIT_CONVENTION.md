@@ -60,5 +60,13 @@ One logical change per commit; split unrelated work.
 - First lines git writes itself pass: `Merge`, `Revert "`, `fixup!`, `squash!`.
 - Trailers as git reads them (the last paragraph of `Key: value` lines), on every commit.
 
-`git commit --no-verify` skips it. Use it only in an emergency and say so in the PR; agents
-cannot run it.
+`git commit --no-verify` (or `-n`) skips it. Use it only in an emergency and say so in the PR.
+What stops an agent from skipping it, by layer:
+
+- The agreement gate (`scripts/agreement-gate.py`, PreToolUse) refuses `git commit` with `-n` in
+  any short-option cluster (`-nm`, `-anm`), `--no-verify` or an abbreviation of it, an environment
+  prefix (`HUSKY=0 git commit`) or git options before the subcommand (`-c`, `-C`, `--git-dir`, ...).
+- `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` repeat the common
+  spellings for when the hook does not run. They match command text, so they miss others
+  (`docs/standards/AGREEMENT_REVIEW.md`, "Second fence").
+- A human terminal is outside both.

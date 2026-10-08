@@ -294,10 +294,12 @@ def draft_target(repo, rel):
 
 
 # Flags that make a listed program write files or run other programs stay refused whatever the list opens.
-UNSAFE_FLAGS = {'rg': ('--pre', '--hostname-bin'), 'git': ('--output', '--ext-diff', '--textconv', '--no-index')}
-# Commands the gate itself admits or refuses; no read_only_commands entry can open them.
-GATE_OWNED = (['python3', 'scripts/agreement-gate.py'], ['git', 'add'], ['git', 'commit'], ['git', 'switch'],
-              ['git', 'push'])
+UNSAFE_FLAGS = {'rg': ('--pre', '--hostname-bin'),
+                'git': ('--output', '--ext-diff', '--textconv', '--no-index', '--open-files-in-pager')}
+# Commands the gate itself admits or refuses; no read_only_commands entry can open them. git global
+# options are refused before this (see pretool), so argv[1] is the git subcommand.
+GIT_OWNED = ('add', 'commit', 'switch', 'push', 'checkout')
+ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
 
 
 def listed(cfg, key, valid):
@@ -311,9 +313,14 @@ def read_only_shell(argv, cfg):
     # Exact argv prefixes: an empty prefix or an empty token would open more than its author wrote.
     prefixes = listed(cfg, 'read_only_commands',
                       lambda p: isinstance(p, list) and p and all(isinstance(s, str) and s for s in p))
-    if not argv or any(argv[:len(p)] == p for p in GATE_OWNED) or not any(argv[:len(p)] == p for p in prefixes):
+    if not argv or not any(argv[:len(p)] == p for p in prefixes):
         return False
-    return not any(a.startswith(UNSAFE_FLAGS.get(argv[0], ())) for a in argv[1:])
+    if (argv[0] == 'git' and argv[1:2] and argv[1] in GIT_OWNED) or (
+            argv[0] != 'git' and any('agreement-gate' in a for a in argv)):
+        return False  # gate-owned, however the path or the list is spelled (git only reads the file)
+    # `-O` also inside short clusters (`git grep -iO`): it opens matches in a pager.
+    return not any(a.startswith(UNSAFE_FLAGS.get(argv[0], ())) or (argv[0] == 'git' and re.match(r'-[A-Za-z]*O', a))
+                   for a in argv[1:])
 
 
 def unquoted(command):
@@ -455,6 +462,11 @@ def pretool(repo, payload):
             raise Blocked('quote arguments that contain * ? [ ] { } ( ); shell expansion cannot be scope-checked')
         argv = shlex.split(command)
         _, cfg = config(repo)
+        if argv and ENV_ASSIGNMENT.match(argv[0]):
+            raise Blocked('environment assignments before a command are refused; run the command itself')
+        if argv[:1] == ['git'] and argv[1:2] and argv[1].startswith('-'):
+            raise Blocked('git options before the subcommand (-C, -c, --git-dir, --work-tree, --exec-path, '
+                          '--config-env, -p, --no-pager, ...) are refused')
         if argv[:1] == ['agent-browser']:
             browser_command(repo, argv, cfg)  # Owns agent-browser; read_only_commands never reopens it.
             return
@@ -502,10 +514,15 @@ def pretool(repo, payload):
             return
         if argv[:2] == ['git', 'commit']:
             approved(repo)
-            if '--no-verify' not in argv and '-n' not in argv and not any(a.startswith(('--no-', '--config', '--exec')) for a in argv[2:]):
-                check_scope(repo, approved(repo))
-                delivery(repo, staged=True)
-                return
+            # Hooks carry the agreement check: refuse --no-verify and its abbreviations (--no-*), and any
+            # short-option cluster with n (-n, -nm, -anm), wherever it stands. Message values never start with -.
+            if any(a.startswith(('--no-', '--config', '--exec')) or (a[:1] == '-' and a[1:2] != '-' and 'n' in a)
+                   for a in argv[2:]):
+                raise Blocked('git commit must run its hooks: -n, --no-verify (or an abbreviation) and short '
+                              'clusters containing n are refused')
+            check_scope(repo, approved(repo))
+            delivery(repo, staged=True)
+            return
         raise Blocked('shell execution needs a declared verification command; use agreement-gate.py verify')
     # A subagent's own tool calls pass this same hook, so a listed reviewer gains no edit path.
     # Without subagent_type the host starts its default general-purpose agent; match that name.

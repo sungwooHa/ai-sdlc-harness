@@ -253,6 +253,11 @@ def main() -> int:
             ("browser flag without dash", {"agent_browser": {**browser, "global_flags": {"json": ""}}}, True),
             ("browser bad slot", {"agent_browser": {**browser, "commands": {"pdf": {"args": ["file"]}}}}, True),
             ("browser option as command", {"agent_browser": {**browser, "commands": {"--cdp": {}}}}, True),
+            # M2: a one-token entry opens every subcommand and argument of that program; only a reviewed one passes
+            ("whole git unreviewed", {"read_only_commands": [["git"]]}, True),
+            ("whole interpreter unreviewed", {"read_only_commands": [["python3"]]}, True),
+            ("whole program reviewed", {"read_only_commands": [["make"]], "reviewed_whole_programs": ["make"]}, False),
+            ("reviewed list malformed", {"reviewed_whole_programs": "make"}, True),
         ):
             root = Path(temp_dir) / f"gate-{label.replace(' ', '-')}"
             root.mkdir()
