@@ -118,10 +118,12 @@ PR에 추가된 `## 가치 확인` 제목과 상태 문자열도 언어 변경 �
 ## 게이트 추가하는 법
 
 - **커밋 게이트**: `.husky/pre-commit` 에 한 줄 추가(무엇을 막는지 + 끄는 법을 주석으로) →
-  `.agents/harness.yaml` `shared_hook_intents` 에 같은 스크립트를 선언. 선언과 배선 중 하나만
-  있으면 `check:harness` 가 실패한다.
+  `.agents/harness.yaml` `shared_hook_intents` 에 같은 스크립트를 선언(`event` 는 husky 파일 이름,
+  `host_files` 에 그 파일). 선언만 있고 배선이 없거나, 배선만 있고 선언이 없거나, 선언과 다른
+  이벤트에 배선하면 `check:harness` 가 실패한다. 이 대조는 호스트 파일이 실행하는 저장소 루트
+  `scripts/…` 경로만 본다 — 스크립트 없이 도는 명령(`pnpm lint` 등)은 `scripts/` 파일로 감싸야 대조된다.
 - **세션 훅**: `.claude/settings.json` (Claude) / `.codex/hooks.json` (Codex) 의 해당 이벤트에 추가하고
-  같은 intent 의 `host_files` 에 그 호스트 파일을 적는다.
+  같은 intent 의 `host_files` 에 그 호스트 파일을, `event` 에 그 이벤트 키를 적는다(여러 개는 `A|B|C`).
 - **편집 차단**: `.agents/harness.yaml` `protected_paths` 에 `{id, globs, reason, instead}` 추가.
   비활성 예시는 `protected_paths_examples` 에 들어 있다.
 

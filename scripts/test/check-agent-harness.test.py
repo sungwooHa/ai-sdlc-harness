@@ -8,6 +8,7 @@ Claude entrypoint must fail with a non-zero exit code.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -103,6 +104,79 @@ def main() -> int:
                 assert unwired, f"{label}: expected unwired_hook_intent, errors={payload['errors']}"
             else:
                 assert not unwired, f"{label}: unexpected unwired_hook_intent, errors={unwired}"
+
+        # The reverse direction: every root `scripts/…` path a host file runs (Claude/Codex JSON under
+        # its event key, a husky file under its own name) must belong to an intent that lists that host
+        # file and that event. One script used by two intents is told apart by host_files.
+        declared = [
+            {"id": "guard_runtime", "event": "Stop|PreToolUse", "required_scripts": ["scripts/guard.py"],
+             "host_files": {"claude": ".claude/settings.json"}},
+            {"id": "guard_precommit", "event": "pre-commit", "required_scripts": ["scripts/guard.py"],
+             "host_files": {"husky": ".husky/pre-commit"}},
+            {"id": "shim", "event": "SessionStart", "required_scripts": ["scripts/harness/shim.sh"],
+             "host_files": {"claude": ".claude/settings.json"}},
+        ]
+        claude_hooks = {
+            "SessionStart": [{"hooks": [{"type": "command", "command": 'bash "$CLAUDE_PROJECT_DIR"/scripts/harness/shim.sh'}]}],
+            "Stop": [{"hooks": [{"type": "command", "command": 'python3 "$CLAUDE_PROJECT_DIR"/scripts/guard.py'}]}],
+            "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 scripts/guard.py"}]}],
+        }
+        husky = (
+            'python3 "$(git rev-parse --show-toplevel)/scripts/guard.py" --staged\n'
+            '# "$(git rev-parse --show-toplevel)/scripts/commented-out.sh"\n'
+            'sh apps/web/scripts/lint.sh\n'
+        )
+        codex_line = "bash -lc 'repo=\"$(git rev-parse --show-toplevel)\"; exec python3 \"$repo/scripts/{}\"'"
+        for label, intents, hooks, husky_files, codex_script, expect in (
+            ("declared", declared, claude_hooks, {"pre-commit": husky}, None, {}),
+            # migration-check.sh is wired in husky without a declaration (the inax case); guard.py is
+            # declared for Claude and husky but also wired in Codex; shim2.sh hides under a subfolder.
+            ("undeclared", declared,
+             {**claude_hooks, "SessionStart": [{"hooks": [
+                 {"type": "command", "command": 'bash "$CLAUDE_PROJECT_DIR"/scripts/harness/shim.sh'},
+                 {"type": "command", "command": 'bash "$CLAUDE_PROJECT_DIR"/scripts/harness/shim2.sh'}]}]},
+             {"pre-commit": husky + 'sh "$(git rev-parse --show-toplevel)/scripts/migration-check.sh"\n'},
+             "guard.py",
+             {"undeclared_hook": {(".husky/pre-commit", "scripts/migration-check.sh"),
+                                  (".claude/settings.json", "scripts/harness/shim2.sh"),
+                                  (".codex/hooks.json", "scripts/guard.py")}}),
+            # guard.py declared on Stop|PreToolUse but also wired on PostToolUse; a husky intent that
+            # says pre-commit while its host file is .husky/pre-push.
+            ("event mismatch",
+             declared + [{"id": "push_guard", "event": "pre-commit", "required_scripts": ["scripts/push.sh"],
+                          "host_files": {"husky": ".husky/pre-push"}}],
+             {**claude_hooks, "PostToolUse": [{"hooks": [{"type": "command", "command": "python3 scripts/guard.py"}]}]},
+             {"pre-commit": husky, "pre-push": 'sh "$(git rev-parse --show-toplevel)/scripts/push.sh"\n'},
+             None,
+             {"hook_event_mismatch": {(".claude/settings.json", "scripts/guard.py"),
+                                      (".husky/pre-push", "scripts/push.sh")},
+              # and the forward direction per event: push_guard is not run on its declared pre-commit
+              "unwired_hook_intent": {(".husky/pre-push", "scripts/push.sh")}}),
+        ):
+            root = Path(temp_dir) / f"two-way-{label.replace(' ', '-')}"
+            root.mkdir()
+            build_fixture(root, f"{IMPORT_LINE}\n")
+            manifest = dict(MANIFEST, shared_hook_intents=intents)
+            (root / ".agents/harness.yaml").write_text(json.dumps(manifest), encoding="utf-8")
+            for rel in ("scripts/guard.py", "scripts/harness/shim.sh", "scripts/push.sh"):
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text("echo ok\n", encoding="utf-8")
+            (root / ".claude/settings.json").write_text(json.dumps({"hooks": hooks}), encoding="utf-8")
+            (root / ".husky").mkdir()
+            for name, body in husky_files.items():
+                (root / ".husky" / name).write_text(f"#!/usr/bin/env sh\n{body}", encoding="utf-8")
+            if codex_script:
+                (root / ".codex").mkdir()
+                codex = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": codex_line.format(codex_script)}]}]}}
+                (root / ".codex/hooks.json").write_text(json.dumps(codex), encoding="utf-8")
+            code, out = run(root)
+            payload = json.loads(out)
+            wiring_codes = ("undeclared_hook", "hook_event_mismatch", "unwired_hook_intent")
+            found = {c: {(e["path"], s) for e in payload["errors"] if e["code"] == c
+                         for s in re.findall(r"scripts/[\w./-]*\w", e["message"])[:1]} for c in wiring_codes}
+            for c in wiring_codes:
+                assert found[c] == expect.get(c, set()), f"{label}: {c} expected {expect.get(c, set())}, errors={payload['errors']}"
+            assert (code == 1) == bool(expect), f"{label}: exit={code}, errors={payload['errors']}"
 
         # A vendored skill behind an adapter must stay callable by the Skill tool:
         # disable-model-invocation is an error; user-invocable: false or no flag at all passes.

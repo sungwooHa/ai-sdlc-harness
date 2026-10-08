@@ -37,6 +37,8 @@ USER_PATH_PATTERNS = (
 )
 # This file names the removed scripts on purpose (see REMOVED_SCRIPT_REFS).
 SELF_REL = "scripts/check-agent-harness.py"
+# A `scripts/…` path in a hook command (see HarnessCheck._script_refs for which ones count).
+SCRIPT_REF = re.compile(r"scripts/[\w./-]*\w")
 
 
 @dataclass
@@ -290,7 +292,8 @@ class HarnessCheck:
             except (OSError, json.JSONDecodeError) as exc:
                 self._error("invalid_host_config", rel, f"must be valid JSON: {exc}")
 
-        for intent in self.manifest.get("shared_hook_intents", []):
+        intents = [i for i in self.manifest.get("shared_hook_intents", []) if isinstance(i, dict)]
+        for intent in intents:
             intent_id = intent.get("id", "?")
             scripts = intent.get("required_scripts", [])
             for script in scripts:
@@ -301,46 +304,110 @@ class HarnessCheck:
                 if not host_path.is_file():
                     self._error("missing_hook_host_file", host_file, f"hook intent {intent_id} declares this host file")
                     continue
-                text = self._hook_surface(host_path)
-                for script in scripts:
-                    if script not in text:
+                wiring = self._hook_wiring(host_path)
+                if wiring is None:
+                    continue  # reported as invalid_host_config
+                # Each declared event must run the script; without an event, anywhere in the file.
+                for event in self._intent_events(intent) or [None]:
+                    text = wiring.get(event, "") if event else "\n".join(wiring.values())
+                    for script in scripts:
+                        if script not in text:
+                            on = f" on {event}" if event else ""
+                            self._error(
+                                "unwired_hook_intent",
+                                host_file,
+                                f"hook intent {intent_id} ({host}) does not run {script}{on}",
+                            )
+
+        # Reverse direction: a hook wired without a declaration is invisible to anyone reading the
+        # manifest. Every root `scripts/…` path a host file runs needs an intent that lists this host
+        # file (a script shared by several intents is told apart by host_files) and this event.
+        husky_dir = self.repo_root / ".husky"
+        husky_files = sorted(
+            f".husky/{p.name}" for p in (husky_dir.iterdir() if husky_dir.is_dir() else [])
+            if p.is_file() and not p.name.startswith((".", "_")) and p.suffix != ".sh"
+        )
+        for host_file in [".claude/settings.json", ".codex/hooks.json", *husky_files]:
+            host_path = self.repo_root / host_file
+            wiring = self._hook_wiring(host_path) if host_path.is_file() else None
+            for event, text in (wiring or {}).items():
+                for script in sorted(set(self._script_refs(text))):
+                    owners = [
+                        i for i in intents
+                        if host_file in (i.get("host_files") or {}).values() and script in (i.get("required_scripts") or [])
+                    ]
+                    if not owners:
                         self._error(
-                            "unwired_hook_intent",
+                            "undeclared_hook",
                             host_file,
-                            f"hook intent {intent_id} ({host}) does not reference {script}",
+                            f"{event} runs {script}, but no shared_hook_intents entry declares it for this host file",
+                        )
+                    elif not any(event in self._intent_events(i) for i in owners):
+                        declared = ", ".join(f"{i.get('id', '?')} ({i.get('event') or 'no event'})" for i in owners)
+                        self._error(
+                            "hook_event_mismatch",
+                            host_file,
+                            f"{script} runs on {event}, but its intents here declare {declared}",
                         )
 
-    def _hook_surface(self, host_path: Path) -> str:
-        """The part of a host file that actually runs hooks.
+    @staticmethod
+    def _intent_events(intent: dict[str, Any]) -> list[str]:
+        """`A|B|C` in an intent's event field names three events."""
+        return [e.strip() for e in str(intent.get("event") or "").split("|") if e.strip()]
+
+    def _hook_wiring(self, host_path: Path) -> dict[str, str] | None:
+        """The part of a host file that actually runs hooks, by event.
 
         A plain substring test passed when the invocation was commented out but
         the script name survived in a comment — the "documented, not enforced"
         phantom this repo has already been bitten by. JSON adapters contribute
-        only their `command` strings; shell hooks contribute only lines that are
-        not comments.
+        only the `command` strings under `hooks.<Event>`; a shell hook (husky)
+        contributes its non-comment lines under its own file name as the event.
+        None when a JSON adapter does not parse (reported as invalid_host_config).
         """
         text = self._read_text(host_path)
-        if host_path.suffix == ".json":
-            try:
-                data = json.loads(text)
-            except json.JSONDecodeError:
-                return text  # reported separately as invalid_host_config
-            commands: list[str] = []
+        if host_path.suffix != ".json":
+            return {host_path.name: "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))}
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        hooks = data.get("hooks") if isinstance(data, dict) else None
+        if not isinstance(hooks, dict):
+            return {}
 
-            def walk(node: object) -> None:
-                if isinstance(node, dict):
-                    for key, value in node.items():
-                        if key == "command" and isinstance(value, str):
-                            commands.append(value)
-                        else:
-                            walk(value)
-                elif isinstance(node, list):
-                    for item in node:
-                        walk(item)
+        def commands(node: object) -> Iterable[str]:
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    if key == "command" and isinstance(value, str):
+                        yield value
+                    else:
+                        yield from commands(value)
+            elif isinstance(node, list):
+                for item in node:
+                    yield from commands(item)
 
-            walk(data)
-            return "\n".join(commands)
-        return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        return {event: "\n".join(commands(entries)) for event, entries in hooks.items()}
+
+    @staticmethod
+    def _script_refs(text: str) -> list[str]:
+        """Repo-root `scripts/…` paths in executable hook text.
+
+        A path counts when it starts a word (`python3 scripts/x.py`) or follows a root expression
+        (`"$CLAUDE_PROJECT_DIR"/`, `$repo/`, `$(git rev-parse --show-toplevel)/`, `./`). A path under
+        a literal directory (`apps/web/scripts/x.sh`) belongs to that directory and does not count.
+        """
+        refs = []
+        for match in SCRIPT_REF.finditer(text):
+            before = text[: match.start()]
+            if before.endswith("/"):
+                segment = re.search(r"[\w.$-]*$", before[:-1]).group()
+                if segment not in ("", ".") and not segment.startswith("$"):
+                    continue
+            elif before and re.match(r"[\w.-]", before[-1]):
+                continue
+            refs.append(match.group())
+        return refs
 
     # ------------------------------------------------------ protected paths
     def _check_protected_paths(self) -> None:

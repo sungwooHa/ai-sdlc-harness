@@ -194,7 +194,12 @@ all worktrees of the clone, but the folders are not: recreate them in each new w
 ## Hooks and gates
 
 `shared_hook_intents` in `harness.yaml` declares intent once; each host file implements it. The
-harness check fails when a declared intent is missing from its host file.
+harness check compares both directions: a declared script that a host file does not run on each
+declared event (`unwired_hook_intent`), a root `scripts/…` path that a host file runs with no intent
+listing that host file (`undeclared_hook`), and one run on an event its intent does not declare
+(`hook_event_mismatch`). The event is the key under `hooks` in `.claude/settings.json` and
+`.codex/hooks.json`, and the file name for `.husky/*`; `A|B|C` declares three events. A script used
+by several intents (`agreement-gate.py` at runtime and at pre-commit) is told apart by `host_files`.
 
 | Intent | Event | Script | Host files |
 |---|---|---|---|
@@ -203,7 +208,11 @@ harness check fails when a declared intent is missing from its host file.
 | `protected_paths_pretooluse` | PreToolUse (Edit/Write/MultiEdit **and Bash**) | `scripts/protected-paths-guard.py` | `.claude/settings.json` |
 | `question_gate` | UserPromptSubmit / PreToolUse (AskUserQuestion, EnterPlanMode, ExitPlanMode, Skill) / Stop | `scripts/question-gate.py` | `.claude/settings.json` |
 | `pr_body_gate` | PreToolUse (Write) / PostToolUse (Edit, Write, MultiEdit) / Stop | `scripts/pr-body-gate.py` | `.claude/settings.json` |
+| `agreement_runtime` | UserPromptSubmit / PreToolUse (every tool) / Stop | `scripts/agreement-gate.py` | `.claude/settings.json`, `.codex/hooks.json` |
+| `adr_stop` | Stop | `scripts/adr-gate.py` | `.claude/settings.json`, `.codex/hooks.json` |
 | `harness_fast_guard_precommit` | pre-commit | `scripts/agent-harness-fast-guard.py` | `.husky/pre-commit` |
+| `agreement_precommit` | pre-commit | `scripts/agreement-gate.py` (`check-staged`) | `.husky/pre-commit` |
+| `adr_precommit` | pre-commit | `scripts/adr-gate.py` (`--staged`) | `.husky/pre-commit` |
 
 Add a project gate by writing it as one line in `.husky/pre-commit` (or one hook entry in
 `.claude/settings.json`) **and** declaring it as a `shared_hook_intents` entry — the check then
@@ -246,8 +255,11 @@ accept either form when judging wiring.
 a hook times out (second fence; see `AGREEMENT_REVIEW.md`).
 
 **Wiring check.** The harness check reads only the executable surface of a host file — `command`
-strings in JSON adapters, non-comment lines in shell hooks — so a commented-out invocation counts as
-unwired even when the script name survives in a comment.
+strings under `hooks.<Event>` in JSON adapters, non-comment lines in shell hooks — so a commented-out
+invocation counts as unwired even when the script name survives in a comment. The reverse direction
+matches repo-root `scripts/…` paths only: a command without a script (`pnpm lint`) or a path under
+another directory (`apps/web/scripts/…`) is not compared with the declarations, so wrap such a gate
+in a `scripts/` file when it must be declared.
 
 Local agent runtime state (`.claude/skills/.omc/**`, `.codex/worktrees/**`, `.claude/worktrees/**`,
 `.serena/**`) is excluded from harness scanning and is not repository policy.

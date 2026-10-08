@@ -79,7 +79,8 @@ flowchart TB
 
 `.agents/harness.yaml` 이 계약의 단일 정본이고 호스트 파일은 그 어댑터다.
 훅을 하나 추가하려면 `shared_hook_intents` 에 선언하고 해당 호스트 파일에 배선한다.
-선언과 배선 중 하나만 있으면 `check:harness` 가 실패한다.
+선언과 배선 중 하나만 있거나 선언과 다른 이벤트에 배선하면 `check:harness` 가 실패한다
+(호스트 파일이 실행하는 `scripts/…` 경로 기준).
 
 ## 스킬 계층
 
@@ -103,7 +104,8 @@ flowchart TB
 ## 검사는 스크립트가 한다
 
 - `scripts/check-agent-harness.py` — `.agents/harness.yaml` 의 선언과 실제 호스트 파일이 어긋난 지점을 잡는다.
-  선언만 있고 배선이 없는 훅, 어댑터가 감싸는데 호출 불가로 잠긴 스킬, 심링크가 아닌 스킬 미러 등.
+  선언만 있고 배선이 없는 훅, 배선만 있고 선언이 없는 훅, 선언과 다른 이벤트에 걸린 훅,
+  어댑터가 감싸는데 호출 불가로 잠긴 스킬, 심링크가 아닌 스킬 미러 등.
 - `scripts/agent-harness-fast-guard.py` — 변경 파일만 빠르게 훑는다. 활성 문서 루트 밖에 생긴 문서,
   사용자 홈 디렉터리가 박힌 절대경로, husky 훅이 배선되지 않은 체크아웃을 잡는다.
 - `scripts/protected-paths-guard.py` — `protected_paths` 에 선언된 파일에 대한 에이전트의 편집을 PreToolUse 에서 막는다.
