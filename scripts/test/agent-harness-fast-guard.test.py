@@ -96,6 +96,15 @@ _code, _err = run(_wired, "--quiet-unless-relevant")
 check("무관한 절대 hooksPath 는 경고한다", WARN in _err, True)
 subprocess.run(["git", "-C", str(_wired), "config", "core.hooksPath", ".husky/_"], check=True)
 
+# .husky/ 의 다른 훅(commit-msg)도 러너가 없으면 그 훅이 통째로 안 돈다 — pre-commit 과 같이 알린다.
+(_wired / ".husky" / "commit-msg").write_text("#!/usr/bin/env sh\n", encoding="utf-8")
+_code, _err = run(_wired, "--quiet-unless-relevant")
+check("commit-msg 러너가 없으면 경고한다", "husky commit-msg 미배선" in _err, True)
+check("commit-msg 미배선도 실패다(exit 1)", _code, 1)
+(_wired / ".husky" / "_" / "commit-msg").write_text("#!/usr/bin/env sh\n", encoding="utf-8")
+_code, _err = run(_wired, "--quiet-unless-relevant")
+check("commit-msg 러너가 있으면 침묵한다", "미배선" in _err, False)
+
 # hooksPath 는 맞는데 러너 파일이 없으면 — 반쪽 배선도 잡아야 한다.
 (_wired / ".husky" / "_" / "pre-commit").unlink()
 _code, _err = run(_wired, "--quiet-unless-relevant")

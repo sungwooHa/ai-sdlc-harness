@@ -74,7 +74,8 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
   `animation-vocabulary`, `git-commit`(커밋 규칙 절만 `COMMIT_CONVENTION.md` 참조로 바꿈), `draw-diagram`.
 - `scripts/harness/`: `vendor-skills.py`, `run-evals.py`, `ensure-husky.sh`, `check-plan-artifact.sh`.
 - `scripts/`: `check-agent-harness.py`, `agent-harness-fast-guard.py`, `protected-paths-guard.py`.
-- `scripts/test/`: 하네스 가드 회귀 테스트 7종.
+- `scripts/test/`: 하네스 가드 회귀 테스트 15종(`test:harness` 가 전부 돌린다. 그중 `commit-msg-gate`·`init-template`
+  테스트는 템플릿에서 새로 씀).
 - `docs/changes/_templates/{intent,spec,plan}.md`, `.claude/evals/README.md`,
   `.codex/hooks.json`, `.codex/config.toml`, `.claude/agents/verifier.md`.
 

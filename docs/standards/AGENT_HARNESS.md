@@ -249,7 +249,8 @@ round"; the adapters override it and the gate enforces the override.
 **Husky in worktrees and fresh clones.** husky only creates the gitignored `.husky/_` shims during
 install; without them git runs no hooks at all. `scripts/harness/ensure-husky.sh` writes minimal
 shims (idempotent, gitignored), runs at Claude `SessionStart`, and the fast guard fails (exit 1)
-when hooks are still unwired instead of only warning. `core.hooksPath` is repo-level and must stay
+when a hook file under `.husky/` (`pre-commit`, `commit-msg`) still has no shim, instead of only
+warning. `core.hooksPath` is repo-level and must stay
 the relative `.husky/_` husky writes, so each worktree runs its own hook files; an absolute value
 that resolves to this repo's `.husky/_` is normalized back by `ensure-husky.sh`, and both scripts
 accept either form when judging wiring.
