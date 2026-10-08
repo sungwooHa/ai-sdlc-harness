@@ -2,12 +2,13 @@
 # Fill this template's __PLACEHOLDERS__ in place, once, right after "Use this template".
 # Usage: sh scripts/harness/init-template.sh --project-name acme --prefix acme [--app web] ...
 # Values must not contain the `|` character (it is the sed delimiter).
+# Defaults: trunk (integration branch = main) and no CI file (`--ci-file none`).
 set -eu
 
 PROJECT_NAME=""; PREFIX=""; APP="app"; APPS_OVERVIEW="Monorepo. Describe the apps and stack here."
 PACKAGE_MANAGER="pnpm"; NODE_VERSION="22.12.0"; COMMIT_FORMAT="{type}: [{모듈명}] {변경 내용}"
-DEFAULT_BRANCH="main"; INTEGRATION_BRANCH="develop"; HUMAN_DOC_LANG="Korean"
-UI_SOURCE_GLOB="apps/*/src/**/ui/**"; CI_FILE=".github/workflows/harness.yml"
+DEFAULT_BRANCH="main"; INTEGRATION_BRANCH="main"; HUMAN_DOC_LANG="Korean"
+UI_SOURCE_GLOB="apps/*/src/**/ui/**"; CI_FILE="none"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -27,6 +28,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$PROJECT_NAME" ] && [ -n "$PREFIX" ] || { echo "--project-name and --prefix are required" >&2; exit 2; }
+# Without a CI file the docs keep a neutral slot instead of naming a pipeline that does not exist.
+if [ -z "$CI_FILE" ] || [ "$CI_FILE" = "none" ]; then CI_FILE="<ci-file>"; fi
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"

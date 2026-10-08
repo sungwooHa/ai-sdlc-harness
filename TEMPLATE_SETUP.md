@@ -19,10 +19,12 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
      --project-name acme-platform --prefix acme --app web \
      --apps-overview "Polyglot monorepo: apps/web (React, Vite), apps/api (Spring Boot, Java 21)." \
      --package-manager pnpm --node-version 22.12.0 \
-     --default-branch main --integration-branch develop \
      --ui-source-glob 'apps/web/src/**/{ui,routes}/**' \
-     --human-doc-lang Korean --ci-file .github/workflows/harness.yml
+     --human-doc-lang Korean
    ```
+
+   브랜치는 트렁크(`main` 하나)가, CI 파일은 "없음"이 기본값이다. 다르면 `--default-branch`,
+   `--integration-branch`, `--ci-file <경로>` 로 준다.
 
    스킬 디렉터리 `__PREFIX__-*` 와 `apps/__APP__` 도 함께 rename 되고 `.claude/skills` 심링크가 다시 걸린다.
    실행 후 `scripts/harness/init-template.sh` 는 지운다.
@@ -49,10 +51,10 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 | `__NODE_VERSION__` | `package.json` engines.node 하한 | `22.12.0` |
 | `__COMMIT_FORMAT__` | 커밋 메시지 포맷 한 줄 | `{type}: [{모듈명}] {변경 내용}` |
 | `__DEFAULT_BRANCH__` | 운영 브랜치 | `main` |
-| `__INTEGRATION_BRANCH__` | 통합 브랜치 (PR 대상, plan 게이트 기본 base) | `develop` |
+| `__INTEGRATION_BRANCH__` | 통합 브랜치 (PR 대상, plan 게이트 기본 base). 트렁크면 기본 브랜치와 같다 | `main` (기본값) |
 | `__UI_SOURCE_GLOB__` | UI 리뷰가 필요한 소스 범위 | `apps/frontend/src/**/{ui,host,routes}/**` |
 | `__HUMAN_DOC_LANG__` | 사람이 읽는 산출물의 언어 | `Korean` |
-| `__CI_FILE__` | CI 파이프라인 정의 파일 경로 | `bitbucket-pipelines.yml` |
+| `__CI_FILE__` | CI 파이프라인 정의 파일 경로. 기본 없음(`none`) → 문서에 `<ci-file>` 로 남는다 | `bitbucket-pipelines.yml` |
 
 `__HUMAN_DOC_LANG__` 을 Korean 이외로 바꾸면 `docs/changes/_templates/*.md` 와 구조 마커
 (`상태: draft`, `## 티켓`, `시각 변경 없음`) 도 함께 번역해야 한다 — 이 마커들은 어댑터 스킬과
