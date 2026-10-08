@@ -18,8 +18,12 @@ Do, in order:
 1. Agreement adherence: list every item in the approved plan's change table and mark done /
    partial / missing. Flag anything in the diff that the agreement or `scope.json` does not cover.
 2. Definition of Done: for each checkbox in plan.md, state whether the diff provides the evidence.
-3. The remaining `REVIEW.md` passes (conditional ones only when they apply). Run the narrow tests
-   the plan names (never the whole suite) and paste the command and result.
+3. The remaining `REVIEW.md` passes (conditional ones only when they apply). Run tests with
+   `python3 scripts/agreement-gate.py verify`: it runs the commands `scope.json` declares
+   (`verification_commands`) and records the result for the current source. Under the agreement
+   gate your Bash runs only `agreement_gate.read_only_commands`, so a direct test command is
+   refused; do not work around it. Paste the command and its output. A test the plan names but
+   `scope.json` does not declare is a finding.
 4. Report findings ranked blocker → major → minor as `REVIEW.md` defines them, each with file:line,
    a one-sentence defect, and a concrete failure scenario; questions follow the findings. If
    nothing blocks, say so in one line first.

@@ -43,6 +43,12 @@ if [ -d "apps/__APP__" ]; then mv "apps/__APP__" "apps/$APP"; fi
 rm -f .claude/skills/*
 for s in $(ls .agents/skills); do ln -s "../../.agents/skills/$s" ".claude/skills/$s"; done
 
+# Trunk (integration branch = default branch): AGENTS.md names the one branch once.
+if [ "$INTEGRATION_BRANCH" = "$DEFAULT_BRANCH" ]; then
+  sed -i.bak 's|`__DEFAULT_BRANCH__` (production), `__INTEGRATION_BRANCH__` (integration)|`__DEFAULT_BRANCH__` (trunk)|' AGENTS.md
+  rm -f AGENTS.md.bak
+fi
+
 # 2. Substitute every placeholder in every tracked text file.
 subst() {
   files="$(grep -rlI "$1" . --exclude-dir=.git --exclude-dir=node_modules --exclude=TEMPLATE_SETUP.md --exclude=init-template.sh || true)"

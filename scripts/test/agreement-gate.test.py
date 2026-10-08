@@ -225,6 +225,10 @@ with tempfile.TemporaryDirectory() as tmp:
     for kind in ('verifier', 'general-purpose'):
         assert event(root, 'PreToolUse', 'Write', write, agent_id='a1', agent_type=kind).returncode == 0, kind
         assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / 'other.py')}, agent_id='a1', agent_type=kind).returncode == 2, kind
+    # The verifier (.claude/agents/verifier.md) runs tests only through the declared verification commands.
+    for command, code in (('python3 scripts/agreement-gate.py verify', 0), ('python3 scripts/agreement-gate.py status', 0),
+                          ('pnpm test', 2), ('python3 -m pytest -q', 2)):
+        assert event(root, 'PreToolUse', 'Bash', {'command': command}, agent_id='a1', agent_type='verifier').returncode == code, command
     assert event(root, 'PreToolUse', 'Bash', {'command': 'python3 scripts/agreement-gate.py status'}, cwd=str(folder)).returncode == 2
     assert event(root, 'PreToolUse', 'Bash', {'command': 'python3 scripts/agreement-gate.py remove other.py'}).returncode == 2
     assert run(root, 'remove', 'other.py').returncode == 1
