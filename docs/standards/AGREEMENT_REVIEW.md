@@ -119,20 +119,38 @@ not establish coverage for every host version. See the official host hook docume
 ## Gate configuration and switching off
 
 `agreement_gate` in `.agents/harness.yaml` holds the lists the gate reads; approval, scope and
-verification decisions stay in `scripts/agreement-gate.py`. `check:harness` validates all three.
+verification decisions stay in `scripts/agreement-gate.py`. `check:harness` validates all four.
 A missing list opens nothing; a malformed one blocks the call.
+
+Every shell command must be one direct command: shell metacharacters (`; & | > < $`, backquote,
+backslash, newline) and unquoted `* ? [ ] { } ( )` are refused, because globs, brace expansion and
+zsh glob qualifiers add arguments (or run code) the gate never sees. Quote such arguments.
 
 - `allowed_subagents` (default `Explore`, `Plan`, `verifier`, `general-purpose`): subagent types
   the Agent/Task tool may start. A call without `subagent_type` counts as `general-purpose`, the
   host default that `/review-since` starts. A subagent's own tool calls pass the same PreToolUse
   hook (the payload carries `agent_id`/`agent_type`), so a listed type gains no edit path.
 - `read_only_commands`: exact argv prefixes that run before and after approval, no wildcards.
-  Shell metacharacters (`; & | > < $`, backquote, backslash, newline), unsafe `rg`/`git` flags and
-  gate-owned commands (`agreement-gate.py`, `git add|commit|switch|push`) stay refused whatever
-  the list says. List a subcommand, never a bare interpreter such as `python3`: that opens any code.
-  `agent-browser` is listed whole for screen checks. Its output never records verification; only
-  `agreement-gate.py verify` does. Files it writes are not checked before the call, and Stop and
-  pre-commit still refuse changed files outside scope, so write screenshots outside the checkout.
+  Unsafe `rg`/`git` flags and gate-owned commands (`agreement-gate.py`, `git add|commit|switch|push`)
+  stay refused whatever the list says. List a subcommand, never a bare interpreter such as `python3`:
+  that opens any code. A listed command never records verification; only `agreement-gate.py verify`
+  does.
+- `agent_browser`: screen checks with `agent-browser`, before and after approval. Write the command
+  words first and options after them (`agent-browser snapshot -i --json`). `commands` maps the
+  allowed command words (one to three, e.g. `set viewport`) to their `flags` and `args`;
+  `global_flags` apply to every command. A flag's value shape is `""` (switch), `"path"`, or a regex
+  the value must fully match. `args` is `null` for free text (selectors, URLs, typed text) or a
+  list of slots `path`, `path?` (optional) and `text`. A `path` value must resolve, after `..` and
+  symlinks, inside `artifact_dir` (`$TMPDIR/<name>`: created 0700, owned by you, never a symlink,
+  never inside or around the checkout); `~` paths are refused because quoting decides whether the
+  shell expands them. The refusal message prints the resolved directory to use. `batch`, `chat`,
+  `connect`, `upload` and `--cdp`, `--auto-connect`, `-p`/`--provider`, `--executable-path`,
+  `--args`, `--extension`, `--config`, `--init-script` stay refused whatever the lists say, and every
+  call is refused while `./agent-browser.json` exists (it can set all of those). `read_only_commands`
+  never opens `agent-browser`. Not opened by design: element screenshots (a lone `screenshot`
+  argument may be read as a path) and text arguments that start with `-`. A download a page starts
+  by itself lands in agent-browser's default location, which the gate does not see; Stop and
+  pre-commit still refuse new files in the checkout outside scope.
 - `branch_pattern`: full-match regex for `git switch -c <branch>` after approval.
 
 **Second fence.** A hook that times out or fails to start does not block the tool call.

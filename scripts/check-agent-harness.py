@@ -537,6 +537,42 @@ class HarnessCheck:
             valid = False
         if not valid:
             self._error("agreement_gate_lists", MANIFEST_REL, "agreement_gate.branch_pattern must be a valid regex")
+        browser = gate.get("agent_browser")
+        commands = browser.get("commands") if isinstance(browser, dict) else None
+        if not (
+            isinstance(browser, dict)
+            and re.fullmatch(r"\$TMPDIR/[A-Za-z0-9_-][A-Za-z0-9._-]*", str(browser.get("artifact_dir")))
+            and self._browser_flags(browser.get("global_flags"))
+            and isinstance(commands, dict)
+            and all(
+                isinstance(spec, dict)
+                and re.fullmatch(r"[a-z]+( [a-z]+){0,2}", name)
+                and self._browser_flags(spec.get("flags", {}))
+                and (spec.get("args") is None or (
+                    isinstance(spec["args"], list) and all(a in ("path", "path?", "text") for a in spec["args"])))
+                for name, spec in commands.items()
+            )
+        ):
+            self._error(
+                "agreement_gate_lists",
+                MANIFEST_REL,
+                'agreement_gate.agent_browser needs artifact_dir "$TMPDIR/<name>", global_flags and commands '
+                "in the shape docs/standards/AGREEMENT_REVIEW.md describes",
+            )
+
+    @staticmethod
+    def _browser_flags(flags: object) -> bool:
+        """option -> value shape: "" (switch), "path" (inside artifact_dir) or a regex that compiles."""
+        if not isinstance(flags, dict):
+            return False
+        for flag, shape in flags.items():
+            if not (isinstance(flag, str) and flag.startswith("-") and isinstance(shape, str)):
+                return False
+            try:
+                re.compile(shape)
+            except re.error:
+                return False
+        return True
 
     # ----------------------------------------------------------- repo scans
     def _check_repo_wide_terms(self) -> None:

@@ -15,6 +15,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -315,6 +316,91 @@ def read_only_shell(argv, cfg):
     return not any(a.startswith(UNSAFE_FLAGS.get(argv[0], ())) for a in argv[1:])
 
 
+def unquoted(command):
+    """The command text outside quotes (backslash, `$` and backquote are refused before this runs)."""
+    out, quote = [], None
+    for ch in command:
+        if quote:
+            quote = None if ch == quote else quote
+        elif ch in '\'"':
+            quote = ch
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+BROWSER_KEY = 'agreement_gate.agent_browser'
+# Other browsers or programs, local files, AI chat and command batches: no agent_browser entry opens these.
+BROWSER_REFUSED = ('batch', 'chat', 'connect', 'upload')
+BROWSER_REFUSED_FLAGS = ('--cdp', '--auto-connect', '-p', '--provider', '--executable-path', '--args',
+                         '--extension', '--config', '--init-script')
+NEGATIVE_NUMBER = re.compile(r'-\d+(\.\d+)?')
+
+
+def browser_root(repo, browser):
+    """The one directory agent-browser may write to: own, real, outside the checkout (created 0700)."""
+    path = Path(tempfile.gettempdir()) / browser['artifact_dir'][len('$TMPDIR/'):]
+    if path.is_symlink():
+        raise Blocked(f'agent-browser artifact directory {path} must not be a symlink')
+    path.mkdir(mode=0o700, exist_ok=True)
+    root = path.resolve()
+    if root.stat().st_uid != os.getuid() or root == repo or repo in root.parents or root in repo.parents:
+        raise Blocked(f'agent-browser artifact directory {root} must be your own directory outside the checkout')
+    return root
+
+
+def browser_path(repo, browser, value):
+    root = browser_root(repo, browser)
+    target = (repo / value).resolve()  # relative to the guarded root; .. and symlinks resolved
+    if value.startswith('~') or (target != root and root not in target.parents):
+        raise Blocked(f'agent-browser writes files only under {root} (absolute path); got {value}')
+
+
+def browser_command(repo, argv, cfg):
+    """agent-browser <command words> [options and arguments]: every word, option and file path is listed."""
+    browser = cfg.get('agent_browser')
+    if not (isinstance(browser, dict) and isinstance(browser.get('commands'), dict)
+            and isinstance(browser.get('global_flags'), dict) and isinstance(browser.get('artifact_dir'), str)
+            and re.fullmatch(r'\$TMPDIR/[A-Za-z0-9_-][A-Za-z0-9._-]*', browser['artifact_dir'])):
+        raise Blocked(f'{BROWSER_KEY} is missing or malformed; see docs/standards/AGREEMENT_REVIEW.md')
+    if os.path.lexists(repo / 'agent-browser.json'):
+        raise Blocked('agent-browser reads ./agent-browser.json from the checkout; remove it before screen checks')
+    if argv[1:2] and argv[1] in BROWSER_REFUSED or any(a.split('=', 1)[0] in BROWSER_REFUSED_FLAGS for a in argv):
+        raise Blocked('agent-browser ' + ', '.join(BROWSER_REFUSED + BROWSER_REFUSED_FLAGS) + ' stay refused')
+    words = next((n for n in (3, 2, 1) if len(argv) > n and not any(a.startswith('-') for a in argv[1:n + 1])
+                  and ' '.join(argv[1:n + 1]) in browser['commands']), 0)
+    if not words:
+        raise Blocked(f'agent-browser command {" ".join(argv[1:3])!r} is not in {BROWSER_KEY}.commands '
+                      '(write the command words first, options after them)')
+    name = ' '.join(argv[1:words + 1])
+    spec = browser['commands'][name] or {}
+    flags = {**browser['global_flags'], **(spec.get('flags') or {})}
+    positional, rest = [], iter(argv[words + 1:])
+    for token in rest:
+        if not token.startswith('-') or NEGATIVE_NUMBER.fullmatch(token):
+            positional.append(token)
+            continue
+        if token not in flags:
+            raise Blocked(f'agent-browser option {token} is not listed for {name!r} '
+                          f'({BROWSER_KEY}.global_flags or .commands[{name!r}].flags)')
+        shape, value = flags[token], None
+        if shape:
+            value = next(rest, None)
+            if value is None:
+                raise Blocked(f'agent-browser option {token} needs a value')
+        if shape == 'path':
+            browser_path(repo, browser, value)
+        elif shape and not re.fullmatch(shape, value):
+            raise Blocked(f'agent-browser {token} {value!r} does not match {BROWSER_KEY} ({shape})')
+    slots = spec.get('args')  # None: free text (selectors, URLs, typed text)
+    if slots is not None:
+        if not len([s for s in slots if not s.endswith('?')]) <= len(positional) <= len(slots):
+            raise Blocked(f'agent-browser {name} takes {slots} ({BROWSER_KEY}.commands[{name!r}].args)')
+        for slot, value in zip(slots, positional):
+            if slot.rstrip('?') == 'path':
+                browser_path(repo, browser, value)
+
+
 def pretool(repo, payload):
     tool = payload.get('tool_name')
     args = payload.get('tool_input') or {}
@@ -364,8 +450,14 @@ def pretool(repo, payload):
         command = args.get('command', '')
         if not isinstance(command, str) or any(c in command for c in '\n\r;&|><`$\\'):
             raise Blocked('use one direct command; compound shells and substitutions cannot be scope-checked')
+        if any(c in unquoted(command) for c in '*?[]{}()'):
+            # Globs, braces and zsh glob qualifiers expand into arguments (or run code) the gate never sees.
+            raise Blocked('quote arguments that contain * ? [ ] { } ( ); shell expansion cannot be scope-checked')
         argv = shlex.split(command)
         _, cfg = config(repo)
+        if argv[:1] == ['agent-browser']:
+            browser_command(repo, argv, cfg)  # Owns agent-browser; read_only_commands never reopens it.
+            return
         if read_only_shell(argv, cfg):
             return
         if argv in (['python3', 'scripts/adr-gate.py'], ['python3', 'scripts/adr-gate.py', '--all']):

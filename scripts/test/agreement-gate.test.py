@@ -119,6 +119,80 @@ with tempfile.TemporaryDirectory() as tmp:
         cfg = {key: value for key, value in {**gate_cfg, **changes}.items() if value is not None}
         (root / '.agents/harness.yaml').write_text(json.dumps({**MANIFEST, 'agreement_gate': cfg}))
 
+    def wrong(cases, **extra):
+        """Commands whose exit code differs from the expected one (all listed, not only the first)."""
+        return [(command, code, got) for command, code in cases
+                if (got := event(root, 'PreToolUse', 'Bash', {'command': command}, **extra).returncode) != code]
+
+    # agent-browser (B1): screen-driving commands open before approval; files go only under the artifact
+    # directory outside the checkout; launch/config/batch/upload and anything unlisted stay refused.
+    browser = gate_cfg['agent_browser']
+    gate_tmp, saved_tmpdir = tempfile.TemporaryDirectory(), os.environ.get('TMPDIR')
+    os.environ['TMPDIR'] = gate_tmp.name  # the gate resolves $TMPDIR from its environment
+    qa_name = 'proj-qa'
+    qa = Path(gate_tmp.name) / qa_name
+    configure(agent_browser={**browser, 'artifact_dir': f'$TMPDIR/{qa_name}'})
+    shot = f'{qa}/home.png'
+    browser_cases = [(c, 0) for c in (
+        'agent-browser snapshot -i', 'agent-browser click @e2', 'agent-browser fill @e3 user@example.com',
+        'agent-browser set viewport 1280 800', 'agent-browser snapshot -i --json --session qa-1',
+        'agent-browser mouse wheel -50 0', 'agent-browser eval "document.querySelectorAll(\'a\').length"',
+        'agent-browser network route http://localhost:3000/api/x --abort', 'agent-browser screenshot',
+        f'agent-browser screenshot {shot}', f'agent-browser screenshot --full {shot}', f'agent-browser pdf {qa}/page.pdf',
+        f'agent-browser download @e5 {qa}/file.csv', f'agent-browser network har stop {qa}/capture.har',
+        f'agent-browser state save {qa}/auth.json', f'agent-browser record start {qa}/run.webm',
+        f'agent-browser trace stop {qa}/trace.json', f'agent-browser screenshot --screenshot-dir {qa}',
+        f'agent-browser open http://localhost:3000 --download-path {qa}/downloads',
+        f'agent-browser diff screenshot --baseline {qa}/a.png -o {qa}/d.png',
+    )] + [(c, 2) for c in (
+        # file writes outside the artifact directory: the checkout, .git, relative, .., a link, ~, ~user
+        f'agent-browser screenshot {root}/.git/config', 'agent-browser screenshot shot.png',
+        f'agent-browser pdf {root}/out.pdf', f'agent-browser download @e5 {root}/.git/hooks/pre-commit',
+        f'agent-browser network har stop {root}/x.har', f'agent-browser state save {root}/s.json',
+        f'agent-browser record start {root}/r.webm', f'agent-browser trace stop {root}/t.json',
+        f'agent-browser profiler stop {root}/p.json', f'agent-browser screenshot {qa}/../escape.png',
+        f'agent-browser screenshot {qa}/link/x.png', 'agent-browser screenshot ~/x.png',
+        'agent-browser screenshot ~root/x.png', f'agent-browser open http://x --screenshot-dir {root}',
+        f'agent-browser open http://x --download-path {root}/.git', f'agent-browser open http://x --profile {root}/.git/p',
+        'agent-browser open http://x --profile Default', f'agent-browser diff screenshot --baseline {shot} -o {root}/d.png',
+        # always refused, whatever the lists say
+        'agent-browser batch "open x" "screenshot y"', 'agent-browser chat "open the page"', 'agent-browser connect 9222',
+        'agent-browser upload @e1 notes.txt', 'agent-browser snapshot --cdp 9222', 'agent-browser snapshot --auto-connect',
+        'agent-browser open http://x -p browserbase', 'agent-browser open http://x --provider browserbase',
+        'agent-browser open http://x --executable-path /opt/x/chrome', 'agent-browser open http://x --args --no-sandbox',
+        'agent-browser open http://x --extension ext', 'agent-browser open http://x --config cfg.json',
+        'agent-browser open http://x --init-script s.js', 'agent-browser open http://x --cdp=9222',
+        'AGENT_BROWSER_DOWNLOAD_PATH=.git agent-browser open http://x',
+        # not on the lists: options before the command, unlisted options, settings and commands
+        'agent-browser --headed open http://x', 'agent-browser wait --download x.pdf', 'agent-browser set credentials u p',
+        'agent-browser cookies set a b --curl cookies.txt', 'agent-browser clipboard read', 'agent-browser install',
+        'agent-browser state show x', 'agent-browser screenshot --full true',
+        # shell expansion the gate cannot see: braces add arguments, zsh glob qualifiers take code
+        'agent-browser click {@e1,--profile,.git}', 'ls *(N)', 'git log {--output=x,HEAD}',
+    )]
+    qa.mkdir(mode=0o700, exist_ok=True)
+    (qa / 'link').symlink_to(root, target_is_directory=True)
+    failures = wrong(browser_cases)
+    (root / 'agent-browser.json').write_text('{}')  # project config: every call refused while it exists
+    failures += wrong([('agent-browser snapshot', 2)])
+    (root / 'agent-browser.json').unlink()
+    # read_only_commands never reopens agent-browser
+    configure(read_only_commands=gate_cfg['read_only_commands'] + [['agent-browser']],
+              agent_browser={**browser, 'artifact_dir': f'$TMPDIR/{qa_name}'})
+    failures += wrong([(f'agent-browser pdf {root}/out.pdf', 2)])
+    link = qa.parent / f'{qa_name}-link'
+    link.symlink_to(root, target_is_directory=True)
+    # A malformed or missing section blocks every call; a directory that is a link or the checkout blocks file writes.
+    for bad, snapshot_code in (('/var/tmp/qa', 2), (None, 2), (f'$TMPDIR/{link.name}', 0), (f'$TMPDIR/{root.name}', 0)):
+        if bad and root.name in bad:
+            os.environ['TMPDIR'] = str(root.parent)
+        configure(agent_browser=None if bad is None else {**browser, 'artifact_dir': bad})
+        failures += [(bad, *f) for f in wrong([(f'agent-browser pdf {root}/out.pdf', 2), ('agent-browser snapshot', snapshot_code)])]
+    os.environ.pop('TMPDIR') if saved_tmpdir is None else os.environ.update(TMPDIR=saved_tmpdir)
+    gate_tmp.cleanup()
+    assert not failures, failures
+    configure()
+
     configure(allowed_subagents=['Explore'], read_only_commands=[['make', 'lint']])
     assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'verifier'}).returncode == 2
     assert event(root, 'PreToolUse', 'Agent', {'prompt': 'x'}).returncode == 2  # The default type is listed data too.

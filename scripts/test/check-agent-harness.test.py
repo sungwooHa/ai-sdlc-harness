@@ -232,8 +232,12 @@ def main() -> int:
 
         # agreement_gate lists are data the gate trusts: exact argv prefixes without wildcards,
         # named subagents, and a branch pattern that compiles.
+        browser = {"artifact_dir": "$TMPDIR/demo-qa", "global_flags": {"--json": "", "--session": "[a-z]+"},
+                   "commands": {"snapshot": {"flags": {"-i": ""}}, "set viewport": {}, "pdf": {"args": ["path"]},
+                                "screenshot": {"args": ["path?"], "flags": {"-o": "path"}}}}
         gate = {"enabled": True, "allowed_subagents": ["Explore"], "read_only_commands": [["git", "status"]],
-                "branch_pattern": "feature/[a-z0-9-]+(/[a-z0-9-]+)*"}
+                "branch_pattern": "feature/[a-z0-9-]+(/[a-z0-9-]+)*", "agent_browser": browser}
+        mismatches = []
         for label, change, expect_error in (
             ("valid", {}, False),
             ("missing", {"read_only_commands": None}, True),
@@ -241,6 +245,14 @@ def main() -> int:
             ("empty prefix", {"read_only_commands": [[]]}, True),
             ("unnamed subagent", {"allowed_subagents": [""]}, True),
             ("bad pattern", {"branch_pattern": "feature/("}, True),
+            # agent_browser: the gate trusts these shapes, so a typo must fail here (B1)
+            ("browser missing", {"agent_browser": None}, True),
+            ("browser dir in repo", {"agent_browser": {**browser, "artifact_dir": "docs/qa"}}, True),
+            ("browser dir not tmp", {"agent_browser": {**browser, "artifact_dir": "/var/tmp/qa"}}, True),
+            ("browser bad value regex", {"agent_browser": {**browser, "global_flags": {"--session": "("}}}, True),
+            ("browser flag without dash", {"agent_browser": {**browser, "global_flags": {"json": ""}}}, True),
+            ("browser bad slot", {"agent_browser": {**browser, "commands": {"pdf": {"args": ["file"]}}}}, True),
+            ("browser option as command", {"agent_browser": {**browser, "commands": {"--cdp": {}}}}, True),
         ):
             root = Path(temp_dir) / f"gate-{label.replace(' ', '-')}"
             root.mkdir()
@@ -251,8 +263,9 @@ def main() -> int:
             code, out = run(root)
             payload = json.loads(out)
             errors = [item for item in payload["errors"] if item["code"] == "agreement_gate_lists"]
-            assert bool(errors) == expect_error, f"{label}: errors={payload['errors']}"
-            assert (code == 1) == expect_error, f"{label}: exit={code}"
+            if bool(errors) != expect_error or (code == 1) != expect_error:
+                mismatches.append((label, expect_error, code, payload["errors"]))
+        assert not mismatches, mismatches
 
     print("PASS: check-agent-harness smoke tests")
     return 0
