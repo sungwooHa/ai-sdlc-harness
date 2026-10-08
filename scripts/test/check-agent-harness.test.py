@@ -239,7 +239,7 @@ def main() -> int:
                 assert code == 1, f"{label}: exit={code}"
                 assert {"claude_skill_not_symlink", "retired_root_reference"} <= codes, f"{label}: errors={payload['errors']}"
 
-        # agreement_gate lists are data the gate trusts: exact argv prefixes without wildcards,
+        # agreement_gate lists are data the gate trusts: argv prefixes or exact argv without wildcards,
         # named subagents, and a branch pattern that compiles.
         browser = {"artifact_dir": "$TMPDIR/demo-qa", "global_flags": {"--json": "", "--session": "[a-z]+"},
                    "commands": {"snapshot": {"flags": {"-i": ""}}, "set viewport": {}, "pdf": {"args": ["path"]},
@@ -267,6 +267,13 @@ def main() -> int:
             ("whole interpreter unreviewed", {"read_only_commands": [["python3"]]}, True),
             ("whole program reviewed", {"read_only_commands": [["make"]], "reviewed_whole_programs": ["make"]}, False),
             ("reviewed list malformed", {"reviewed_whole_programs": "make"}, True),
+            # N2: an entry naming a script matches its whole argv ({"exact": [...]}), never a prefix
+            ("script as prefix", {"read_only_commands": [["python3", "scripts/check.py"]]}, True),
+            ("wrapper as prefix", {"read_only_commands": [["./gradlew", "tasks"]]}, True),
+            ("script exact", {"read_only_commands": [{"exact": ["python3", "scripts/check.py", "--format", "text"]}]}, False),
+            ("exact empty", {"read_only_commands": [{"exact": []}]}, True),
+            ("exact extra key", {"read_only_commands": [{"exact": ["git", "status"], "prefix": True}]}, True),
+            ("exact wildcard", {"read_only_commands": [{"exact": ["git", "*"]}]}, True),
         ):
             root = Path(temp_dir) / f"gate-{label.replace(' ', '-')}"
             root.mkdir()

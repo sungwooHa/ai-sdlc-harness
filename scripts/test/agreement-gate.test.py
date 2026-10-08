@@ -235,10 +235,25 @@ with tempfile.TemporaryDirectory() as tmp:
                        ('rg --files --no-ignore --sortr modified -g intent.md docs/changes', 0),
                        ('ls -t docs/changes/*/intent.md', 2)] + [(c, 2) for c in ('git -C . status', 'git -c core.pager=x log', 'GIT_PAGER=x git log',
                                          'git diff -Oorder.txt', 'git log --output=leak.txt')])
+    # N2: a script entry matches its whole argv, so `--repo-root <elsewhere>` or any other argument stays refused.
+    # N3: plain readers may name the gate's own files. ui-review resolves its base with git merge-base.
+    failures += wrong([('python3 scripts/check-agent-harness.py --format text', 0), ('cat scripts/agreement-gate.py', 0),
+                       ('rg -n agreement-gate .', 0), ('wc -l scripts/test/agreement-gate.test.py', 0),
+                       ('head -5 scripts/agreement-gate.py', 0), ('git merge-base HEAD origin/main', 0)] + [(c, 2) for c in (
+        'python3 scripts/check-agent-harness.py --repo-root /tmp/x', 'python3 scripts/check-agent-harness.py --format text --repo-root /tmp/x',
+        'python3 scripts/check-agent-harness.py --format json', 'python3 scripts/check-agent-harness.py',
+        'rg --pre=cat x scripts/agreement-gate.py')])
+    configure(read_only_commands=[{'exact': ['git', 'status']}])
+    failures += wrong([('git status', 0), ('git status --short', 2)])
     assert not failures, failures
+    configure(read_only_commands=[['git'], ['python3']])  # Running the gate another way says what runs it.
+    result = event(root, 'PreToolUse', 'Bash', {'command': 'python3 ./scripts/agreement-gate.py approve fake'})
+    assert result.returncode == 2 and 'runs only as' in result.stderr, result.stderr
     configure(allowed_subagents=None)  # A missing list opens nothing.
     assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'Explore'}).returncode == 2
-    for bad in ([[]], [['git', '']], 'git status'):  # An empty prefix would open every command.
+    # An empty prefix would open every command; a script named by a prefix would take any argument.
+    for bad in ([[]], [['git', '']], 'git status', [['python3', 'scripts/check-agent-harness.py']], [{'exact': []}],
+                [{'exact': ['git', 'status'], 'prefix': True}], [['git', 'status'], {'exact': 'git status'}]):
         configure(read_only_commands=bad)
         result = event(root, 'PreToolUse', 'Bash', {'command': 'git status'})
         assert result.returncode == 2 and 'read_only_commands' in result.stderr, (bad, result.stderr)

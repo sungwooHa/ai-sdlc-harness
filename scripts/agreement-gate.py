@@ -300,7 +300,11 @@ UNSAFE_FLAGS = {'rg': ('--pre', '--hostname-bin'),
 # Commands the gate itself admits or refuses; no read_only_commands entry can open them. git global
 # options are refused before this (see pretool), so argv[1] is the git subcommand.
 GIT_OWNED = ('add', 'commit', 'switch', 'push', 'checkout')
+# Programs that only read their file arguments: these alone may name the gate's own files.
+GATE_FILE_READERS = ('cat', 'head', 'tail', 'wc', 'rg', 'grep', 'ls')
 ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
+# A token naming a script or a path: such an entry takes any later argument as a prefix, so it must be exact.
+SCRIPT_TOKEN = re.compile(r'/|\.(py|sh|[cm]?js|ts|rb|pl)$')
 
 
 def listed(cfg, key, valid):
@@ -310,15 +314,25 @@ def listed(cfg, key, valid):
     return value
 
 
+def argv_list(value):
+    return isinstance(value, list) and value and all(isinstance(s, str) and s for s in value)
+
+
+def command_entry(item):
+    """["git", "log"]: an argv prefix. {"exact": [...]}: the whole argv. A script is named only exactly."""
+    if isinstance(item, dict):
+        return list(item) == ['exact'] and argv_list(item['exact'])
+    return argv_list(item) and not any(SCRIPT_TOKEN.search(s) for s in item)
+
+
 def read_only_shell(argv, cfg):
-    # Exact argv prefixes: an empty prefix or an empty token would open more than its author wrote.
-    prefixes = listed(cfg, 'read_only_commands',
-                      lambda p: isinstance(p, list) and p and all(isinstance(s, str) and s for s in p))
-    if not argv or not any(argv[:len(p)] == p for p in prefixes):
+    # An empty prefix or an empty token would open more than its author wrote.
+    entries = listed(cfg, 'read_only_commands', command_entry)
+    if not argv or not any(argv == e['exact'] if isinstance(e, dict) else argv[:len(e)] == e for e in entries):
         return False
     if (argv[0] == 'git' and argv[1:2] and argv[1] in GIT_OWNED) or (
-            argv[0] != 'git' and any('agreement-gate' in a for a in argv)):
-        return False  # gate-owned, however the path or the list is spelled (git only reads the file)
+            argv[0] not in ('git', *GATE_FILE_READERS) and any('agreement-gate' in a for a in argv)):
+        return False  # gate-owned, however the path or the list is spelled (git and readers only read the file)
     # `-O` also inside short clusters (`git grep -iO`): it opens matches in a pager.
     return not any(a.startswith(UNSAFE_FLAGS.get(argv[0], ())) or (argv[0] == 'git' and re.match(r'-[A-Za-z]*O', a))
                    for a in argv[1:])
@@ -531,6 +545,9 @@ def pretool(repo, payload):
             check_scope(repo, approved(repo))
             delivery(repo, staged=True)
             return
+        if argv[0] != 'git' and any('agreement-gate' in a for a in argv):
+            raise Blocked('the agreement gate runs only as `python3 scripts/agreement-gate.py prepare|status|verify|'
+                          'remove|move`; read its files with Read/Grep or cat/rg')
         raise Blocked('shell execution needs a declared verification command; use agreement-gate.py verify')
     # A subagent's own tool calls pass this same hook, so a listed reviewer gains no edit path.
     # Without subagent_type the host starts its default general-purpose agent; match that name.

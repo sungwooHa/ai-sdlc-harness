@@ -533,13 +533,12 @@ class HarnessCheck:
         if not isinstance(subagents, list) or not all(isinstance(s, str) and s for s in subagents):
             self._error("agreement_gate_lists", MANIFEST_REL, "agreement_gate.allowed_subagents must list subagent type names")
         commands = gate.get("read_only_commands")
-        if not isinstance(commands, list) or not all(
-            isinstance(p, list) and p and all(isinstance(s, str) and s and "*" not in s for s in p) for p in commands
-        ):
+        if not isinstance(commands, list) or not all(self._command_entry(p) for p in commands):
             self._error(
                 "agreement_gate_lists",
                 MANIFEST_REL,
-                "agreement_gate.read_only_commands must list nonempty exact argv prefixes (no wildcards)",
+                'agreement_gate.read_only_commands must list argv prefixes (["git", "log"]) or {"exact": [argv]}; '
+                "no wildcards; an entry naming a script or path must be exact",
             )
         # A one-token entry opens every subcommand and argument of that program (`git` → `git ci -n`
         # through an alias, `python3` → any code), so it must be named in reviewed_whole_programs too.
@@ -584,6 +583,15 @@ class HarnessCheck:
                 'agreement_gate.agent_browser needs artifact_dir "$TMPDIR/<name>", global_flags and commands '
                 "in the shape docs/standards/AGREEMENT_REVIEW.md describes",
             )
+
+    @staticmethod
+    def _command_entry(entry: object) -> bool:
+        """["git", "log"] opens that argv prefix; {"exact": [...]} only that whole argv. A prefix entry
+        naming a script or path would pass it any argument (`--repo-root <elsewhere>`), so those are exact."""
+        argv = entry.get("exact") if isinstance(entry, dict) and list(entry) == ["exact"] else entry
+        if not (isinstance(argv, list) and argv and all(isinstance(s, str) and s and "*" not in s for s in argv)):
+            return False
+        return isinstance(entry, dict) or not any(re.search(r"/|\.(py|sh|[cm]?js|ts|rb|pl)$", s) for s in argv)
 
     @staticmethod
     def _browser_flags(flags: object) -> bool:
