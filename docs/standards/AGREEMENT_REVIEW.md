@@ -141,8 +141,8 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
   `npm`, `npx`, `yarn`, `bun`, `node`, `python`, `python3`, `bash`, `sh`, `uv`, `poetry`) and names
   more than the runner (`pnpm check:harness`, `npm run x`, `python3 -m pkg`). The default list opens
   `python3 scripts/check-agent-harness.py --format text` exactly, and `git merge-base` for
-  `__PREFIX__-ui-review`. It opens `git branch`, `git remote -v` and `git stash list` exactly (with
-  any other argument they create, delete or write). It searches with `rg`, not `grep` or `find`: use
+  `__PREFIX__-ui-review`. It opens `git branch`, `git remote -v` and `git stash list` exactly (any
+  other argument is refused; some create, delete or write). It searches with `rg`, not `grep` or `find`: use
   `rg --files -g <glob>` to find files. These stay refused whatever the list says: unsafe flags (`rg --pre`/`--hostname-bin`; git
   `--output`, `--ext-diff`, `--textconv`, `--no-index`, `--open-files-in-pager`, and `-O` in any
   short cluster) and gate-owned commands in any spelling (`git add|commit|switch|push|checkout`;
