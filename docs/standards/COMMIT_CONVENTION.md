@@ -63,8 +63,10 @@ One logical change per commit; split unrelated work.
 - A first line that starts with `#` is refused: with `-m`/`-F` git keeps it as the subject, and the
   hook cannot tell that from an editor comment.
 - Trailers as git reads them (the last paragraph of `Key: value` lines), on every commit.
-  A last paragraph made only of `Key: value` lines (or a bare URL) is read as trailers — add a
-  sentence or end with Plan-Ref.
+  When that paragraph is prose or a link (`Why: ...`, a bare URL), add a sentence or end with
+  Plan-Ref. A real trailer has to be removed: a line that starts with `Co-Authored-By:` is refused
+  anywhere in the stored message (the body, or below the scissors line, which `-m`/`-F` keep)
+  unless `allowed_trailers` lists it. A mid-line mention, a comment line and a `--verbose` diff pass.
 
 `git commit --no-verify` (or `-n`) skips it. Use it only in an emergency and say so in the PR.
 What stops an agent from skipping it, by layer:

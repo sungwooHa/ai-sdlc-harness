@@ -26,6 +26,7 @@ PLACEHOLDER = re.compile(r"__[A-Z0-9_]+__")
 TEXT = r"\S(?:.*?\S)?"  # nonempty, no surrounding blanks
 # `[{field}]` or `({field})` (optional, with the space after it) | `{field}`
 TOKEN = re.compile(r"(?P<opt>\[\{[^{}]+\}\] ?|\(\{[^{}]+\}\) ?)|\{(?P<field>[^{}]+)\}")
+CO_AUTHOR = re.compile(r"co-authored-by:", re.IGNORECASE)
 
 
 def subject_pattern(fmt: str, types: list[str]) -> re.Pattern[str]:
@@ -80,22 +81,31 @@ def problems(message: str, cfg: dict) -> list[str]:
         # would be stored as the subject unchecked. Refuse it instead of guessing.
         if next((line for line in message.splitlines() if line.strip()), "").startswith("#"):
             found.append("first line starts with `#`; with -m/-F git keeps it as the subject — write the subject first")
-            return found + trailer_problems(text, cfg)
+            return found + trailer_problems(message, cfg)
         types = [t for t in cfg.get("types") or [] if isinstance(t, str)]
         if not subject.startswith(GIT_WRITTEN) and not subject_pattern(fmt, types).fullmatch(subject):
             found.append(f"first line `{subject}` does not match `{fmt}`" + (f" (type: {' | '.join(types)})" if types else ""))
-    return found + trailer_problems(text, cfg)
+    return found + trailer_problems(message, cfg)
 
 
-def trailer_problems(text: str, cfg: dict) -> list[str]:
+def trailer_problems(message: str, cfg: dict) -> list[str]:
     if not cfg.get("forbid_other_trailers", True):
         return []
     allowed = [t for t in cfg.get("allowed_trailers", ["Plan-Ref"]) if isinstance(t, str)]
-    found = [f"trailer `{key}` is not allowed (allowed: {', '.join(allowed) or 'none'})"
-             for key in trailer_keys(text) if key.lower() not in {a.lower() for a in allowed}]
-    if found:
+    lowered = {a.lower() for a in allowed}
+    refused = [key for key in trailer_keys(stored_text(message)) if key.lower() not in lowered]
+    found = [f"trailer `{key}` is not allowed (allowed: {', '.join(allowed) or 'none'})" for key in refused]
+    # Outside the trailers git still stores the line: in the body, and below the scissors line with -m/-F.
+    # Comment lines and a --verbose diff (lines start with #, +, - or a space) never match.
+    co_author = "co-authored-by" not in (lowered | {key.lower() for key in refused}) and any(
+        CO_AUTHOR.match(line) for line in message.splitlines())
+    if co_author:
+        found.append("a `Co-Authored-By:` line is not allowed anywhere in the message")
+    if refused and all("-" not in key for key in refused):  # prose or a link read as trailers (`Why:`, `https:`)
         found.append("a last paragraph made only of `Key: value` lines (or a bare URL) is read as trailers"
                      " — add a sentence or end with Plan-Ref")
+    if co_author or any("-" in key for key in refused):
+        found.append("remove that trailer — moving it into the body does not make it allowed")
     return found
 
 
