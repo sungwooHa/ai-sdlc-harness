@@ -597,17 +597,20 @@ class HarnessCheck:
         def names(value: object) -> bool:
             return isinstance(value, list) and bool(value) and all(isinstance(s, str) and s for s in value)
 
+        # The hook's defaults: forbid_other_trailers true, allowed_trailers [Plan-Ref]; [] allows none.
+        trailers = cfg.get("allowed_trailers", ["Plan-Ref"])
         if not (
             isinstance(cfg.get("format"), str)
             and names(cfg.get("types"))
-            and names(cfg.get("allowed_trailers"))
-            and isinstance(cfg.get("forbid_other_trailers"), bool)
+            and (names(trailers) or trailers == [])
+            and isinstance(cfg.get("forbid_other_trailers", True), bool)
         ):
             self._error(
                 "commit_message_shape",
                 MANIFEST_REL,
-                "commit_message needs format (a string), types and allowed_trailers (non-empty lists of strings) "
-                "and forbid_other_trailers (true or false); see docs/standards/COMMIT_CONVENTION.md",
+                "commit_message needs format (a string) and types (a non-empty list of strings); allowed_trailers, "
+                "if given, is a list of strings and forbid_other_trailers true or false; "
+                "see docs/standards/COMMIT_CONVENTION.md",
             )
 
     @staticmethod
