@@ -83,6 +83,12 @@ def main() -> int:
             ("Merge branch 'x'\n\nCo-authored-by: A <a@example.com>\n", False),  # trailers still checked
         ):
             expect(root, bracket, message, ok, f"bracket format: {message!r}")
+        # A last paragraph that is only a URL or `Key: value` lines is read as trailers; the refusal says so.
+        for body in ("https://github.com/o/r/issues/1", "Why: hooks were skipped"):
+            result = gate(root, bracket, f"fix: [x] y\n\n{body}\n")
+            assert result.returncode == 1 and "read as trailers" in result.stderr, (body, result.stderr)
+        expect(root, bracket, "fix: [x] y\n\nhttps://github.com/o/r/issues/1\n\nPlan-Ref: 261008_00-a\n", True,
+               "a URL paragraph before Plan-Ref is body text")
 
         conventional = config(format="{type}({scope}): {description}", types=TYPES)
         for message, ok in (("feat(api): add x\n", True), ("feat: add x\n", True), ("feat(api) add x\n", False)):

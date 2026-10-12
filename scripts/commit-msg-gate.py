@@ -90,8 +90,12 @@ def trailer_problems(text: str, cfg: dict) -> list[str]:
     if not cfg.get("forbid_other_trailers", True):
         return []
     allowed = [t for t in cfg.get("allowed_trailers", ["Plan-Ref"]) if isinstance(t, str)]
-    return [f"trailer `{key}` is not allowed (allowed: {', '.join(allowed) or 'none'})"
-            for key in trailer_keys(text) if key.lower() not in {a.lower() for a in allowed}]
+    found = [f"trailer `{key}` is not allowed (allowed: {', '.join(allowed) or 'none'})"
+             for key in trailer_keys(text) if key.lower() not in {a.lower() for a in allowed}]
+    if found:
+        found.append("a last paragraph made only of `Key: value` lines (or a bare URL) is read as trailers"
+                     " — add a sentence or end with Plan-Ref")
+    return found
 
 
 def main() -> int:
