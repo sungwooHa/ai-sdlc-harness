@@ -73,6 +73,11 @@ def main() -> int:
             ("Feat: y\n", False),
             ("feat:y\n", False),
             ("feat: \n", False),
+            # The optional slot alone is not a summary: a summary cannot start with the slot's bracket.
+            ("feat: [x]\n", False),
+            ("feat: [Harness]\n", False),
+            ("feat: [x] y\n", True),
+            ("feat: y\n", True),
             ("feat: [Harness] x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n", False),
             ("feat: x\n\nPlan-Ref: 261008_00-a\nSigned-off-by: A <a@example.com>\n", False),
             ("Merge branch 'x'\n\nCo-authored-by: A <a@example.com>\n", False),  # trailers still checked

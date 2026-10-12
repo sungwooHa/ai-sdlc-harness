@@ -30,14 +30,16 @@ TOKEN = re.compile(r"(?P<opt>\[\{[^{}]+\}\] ?|\(\{[^{}]+\}\) ?)|\{(?P<field>[^{}
 
 def subject_pattern(fmt: str, types: list[str]) -> re.Pattern[str]:
     """Read the format as a pattern: `{type}` is one of `types`, any other `{field}` is nonempty
-    text, and a field written as `[{field}]` or `({field})` may be left out with the space after it."""
+    text, and a field written as `[{field}]` or `({field})` may be left out with the space after it.
+    Left out, what follows cannot start with its opening bracket, so `feat: [x]` is no summary."""
     parts, pos = [], 0
     for match in TOKEN.finditer(fmt):
         parts.append(re.escape(fmt[pos : match.start()]))
         opt = match.group("opt")
         if opt:
             space = " " if opt.endswith(" ") else ""
-            parts.append(f"(?:{re.escape(opt[0])}{TEXT}{re.escape(opt.rstrip()[-1])}{space})?")
+            opening = re.escape(opt[0])
+            parts.append(f"(?:{opening}{TEXT}{re.escape(opt.rstrip()[-1])}{space}|(?!{opening}))")
         elif match.group("field").strip() == "type" and types:
             parts.append("(?:" + "|".join(map(re.escape, types)) + ")")
         else:
