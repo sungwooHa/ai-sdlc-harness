@@ -14,7 +14,7 @@ planning/review references. History is delivered through the PR body and attachm
   day's sequence starting at `00` — `260910_00-<slug>`, then `260910_01-...`.
   `/__PREFIX__-intent` assigns it by counting the existing folders with today's `YYMMDD_` prefix.
 - The id appears in the `Plan-Ref` commit trailer; branches use `feature/<slug>`.
-- Commits: `__COMMIT_FORMAT__` — no issue suffix.
+- Commits: follow `docs/standards/COMMIT_CONVENTION.md`; no issue-id suffix.
 - Tickets from `/__PREFIX__-tickets` live in the `## 티켓` section of
   `docs/changes/<YYMMDD_NN>-<slug>/plan.md`.
 

@@ -14,7 +14,8 @@
     "deterministic": [
       ".claude/settings.json",
       ".codex/hooks.json",
-      ".husky/pre-commit"
+      ".husky/pre-commit",
+      ".husky/commit-msg"
     ],
     "artifacts": "docs/changes (local-only working folder; history lives on the PR)",
     "evals": ".claude/evals",
@@ -39,6 +40,7 @@
       "plan.md"
     ],
     "review_gate": "Intent/spec confirmation and pre-implementation agreement are human decisions. Before product implementation, present the applicable HTML drafts and the plan, obtain approval of that revision, and preserve the baseline under agreements/<revision>/. Code review verifies implementation; the PR reviews realized value against that agreement.",
+    "review_policy": "REVIEW.md",
     "ui_review_waiver": "/__PREFIX__-ui-review is required for a diff under __UI_SOURCE_GLOB__ unless the approved plan.md states 시각 변경 없음 (no visual change); the implement adapter records the waiver in its final report.",
     "deliverables": {
       "dir": "deliverables",
@@ -170,7 +172,8 @@
       "AGENT_HARNESS.md",
       "HARNESS_PRINCIPLES.md",
       "eli7-harness.html",
-      "AGREEMENT_REVIEW.md"
+      "AGREEMENT_REVIEW.md",
+      "COMMIT_CONVENTION.md"
     ],
     "tracker_config": "docs/agents/issue-tracker.md"
   },
@@ -190,6 +193,8 @@
     "root": ".agents/skills",
     "claude_mirror": ".claude/skills",
     "mirror_mode": "symlink",
+    "local_prefix": "local-",
+    "local_prefix_note": "Personal skills named `local-<name>`: the real directory lives under the claude_mirror root, `.agents/skills/local-<name>` is a relative symlink to it, both are excluded per clone through `.git/info/exclude` (never `.gitignore`), and the harness check skips them. Prefer user scope first; see docs/standards/AGENT_HARNESS.md \"Personal skills\".",
     "vendored": [
       {
         "source": "github.com/mattpocock/skills",
@@ -277,7 +282,7 @@
       "required_files": [
         ".codex/config.toml",
         ".codex/hooks.json",
-        ".codex/rules/commit-convention.mdc"
+        ".codex/rules/harness.rules"
       ],
       "absolute_path_scan_files": [
         ".codex/config.toml",
@@ -418,8 +423,37 @@
       "host_files": {
         "husky": ".husky/pre-commit"
       }
+    },
+    {
+      "id": "commit_msg_gate",
+      "event": "commit-msg",
+      "description": "Refuse a commit whose first line breaks commit_message.format or that carries a trailer outside commit_message.allowed_trailers. Rules: docs/standards/COMMIT_CONVENTION.md.",
+      "required_scripts": [
+        "scripts/commit-msg-gate.py"
+      ],
+      "host_files": {
+        "husky": ".husky/commit-msg"
+      }
     }
   ],
+  "commit_message": {
+    "convention": "docs/standards/COMMIT_CONVENTION.md",
+    "format": "__COMMIT_FORMAT__",
+    "types": [
+      "feat",
+      "fix",
+      "docs",
+      "style",
+      "refactor",
+      "test",
+      "chore"
+    ],
+    "forbid_other_trailers": true,
+    "allowed_trailers": [
+      "Plan-Ref"
+    ],
+    "rule": "Checked at commit-msg by scripts/commit-msg-gate.py. First line: `format` read as a pattern — `{type}` is one of `types`, any other `{field}` is nonempty text, a field written as `[{field}]` or `({field})` may be left out with the space after it; while `format` is still an unreplaced placeholder (the template repository itself) this part is skipped. First lines git writes for merges, reverts and autosquash (`Merge`, `Revert \"`, `fixup!`, `squash!`) pass. Trailers are read as git reads them (`git interpret-trailers --parse`) on every message: with forbid_other_trailers (default true) only allowed_trailers pass; false allows any trailer and is the human decision to make together with `.claude/settings.json` `attribution`."
+  },
   "stale_project_names": [
     "__PROJECT_NAME__-old"
   ],
@@ -449,7 +483,121 @@
     "runtime_hosts": [
       "claude",
       "codex"
-    ]
+    ],
+    "lists_rule": "Data the gate reads; approval, scope and verification logic stay in the gate. allowed_subagents: subagent types the Agent/Task tool may start (their own tool calls pass the same hook); a call without subagent_type counts as general-purpose, the host default. read_only_commands: commands that run before and after approval, each an argv prefix ([\"git\", \"log\"]: later arguments open) or {\"exact\": [argv]} (only that whole argv); an entry naming a script or path, or a script runner (pnpm, npm, npx, yarn, bun, node, python, python3, bash, sh, uv, poetry) with more words (pnpm check:harness, python3 -m pkg), must be exact; no wildcards; shell metacharacters, unquoted glob/brace/paren characters, environment-assignment prefixes, git options before the subcommand, unsafe rg/git flags and gate-owned commands (any spelling; only cat, head, tail, wc, rg, grep and ls may name the gate's files) stay refused; a listed command never records verification. reviewed_whole_programs: programs whose one-token read_only_commands entry (every argument opens) was reviewed; check:harness refuses any other one-token entry. agent_browser: the only path for agent-browser (see its rule). branch_pattern: regex (full match) for `git switch -c <branch>` after approval. A missing list opens nothing; a malformed one blocks. See docs/standards/AGREEMENT_REVIEW.md.",
+    "allowed_subagents": [
+      "Explore",
+      "Plan",
+      "verifier",
+      "general-purpose"
+    ],
+    "read_only_commands": [
+      ["pwd"],
+      ["ls"],
+      ["cat"],
+      ["head"],
+      ["tail"],
+      ["wc"],
+      ["rg"],
+      ["git", "status"],
+      ["git", "diff"],
+      ["git", "log"],
+      ["git", "show"],
+      ["git", "ls-files"],
+      ["git", "rev-parse"],
+      ["git", "merge-base"],
+      {"exact": ["python3", "scripts/check-agent-harness.py", "--format", "text"]}
+    ],
+    "reviewed_whole_programs": ["pwd", "ls", "cat", "head", "tail", "wc", "rg"],
+    "branch_pattern": "feature/[a-z0-9-]+(/[a-z0-9-]+)*",
+    "agent_browser": {
+      "rule": "Screen checks before and after approval. The command words come first (`agent-browser <command> [<sub>] ...`), options after them. commands: allowed command words (1-3) -> flags (option -> value shape) and args (null: free text such as selectors, URLs and typed text; a list: fixed slots `path`, `path?` or `text`). Value shape: \"\" = switch, \"path\" = an absolute path whose real location is inside artifact_dir, anything else = regex (full match). A value or text argument that starts with - is refused (negative numbers excepted): agent-browser reads global options from any position. global_flags apply to every command. Files are written only under artifact_dir ($TMPDIR/<name>, mode 0700, yours, outside the checkout). batch, chat, connect, upload, --cdp, --auto-connect, -p/--provider, --executable-path, --args, --extension, --config and --init-script stay refused whatever is listed, and so does every call while ./agent-browser.json exists. See docs/standards/AGREEMENT_REVIEW.md.",
+      "artifact_dir": "$TMPDIR/__PROJECT_NAME__-qa",
+      "global_flags": {
+        "--json": "",
+        "--headed": "",
+        "--content-boundaries": "",
+        "--ignore-https-errors": "",
+        "--annotate": "",
+        "--session": "[A-Za-z0-9_-]{1,64}",
+        "--color-scheme": "dark|light|no-preference",
+        "--max-output": "[0-9]{1,9}",
+        "--screenshot-format": "png|jpeg",
+        "--screenshot-quality": "[0-9]{1,3}",
+        "--screenshot-dir": "path",
+        "--download-path": "path",
+        "--profile": "path"
+      },
+      "commands": {
+        "open": {"flags": {"--enable": "react-devtools"}},
+        "click": {},
+        "dblclick": {},
+        "type": {},
+        "fill": {},
+        "press": {},
+        "keydown": {},
+        "keyup": {},
+        "keyboard": {},
+        "hover": {},
+        "focus": {},
+        "check": {},
+        "uncheck": {},
+        "select": {},
+        "drag": {},
+        "scroll": {"flags": {"-s": ".+", "--selector": ".+"}},
+        "scrollintoview": {},
+        "wait": {"flags": {"--url": ".+", "--load": "load|domcontentloaded|networkidle", "--fn": ".+", "--text": ".+", "--state": "visible|hidden|attached|detached", "--timeout": "[0-9]{1,9}"}},
+        "snapshot": {"flags": {"-i": "", "--interactive": "", "-c": "", "--compact": "", "-u": "", "--urls": "", "-d": "[0-9]{1,4}", "--depth": "[0-9]{1,4}", "-s": ".+", "--selector": ".+"}},
+        "eval": {"flags": {"-b": ""}},
+        "get": {},
+        "is": {},
+        "find": {"flags": {"--name": ".+", "--exact": ""}},
+        "mouse": {},
+        "dialog": {},
+        "back": {},
+        "forward": {},
+        "reload": {},
+        "tab": {"flags": {"--label": "[A-Za-z0-9_-]{1,64}"}},
+        "window new": {},
+        "close": {"flags": {"--all": ""}},
+        "set viewport": {},
+        "set device": {},
+        "set media": {},
+        "set offline": {},
+        "set geo": {},
+        "cookies": {"flags": {"--url": ".+", "--domain": ".+", "--path": ".+", "--httpOnly": "", "--secure": "", "--sameSite": "Strict|Lax|None", "--expires": "[0-9]{1,12}"}},
+        "storage": {},
+        "console": {"flags": {"--clear": ""}},
+        "errors": {"flags": {"--clear": ""}},
+        "highlight": {},
+        "network route": {"flags": {"--abort": "", "--body": ".+", "--resource-type": "[a-z,]+"}},
+        "network unroute": {},
+        "network requests": {"flags": {"--clear": "", "--filter": ".+", "--type": "[a-z,]+", "--method": "[A-Z]+", "--status": "[0-9x,-]+"}},
+        "network request": {},
+        "diff snapshot": {"args": [], "flags": {"-b": "path", "--baseline": "path", "-s": ".+", "--selector": ".+", "-c": "", "--compact": "", "-d": "[0-9]{1,4}", "--depth": "[0-9]{1,4}"}},
+        "diff screenshot": {"args": [], "flags": {"-b": "path", "--baseline": "path", "-o": "path", "--output": "path", "-t": "[0-9.]{1,5}", "--threshold": "[0-9.]{1,5}", "-s": ".+", "--selector": ".+", "--full": ""}},
+        "diff url": {"flags": {"--screenshot": "", "--full": "", "--wait-until": "load|domcontentloaded|networkidle", "-s": ".+", "--selector": ".+", "-c": "", "--compact": "", "-d": "[0-9]{1,4}", "--depth": "[0-9]{1,4}"}},
+        "vitals": {},
+        "react": {"flags": {"--only-dynamic": ""}},
+        "pushstate": {},
+        "skills": {"flags": {"--full": "", "--all": ""}},
+        "session": {},
+        "screenshot": {"args": ["path?"], "flags": {"--full": "", "-f": ""}},
+        "pdf": {"args": ["path"]},
+        "download": {"args": ["text", "path"]},
+        "network har start": {"args": ["path?"]},
+        "network har stop": {"args": ["path"]},
+        "state save": {"args": ["path"]},
+        "state load": {"args": ["path"]},
+        "record start": {"args": ["path"]},
+        "record restart": {"args": ["path"]},
+        "record stop": {"args": []},
+        "trace start": {"args": ["path?"]},
+        "trace stop": {"args": ["path"]},
+        "profiler start": {"args": []},
+        "profiler stop": {"args": ["path"]}
+      }
+    }
   },
   "adr_gate": {
     "root": "docs/decisions",

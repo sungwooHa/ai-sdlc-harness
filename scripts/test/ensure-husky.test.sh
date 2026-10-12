@@ -66,4 +66,11 @@ git -C "$TMP/other" config core.hooksPath "$TMP/elsewhere"
 check "무관한 절대 hooksPath → 무변경" "$(git -C "$TMP/other" config core.hooksPath)" "$TMP/elsewhere"
 check "무관한 절대 hooksPath → shim 안 만듦" "$(test -e "$TMP/other/.husky/_/pre-commit" && echo yes || echo no)" "no"
 
+# 8. 훅 파일마다 shim 을 쓴다 — commit-msg 는 메시지 파일 경로($1)를 받아야 한다
+mk "$TMP/msg" yes
+printf '#!/usr/bin/env sh\necho "msg:$1"\n' > "$TMP/msg/.husky/commit-msg"
+(cd "$TMP/msg" && bash "$SCRIPT" --quiet)
+check "commit-msg → shim 생성" "$(test -x "$TMP/msg/.husky/_/commit-msg" && echo yes || echo no)" "yes"
+check "commit-msg → shim 이 인자를 넘김" "$(cd "$TMP/msg" && sh .husky/_/commit-msg .git/COMMIT_EDITMSG)" "msg:.git/COMMIT_EDITMSG"
+
 [ $fail -eq 0 ] && echo "PASS: ensure-husky tests" || { echo "FAIL: ensure-husky tests"; exit 1; }

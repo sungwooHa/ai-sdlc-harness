@@ -18,7 +18,7 @@ The harness keeps agent behaviour consistent across hosts by splitting guidance 
 | Per-app | Rules loaded when work happens under that app (≤ 80 lines each) | `apps/<app>/AGENTS.md` |
 | On-demand | Skills invoked by name for a specific job | `.agents/skills/**` |
 | Subagents | Claude-only reviewer personas (`verifier`) | `.claude/agents/*.md` |
-| Deterministic | Hooks and gates that run without the model deciding to | `.claude/settings.json`, `.codex/hooks.json`, `.husky/pre-commit` |
+| Deterministic | Hooks and gates that run without the model deciding to | `.claude/settings.json`, `.codex/hooks.json`, `.husky/pre-commit`, `.husky/commit-msg` |
 | Artifact chain | Local working record of what a change intends, specifies, and plans (never committed; the PR carries it) | `docs/changes/**` |
 | Evals | Behavioural regression cases: does an agent follow the rules above? | `.claude/evals/**`, `scripts/harness/run-evals.py` |
 
@@ -35,9 +35,11 @@ not in a document.
 | `.agents/skills/` | Single skill root |
 | `.claude/skills` | Symlink mirror of the skill root (one symlink per skill) |
 | `.agents/harness.yaml` | Machine-readable harness contract |
+| `REVIEW.md` | Review passes and severities shared by every reviewer (`artifact_chain.review_policy`) |
 | `.claude/settings.json`, `.codex/hooks.json` | Host hook adapters |
-| `.codex/config.toml`, `.codex/rules/commit-convention.mdc` | Codex host files |
-| `.husky/pre-commit` | Commit-time gates |
+| `.codex/config.toml`, `.codex/rules/harness.rules` | Codex host files |
+| `.husky/pre-commit`, `.husky/commit-msg` | Commit-time gates (staged files; commit message) |
+| `docs/standards/COMMIT_CONVENTION.md` | Commit message rules; `commit_message` in the manifest holds the values the commit-msg hook checks |
 | `docs/changes/<YYMMDD_NN>-<slug>/` | Artifact chain per change — local-only working folder, gitignored, never committed |
 | `docs/changes/_templates/` | `intent.md`, `spec.md`, `plan.md`, `pr.md` templates (the only tracked files under `docs/changes/` besides its README) |
 | `docs/decisions/` | Tracked ADRs: durable decisions, alternatives and consequences; see its README |
@@ -171,10 +173,36 @@ only.
 `harness.yaml` `skills.disabled` with `reason` and `replacement`, so the next agent learns why
 instead of re-enabling it.
 
+**Personal skills.** Keep a skill that is yours, not the team's, out of shared files. Prefer user
+scope: Claude Code reads `~/.claude/skills/`, Codex reads `~/.agents/skills/`; neither reads the
+other's folder, so keep the real directory in one and symlink it from the other. A user-scope skill
+shows in every repository and, in Claude Code, wins over a project skill of the same name, so never
+reuse a team skill's name. Only a skill that makes sense in this repository alone goes here, named
+with `skills.local_prefix` (`local-<name>`): the real directory at `.claude/skills/local-<name>/`,
+a relative symlink `.agents/skills/local-<name>` → `../../.claude/skills/local-<name>` so Codex
+reads it too, and both hidden in this clone through `.git/info/exclude` (never `.gitignore`, which
+is shared):
+
+```
+/.claude/skills/local-*
+/.agents/skills/local-*
+```
+
+The harness check skips the prefix in the mirror check and the content scan, and reports a
+committed `local-*` file as `tracked_local_skill` (the skip is for untracked clones only); the
+exclude keeps the folders out of commits and out of the agreement gate's scope check. The exclude
+file is shared by all worktrees of the clone, but the folders are not: recreate them in each new
+worktree.
+
 ## Hooks and gates
 
 `shared_hook_intents` in `harness.yaml` declares intent once; each host file implements it. The
-harness check fails when a declared intent is missing from its host file.
+harness check compares both directions: a declared script that a host file does not run on each
+declared event (`unwired_hook_intent`), a root `scripts/…` path that a host file runs with no intent
+listing that host file (`undeclared_hook`), and one run on an event its intent does not declare
+(`hook_event_mismatch`). The event is the key under `hooks` in `.claude/settings.json` and
+`.codex/hooks.json`, and the file name for `.husky/*`; `A|B|C` declares three events. A script used
+by several intents (`agreement-gate.py` at runtime and at pre-commit) is told apart by `host_files`.
 
 | Intent | Event | Script | Host files |
 |---|---|---|---|
@@ -183,7 +211,12 @@ harness check fails when a declared intent is missing from its host file.
 | `protected_paths_pretooluse` | PreToolUse (Edit/Write/MultiEdit **and Bash**) | `scripts/protected-paths-guard.py` | `.claude/settings.json` |
 | `question_gate` | UserPromptSubmit / PreToolUse (AskUserQuestion, EnterPlanMode, ExitPlanMode, Skill) / Stop | `scripts/question-gate.py` | `.claude/settings.json` |
 | `pr_body_gate` | PreToolUse (Write) / PostToolUse (Edit, Write, MultiEdit) / Stop | `scripts/pr-body-gate.py` | `.claude/settings.json` |
+| `agreement_runtime` | UserPromptSubmit / PreToolUse (every tool) / Stop | `scripts/agreement-gate.py` | `.claude/settings.json`, `.codex/hooks.json` |
+| `adr_stop` | Stop | `scripts/adr-gate.py` | `.claude/settings.json`, `.codex/hooks.json` |
 | `harness_fast_guard_precommit` | pre-commit | `scripts/agent-harness-fast-guard.py` | `.husky/pre-commit` |
+| `agreement_precommit` | pre-commit | `scripts/agreement-gate.py` (`check-staged`) | `.husky/pre-commit` |
+| `adr_precommit` | pre-commit | `scripts/adr-gate.py` (`--staged`) | `.husky/pre-commit` |
+| `commit_msg_gate` | commit-msg | `scripts/commit-msg-gate.py` | `.husky/commit-msg` |
 
 Add a project gate by writing it as one line in `.husky/pre-commit` (or one hook entry in
 `.claude/settings.json`) **and** declaring it as a `shared_hook_intents` entry — the check then
@@ -216,16 +249,32 @@ round"; the adapters override it and the gate enforces the override.
 **Husky in worktrees and fresh clones.** husky only creates the gitignored `.husky/_` shims during
 install; without them git runs no hooks at all. `scripts/harness/ensure-husky.sh` writes minimal
 shims (idempotent, gitignored), runs at Claude `SessionStart`, and the fast guard fails (exit 1)
-when hooks are still unwired instead of only warning. `core.hooksPath` is repo-level and must stay
+when a hook file under `.husky/` (`pre-commit`, `commit-msg`) still has no shim, instead of only
+warning. `core.hooksPath` is repo-level and must stay
 the relative `.husky/_` husky writes, so each worktree runs its own hook files; an absolute value
 that resolves to this repo's `.husky/_` is normalized back by `ensure-husky.sh`, and both scripts
 accept either form when judging wiring.
 
-`--no-verify` is for emergencies and must be declared in the PR.
+**Commit message gate** (`commit_message`). `.husky/commit-msg` checks the first line against
+`format` (skipped while it is still the template placeholder; git's own merge, revert, reapply,
+`fixup!`, `squash!` and `amend!` first lines pass; a `#` first line is refused) and refuses trailers outside `allowed_trailers` while `forbid_other_trailers` is
+true. `docs/standards/COMMIT_CONVENTION.md` is the rule text. `.claude/settings.json` `attribution`
+is empty so Claude Code adds no co-author trailer or PR footer; an instruction in a memory or
+`CLAUDE.md` file can still ask for one, so the hook is the fence.
+
+`--no-verify` is for emergencies and must be declared in the PR. For agents the agreement gate
+refuses `git push` and every hook-skipping spelling of `git commit` it parses (`-n` as an option,
+alone or in a short cluster, `--no-verify` and its abbreviations, environment prefixes, git options
+before the subcommand; option values are values, abbreviated or unknown options are refused). `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` repeat the
+common spellings for when a hook times out; they match command text, so they are a partial second
+fence (see `AGREEMENT_REVIEW.md`). A human terminal is outside both.
 
 **Wiring check.** The harness check reads only the executable surface of a host file — `command`
-strings in JSON adapters, non-comment lines in shell hooks — so a commented-out invocation counts as
-unwired even when the script name survives in a comment.
+strings under `hooks.<Event>` in JSON adapters, non-comment lines in shell hooks — so a commented-out
+invocation counts as unwired even when the script name survives in a comment. The reverse direction
+matches repo-root `scripts/…` paths only: a command without a script (`pnpm lint`) or a path under
+another directory (`apps/web/scripts/…`) is not compared with the declarations, so wrap such a gate
+in a `scripts/` file when it must be declared.
 
 Local agent runtime state (`.claude/skills/.omc/**`, `.codex/worktrees/**`, `.claude/worktrees/**`,
 `.serena/**`) is excluded from harness scanning and is not repository policy.
@@ -265,7 +314,7 @@ not the description.
 
 1. Edit `.agents/harness.yaml` first — it is the contract, the host files are adapters.
 2. Mirror the change into every host file the intent declares (`.claude/settings.json`,
-   `.codex/hooks.json`, `.husky/pre-commit`).
+   `.codex/hooks.json`, `.husky/*`).
 3. Run `__PACKAGE_MANAGER__ test:harness` and paste the result.
 4. Open a PR describing which layer changed and why the rule could not live one layer lower.
 

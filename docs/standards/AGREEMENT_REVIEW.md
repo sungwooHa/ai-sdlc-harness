@@ -61,8 +61,9 @@ that gap, present the current state, and agree the remaining work explicitly.
 The implement adapter reads the referenced snapshot and implements only the approved file scope.
 Use Write/Edit or Codex apply_patch for edits. For deletion/rename use the scoped helper commands
 `python3 scripts/agreement-gate.py remove <path>` or `move <source> <target>`. Arbitrary mutation
-shell commands and unsupported tools are refused. A simple `git switch -c feature/<name>` is
-allowed after approval. Prepare isolated checkouts outside this flow; use one change per worktree.
+shell commands and unsupported tools are refused. A simple `git switch -c <branch>` whose name
+fully matches `agreement_gate.branch_pattern` (default `feature/<slug>(/<part>)*`) is allowed
+after approval. Prepare isolated checkouts outside this flow; use one change per worktree.
 Run `python3 scripts/agreement-gate.py verify` to execute the declared checks and record their
 exit codes against current source hashes. Editing source invalidates that evidence. Run fresh
 read-only code review and repair findings, then verify again if source changed. Code review assesses correctness against the
@@ -114,3 +115,94 @@ fallback exists for hosts without UserPromptSubmit and must be described as weak
 Do not claim that a matching approval command proves the human read or understood the HTML.
 Native host behavior and trust settings require a deployment smoke test; payload tests alone do
 not establish coverage for every host version. See the official host hook documentation.
+
+## Gate configuration and switching off
+
+`agreement_gate` in `.agents/harness.yaml` holds the lists the gate reads; approval, scope and
+verification decisions stay in `scripts/agreement-gate.py`. `check:harness` validates them.
+A missing list opens nothing; a malformed one blocks the call.
+
+Every shell command must be one direct command: shell metacharacters (`; & | > < $`, backquote,
+backslash, newline) and unquoted `* ? [ ] { } ( )` are refused, because globs, brace expansion and
+zsh glob qualifiers add arguments (or run code) the gate never sees. Quote such arguments.
+Environment assignments before the command (`HUSKY=0 git commit`) and git options before the
+subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env`, `-p`,
+`--no-pager`, ...) are refused for every command, listed or not.
+
+- `allowed_subagents` (default `Explore`, `Plan`, `verifier`, `general-purpose`): subagent types
+  the Agent/Task tool may start. A call without `subagent_type` counts as `general-purpose`, the
+  host default that `/review-since` starts. A subagent's own tool calls pass the same PreToolUse
+  hook (the payload carries `agent_id`/`agent_type`), so a listed type gains no edit path.
+- `read_only_commands`: commands that run before and after approval, no wildcards. Each entry is
+  an argv prefix (`["git", "log"]`: any later argument opens) or `{"exact": [...]}` (only that
+  whole argv). An entry that names a script or a path must be exact (`check:harness` and the gate
+  both refuse it as a prefix): a prefix would hand the script any argument, such as
+  `--repo-root <another checkout>`. So must an entry that starts with a script runner (`pnpm`,
+  `npm`, `npx`, `yarn`, `bun`, `node`, `python`, `python3`, `bash`, `sh`, `uv`, `poetry`) and names
+  more than the runner (`pnpm check:harness`, `npm run x`, `python3 -m pkg`). The default list opens
+  `python3 scripts/check-agent-harness.py --format text` exactly, and `git merge-base` for
+  `__PREFIX__-ui-review`. These stay refused whatever the list says: unsafe flags (`rg --pre`/`--hostname-bin`; git
+  `--output`, `--ext-diff`, `--textconv`, `--no-index`, `--open-files-in-pager`, and `-O` in any
+  short cluster) and gate-owned commands in any spelling (`git add|commit|switch|push|checkout`;
+  an argument naming `agreement-gate` for any program except git and the plain readers `cat`,
+  `head`, `tail`, `wc`, `rg`, `grep`, `ls`, which may read the gate's files). A listed command never records
+  verification; only `agreement-gate.py verify` does.
+- `reviewed_whole_programs`: a one-token `read_only_commands` entry (`["rg"]`) opens every argument
+  of that program, so `check:harness` refuses it unless the program is named here too. Add a name
+  only after checking that no argument of the program writes files, runs code, or reaches a
+  gate-owned command: a bare `git` reaches `git ci -n` through an alias, a bare `python3` runs any
+  code. Prefer listing the subcommand (`["git", "log"]`).
+- `agent_browser`: screen checks with `agent-browser`, before and after approval. Write the command
+  words first and options after them (`agent-browser snapshot -i --json`). `commands` maps the
+  allowed command words (one to three, e.g. `set viewport`) to their `flags` and `args`;
+  `global_flags` apply to every command. A flag's value shape is `""` (switch), `"path"`, or a regex
+  the value must fully match. `args` is `null` for free text (selectors, URLs, typed text) or a
+  list of slots `path`, `path?` (optional) and `text`. A `path` value must be absolute and resolve,
+  after `..` and symlinks, inside `artifact_dir` (`$TMPDIR/<name>`: mode 0700, owned by you, never a
+  symlink, never inside or around the checkout; the gate creates it 0700 and refuses an existing one
+  with any group or other permission). Relative and `~` paths are refused: the agent-browser daemon
+  resolves a relative path from its own working directory, and quoting decides whether the shell
+  expands `~`. The refusal message prints the resolved directory to use. `batch`, `chat`,
+  `connect`, `upload` and `--cdp`, `--auto-connect`, `-p`/`--provider`, `--executable-path`,
+  `--args`, `--extension`, `--config`, `--init-script` stay refused whatever the lists say, and every
+  call is refused while `./agent-browser.json` exists (it can set all of those). `read_only_commands`
+  never opens `agent-browser`. agent-browser takes its global options from any position, so an
+  option value or text argument that starts with `-` is refused (negative numbers such as
+  `mouse wheel -50 0` excepted); otherwise `scroll down -s --profile <dir>` would hide a profile
+  directory inside a selector slot. Not opened by design: element screenshots (a lone `screenshot`
+  argument may be read as a path). A download a page starts by itself lands in agent-browser's
+  default location, which the gate does not see. After approval, Stop and pre-commit refuse
+  changed or new non-ignored files in the working tree outside scope (`git diff` plus untracked
+  files `git ls-files --others --exclude-standard` lists); they do not see writes under `.git/`,
+  ignored paths or outside the checkout, and Stop checks no files while a draft is pending.
+- `branch_pattern`: full-match regex for `git switch -c <branch>` after approval.
+
+**Second fence.** A hook that times out or fails to start does not block the tool call.
+`.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules`
+(`prefix_rule(decision="forbidden")`) repeat part of the gate without the hook: `git push`;
+`git commit` with `--no-verify` (or an abbreviation) or `-n`, `-nm`, `-an...` clusters; git `-c`,
+`-C`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env` before the subcommand. Claude rules
+glob over the whole command text, quotes included, so they cannot tell a message from an option:
+they match `-n`/`-an` clusters only right after `git commit` or as the last word (a message such as
+`-m "fix: rg -n output"` passes), `--no-v...` anywhere (a message containing ` --no-v` is refused
+there; reword it), and `VAR=value` or `env` before `git commit`/`git push`. So `git commit -m x -n
+-q` passes Claude's fence. Codex rules compare whole tokens from the start, so `git commit -m x
+--no-verify`, `git commit -qn`, `git --git-dir=.git commit` and environment prefixes pass Codex's
+fence. The gate is the precise layer: it reads every `git commit` option as git does (abbreviated or
+unknown options are refused) and refuses all of them.
+
+**`enabled: false` is not off.** The gate treats a disabled or missing `agreement_gate` as broken
+wiring and fails closed: every PreToolUse call is refused (exit 2), UserPromptSubmit refuses every
+prompt (on Claude the prompt never reaches the model), Stop exits 2 so the host keeps the session
+going, and `check-staged` refuses every commit. To switch the gate off, remove wiring and
+declaration in one change:
+
+1. `.claude/settings.json` and `.codex/hooks.json`: the `agreement-gate.py` entries under
+   `UserPromptSubmit`, `PreToolUse` and `Stop`.
+2. `.husky/pre-commit`: the `agreement-gate.py check-staged` line.
+3. `.agents/harness.yaml`: the `agreement_runtime` and `agreement_precommit` entries in
+   `shared_hook_intents` (left alone, `check:harness` reports them unwired).
+4. `package.json` `test:harness`: drop `scripts/test/agreement-gate.test.py`, which asserts the wiring.
+
+Update `AGENTS.md` and the agreement skill in the same change; they describe the gate. The second
+fence is independent: keep or remove it deliberately.

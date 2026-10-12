@@ -248,10 +248,17 @@ def check_husky_wiring(repo: Path) -> str | None:
         hooks_dir = _resolved_hooks_dir(repo, hooks_path)
     except Exception:
         return None  # git 을 못 부르면 판정하지 않는다(fail-open)
-    if hooks_dir is not None and (hooks_dir / "pre-commit").is_file():
+    # pre-commit 은 늘, 그 밖에 .husky/ 에 있는 훅(commit-msg 등)은 파일이 있을 때 러너가 있어야 한다.
+    husky = repo / ".husky"
+    hooks = ["pre-commit"] + sorted(
+        p.name for p in (husky.iterdir() if husky.is_dir() else [])
+        if p.is_file() and p.name != "pre-commit" and not p.name.startswith((".", "_")) and p.suffix != ".sh"
+    )
+    missing = hooks if hooks_dir is None else [h for h in hooks if not (hooks_dir / h).is_file()]
+    if not missing:
         return None
-    return ("agent-harness-fast-guard: husky pre-commit 미배선 — 이 상태의 커밋은 "
-            "디자인 가드·ledger·문서 가드를 전부 건너뜁니다. "
+    return (f"agent-harness-fast-guard: husky {', '.join(missing)} 미배선 — 이 상태의 커밋은 "
+            "그 훅의 검사(디자인 가드·ledger·문서 가드·커밋 메시지)를 건너뜁니다. "
             "`bash scripts/harness/ensure-husky.sh` (worktree·fresh clone) 또는 `pnpm install` 로 복구하세요.")
 
 

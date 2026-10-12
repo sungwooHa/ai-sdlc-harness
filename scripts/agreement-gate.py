@@ -13,8 +13,10 @@ import json
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -82,8 +84,11 @@ def relative(repo, value, cwd=None):
     if '..' in path.parts:
         raise Blocked('parent traversal is not allowed')
     raw = path if path.is_absolute() else (cwd or repo) / path
+    # The checkout may be spelled through a symlinked ancestor (macOS /var -> /private/var):
+    # anchor at the shortest prefix that resolves to it. Links inside the checkout stay refused.
+    base = next((p for p in (*reversed(raw.parents), raw) if p.resolve() == repo), repo)
     try:
-        rel = raw.relative_to(repo)
+        rel = raw.relative_to(base)
         for i in range(1, len(rel.parts) + 1):
             if repo.joinpath(*rel.parts[:i]).is_symlink():
                 raise Blocked('symlink targets need an explicit separate workflow')
@@ -289,17 +294,194 @@ def draft_target(repo, rel):
     return target.parent == views and target.suffix == '.html'
 
 
-def read_only_shell(argv):
-    if not argv:
+# Flags that make a listed program write files or run other programs stay refused whatever the list opens.
+UNSAFE_FLAGS = {'rg': ('--pre', '--hostname-bin'),
+                'git': ('--output', '--ext-diff', '--textconv', '--no-index', '--open-files-in-pager')}
+# Commands the gate itself admits or refuses; no read_only_commands entry can open them. git global
+# options are refused before this (see pretool), so argv[1] is the git subcommand.
+GIT_OWNED = ('add', 'commit', 'switch', 'push', 'checkout')
+# Programs that only read their file arguments: these alone may name the gate's own files.
+GATE_FILE_READERS = ('cat', 'head', 'tail', 'wc', 'rg', 'grep', 'ls')
+ENV_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
+# A token naming a script or a path: such an entry takes any later argument as a prefix, so it must be exact.
+SCRIPT_TOKEN = re.compile(r'/|\.(py|sh|[cm]?js|ts|rb|pl)$')
+# A runner with one more word (`pnpm check:harness`, `npm run x`, `python3 -m pkg`) names a script that takes
+# any later argument, so that entry is exact too. A bare runner is a whole program (reviewed_whole_programs).
+SCRIPT_RUNNERS = ('pnpm', 'npm', 'npx', 'yarn', 'bun', 'node', 'python', 'python3', 'bash', 'sh', 'uv', 'poetry')
+
+
+def listed(cfg, key, valid):
+    value = cfg.get(key, [])  # A missing list opens nothing.
+    if not isinstance(value, list) or not all(valid(item) for item in value):
+        raise Blocked(f'agreement_gate.{key} is malformed; see docs/standards/AGREEMENT_REVIEW.md')
+    return value
+
+
+def argv_list(value):
+    return isinstance(value, list) and value and all(isinstance(s, str) and s for s in value)
+
+
+def command_entry(item):
+    """["git", "log"]: an argv prefix. {"exact": [...]}: the whole argv. A script is named only exactly."""
+    if isinstance(item, dict):
+        return list(item) == ['exact'] and argv_list(item['exact'])
+    return argv_list(item) and not any(SCRIPT_TOKEN.search(s) for s in item) and not (
+        item[0] in SCRIPT_RUNNERS and len(item) > 1)
+
+
+def read_only_shell(argv, cfg):
+    # An empty prefix or an empty token would open more than its author wrote.
+    entries = listed(cfg, 'read_only_commands', command_entry)
+    if not argv or not any(argv == e['exact'] if isinstance(e, dict) else argv[:len(e)] == e for e in entries):
         return False
-    if argv[0] in ('pwd', 'ls', 'cat', 'head', 'tail', 'wc'):
-        return True
-    if argv[0] == 'rg':
-        return not any(a.startswith(('--pre', '--hostname-bin')) for a in argv[1:])
-    if argv[0] == 'git' and len(argv) > 1:
-        return argv[1] in ('status', 'diff', 'log', 'show', 'ls-files', 'rev-parse') and not any(
-            a.startswith(('--output', '--ext-diff', '--textconv', '--no-index')) for a in argv[2:])
-    return False
+    if (argv[0] == 'git' and argv[1:2] and argv[1] in GIT_OWNED) or (
+            argv[0] not in ('git', *GATE_FILE_READERS) and any('agreement-gate' in a for a in argv)):
+        return False  # gate-owned, however the path or the list is spelled (git and readers only read the file)
+    # `-O` also inside short clusters (`git grep -iO`): it opens matches in a pager.
+    return not any(a.startswith(UNSAFE_FLAGS.get(argv[0], ())) or (argv[0] == 'git' and re.match(r'-[A-Za-z]*O', a))
+                   for a in argv[1:])
+
+
+# Every `git commit` option of git 2.50.1: the option lines of `git commit -h`, the hidden --allow-empty and
+# --allow-empty-message from its usage lines, and --no-edit, the one --no-* negation opened. "value" takes
+# `=value` or the rest of a short cluster, else the next token even when it starts with - (`-m -n` is the
+# message "-n"); "optional" takes only an attached value (-Skey, -uno, --gpg-sign=key); "flag" takes none;
+# "skip" bypasses hooks. Any other spelling (abbreviations such as --amen or --no-verif, other --no-*, unknown
+# options) is refused, so the gate never reads a token differently from git. scripts/test/agreement-gate.test.py
+# compares this table with the installed `git commit -h`; when it fails after a git upgrade, add the new option
+# with the shape its help line shows (`<arg>` value, `[=<arg>]` optional, none flag) and bump the version.
+COMMIT_OPTIONS = {
+    'quiet': 'flag', 'verbose': 'flag', 'file': 'value', 'author': 'value', 'date': 'value', 'message': 'value',
+    'reedit-message': 'value', 'reuse-message': 'value', 'fixup': 'value', 'squash': 'value', 'reset-author': 'flag',
+    'trailer': 'value', 'signoff': 'flag', 'template': 'value', 'edit': 'flag', 'no-edit': 'flag', 'cleanup': 'value',
+    'status': 'flag', 'gpg-sign': 'optional', 'all': 'flag', 'include': 'flag', 'interactive': 'flag', 'patch': 'flag',
+    'only': 'flag', 'no-verify': 'skip', 'verify': 'flag', 'dry-run': 'flag', 'short': 'flag', 'branch': 'flag',
+    'ahead-behind': 'flag', 'porcelain': 'flag', 'long': 'flag', 'null': 'flag', 'amend': 'flag',
+    'no-post-rewrite': 'skip', 'post-rewrite': 'flag', 'untracked-files': 'optional', 'pathspec-from-file': 'value',
+    'pathspec-file-nul': 'flag', 'allow-empty': 'flag', 'allow-empty-message': 'flag',
+}
+COMMIT_SHORT = {'q': 'quiet', 'v': 'verbose', 'F': 'file', 'm': 'message', 'c': 'reedit-message', 'C': 'reuse-message',
+                's': 'signoff', 't': 'template', 'e': 'edit', 'S': 'gpg-sign', 'a': 'all', 'i': 'include', 'p': 'patch',
+                'o': 'only', 'n': 'no-verify', 'z': 'null', 'u': 'untracked-files'}
+
+
+def commit_skips_hooks(args):
+    """The first option that skips the hooks or that COMMIT_OPTIONS does not read as git does, else None.
+    A short cluster is read letter by letter: a value letter takes the rest of the cluster (or else the next
+    token), an optional one only the rest. Options after a pathspec still count; nothing after `--` does."""
+    rest = iter(args)
+    for arg in rest:
+        if arg == '--':
+            return None
+        if arg.startswith('--'):
+            name, attached, _ = arg[2:].partition('=')
+            kind = COMMIT_OPTIONS.get(name)
+            if kind in (None, 'skip') or (attached and kind == 'flag'):
+                return arg
+            if kind == 'value' and not attached:
+                next(rest, None)
+        elif arg.startswith('-'):
+            for i, letter in enumerate(arg[1:], 1):
+                kind = COMMIT_OPTIONS.get(COMMIT_SHORT.get(letter))
+                if kind in (None, 'skip'):
+                    return arg
+                if kind != 'flag':
+                    if kind == 'value' and i == len(arg) - 1:
+                        next(rest, None)
+                    break
+    return None
+
+
+def unquoted(command):
+    """The command text outside quotes (backslash, `$` and backquote are refused before this runs)."""
+    out, quote = [], None
+    for ch in command:
+        if quote:
+            quote = None if ch == quote else quote
+        elif ch in '\'"':
+            quote = ch
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
+BROWSER_KEY = 'agreement_gate.agent_browser'
+# Other browsers or programs, local files, AI chat and command batches: no agent_browser entry opens these.
+BROWSER_REFUSED = ('batch', 'chat', 'connect', 'upload')
+BROWSER_REFUSED_FLAGS = ('--cdp', '--auto-connect', '-p', '--provider', '--executable-path', '--args',
+                         '--extension', '--config', '--init-script')
+NEGATIVE_NUMBER = re.compile(r'-\d+(\.\d+)?')
+
+
+def browser_root(repo, browser):
+    """The one directory agent-browser may write to: own, mode 0700, real, outside the checkout."""
+    path = Path(tempfile.gettempdir()) / browser['artifact_dir'][len('$TMPDIR/'):]
+    if path.is_symlink():
+        raise Blocked(f'agent-browser artifact directory {path} must not be a symlink')
+    path.mkdir(mode=0o700, exist_ok=True)
+    if stat.S_IMODE(path.lstat().st_mode) & 0o077:
+        raise Blocked(f'agent-browser artifact directory {path} must be mode 0700 (chmod 700 it)')
+    root = path.resolve()
+    if root.stat().st_uid != os.getuid() or root == repo or repo in root.parents or root in repo.parents:
+        raise Blocked(f'agent-browser artifact directory {root} must be your own directory outside the checkout')
+    return root
+
+
+def browser_path(repo, browser, value):
+    root = browser_root(repo, browser)
+    # Absolute only: agent-browser's daemon resolves a relative path from its own working directory.
+    target = Path(value).resolve()  # .. and symlinks resolved
+    if not Path(value).is_absolute() or (target != root and root not in target.parents):
+        raise Blocked(f'agent-browser writes files only under {root} (absolute path); got {value}')
+
+
+def browser_command(repo, argv, cfg):
+    """agent-browser <command words> [options and arguments]: every word, option and file path is listed."""
+    browser = cfg.get('agent_browser')
+    if not (isinstance(browser, dict) and isinstance(browser.get('commands'), dict)
+            and isinstance(browser.get('global_flags'), dict) and isinstance(browser.get('artifact_dir'), str)
+            and re.fullmatch(r'\$TMPDIR/[A-Za-z0-9_-][A-Za-z0-9._-]*', browser['artifact_dir'])):
+        raise Blocked(f'{BROWSER_KEY} is missing or malformed; see docs/standards/AGREEMENT_REVIEW.md')
+    if os.path.lexists(repo / 'agent-browser.json'):
+        raise Blocked('agent-browser reads ./agent-browser.json from the checkout; remove it before screen checks')
+    if argv[1:2] and argv[1] in BROWSER_REFUSED or any(a.split('=', 1)[0] in BROWSER_REFUSED_FLAGS for a in argv):
+        raise Blocked('agent-browser ' + ', '.join(BROWSER_REFUSED + BROWSER_REFUSED_FLAGS) + ' stay refused')
+    words = next((n for n in (3, 2, 1) if len(argv) > n and not any(a.startswith('-') for a in argv[1:n + 1])
+                  and ' '.join(argv[1:n + 1]) in browser['commands']), 0)
+    if not words:
+        raise Blocked(f'agent-browser command {" ".join(argv[1:3])!r} is not in {BROWSER_KEY}.commands '
+                      '(write the command words first, options after them)')
+    name = ' '.join(argv[1:words + 1])
+    spec = browser['commands'][name] or {}
+    flags = {**browser['global_flags'], **(spec.get('flags') or {})}
+    positional, rest = [], iter(argv[words + 1:])
+    for token in rest:
+        if not token.startswith('-') or NEGATIVE_NUMBER.fullmatch(token):
+            positional.append(token)
+            continue
+        if token not in flags:
+            raise Blocked(f'agent-browser option {token} is not listed for {name!r} '
+                          f'({BROWSER_KEY}.global_flags or .commands[{name!r}].flags)')
+        shape, value = flags[token], None
+        if shape:
+            value = next(rest, None)
+            if value is None:
+                raise Blocked(f'agent-browser option {token} needs a value')
+            # agent-browser takes its global options from any position, also from a value slot.
+            if value.startswith('-') and not NEGATIVE_NUMBER.fullmatch(value):
+                raise Blocked(f'agent-browser {token} value {value!r} starts with -: values that look like '
+                              'options are refused (negative numbers excepted)')
+        if shape == 'path':
+            browser_path(repo, browser, value)
+        elif shape and not re.fullmatch(shape, value):
+            raise Blocked(f'agent-browser {token} {value!r} does not match {BROWSER_KEY} ({shape})')
+    slots = spec.get('args')  # None: free text (selectors, URLs, typed text)
+    if slots is not None:
+        if not len([s for s in slots if not s.endswith('?')]) <= len(positional) <= len(slots):
+            raise Blocked(f'agent-browser {name} takes {slots} ({BROWSER_KEY}.commands[{name!r}].args)')
+        for slot, value in zip(slots, positional):
+            if slot.rstrip('?') == 'path':
+                browser_path(repo, browser, value)
 
 
 def pretool(repo, payload):
@@ -351,8 +533,20 @@ def pretool(repo, payload):
         command = args.get('command', '')
         if not isinstance(command, str) or any(c in command for c in '\n\r;&|><`$\\'):
             raise Blocked('use one direct command; compound shells and substitutions cannot be scope-checked')
+        if any(c in unquoted(command) for c in '*?[]{}()'):
+            # Globs, braces and zsh glob qualifiers expand into arguments (or run code) the gate never sees.
+            raise Blocked('quote arguments that contain * ? [ ] { } ( ); shell expansion cannot be scope-checked')
         argv = shlex.split(command)
-        if read_only_shell(argv):
+        _, cfg = config(repo)
+        if argv and ENV_ASSIGNMENT.match(argv[0]):
+            raise Blocked('environment assignments before a command are refused; run the command itself')
+        if argv[:1] == ['git'] and argv[1:2] and argv[1].startswith('-'):
+            raise Blocked('git options before the subcommand (-C, -c, --git-dir, --work-tree, --exec-path, '
+                          '--config-env, -p, --no-pager, ...) are refused')
+        if argv[:1] == ['agent-browser']:
+            browser_command(repo, argv, cfg)  # Owns agent-browser; read_only_commands never reopens it.
+            return
+        if read_only_shell(argv, cfg):
             return
         if argv in (['python3', 'scripts/adr-gate.py'], ['python3', 'scripts/adr-gate.py', '--all']):
             return  # Read-only structure check; verification still needs a recorded execution.
@@ -390,17 +584,28 @@ def pretool(repo, payload):
             targets = argv[2:]
             if targets and all(not p.startswith('-') and relative(repo, p) in data['scope']['paths'] for p in targets):
                 return
-        if len(argv) == 4 and argv[:3] == ['git', 'switch', '-c'] and re.fullmatch(r'feature/[a-z0-9-]+', argv[3]):
+        branch = cfg.get('branch_pattern')  # Missing: no branch creation.
+        if len(argv) == 4 and argv[:3] == ['git', 'switch', '-c'] and isinstance(branch, str) and re.fullmatch(branch, argv[3]):
             approved(repo)
             return
         if argv[:2] == ['git', 'commit']:
             approved(repo)
-            if '--no-verify' not in argv and '-n' not in argv and not any(a.startswith(('--no-', '--config', '--exec')) for a in argv[2:]):
-                check_scope(repo, approved(repo))
-                delivery(repo, staged=True)
-                return
+            refused = commit_skips_hooks(argv[2:])
+            if refused:
+                raise Blocked(f'git commit {refused} is refused: commits run their hooks (-n, --no-verify, --no-* '
+                              'except --no-edit), and options are spelled in full as `git commit -h` lists them '
+                              '(no abbreviations or unknown options)')
+            check_scope(repo, approved(repo))
+            delivery(repo, staged=True)
+            return
+        if argv[:1] != ['git'] and any('agreement-gate' in a for a in argv):
+            raise Blocked('the agreement gate runs only as `python3 scripts/agreement-gate.py prepare|status|verify|'
+                          'remove|move`; read its files with Read/Grep or cat/rg')
         raise Blocked('shell execution needs a declared verification command; use agreement-gate.py verify')
-    if tool in ('Agent', 'Task') and args.get('subagent_type') in ('Explore', 'Plan'):
+    # A subagent's own tool calls pass this same hook, so a listed reviewer gains no edit path.
+    # Without subagent_type the host starts its default general-purpose agent; match that name.
+    if tool in ('Agent', 'Task') and (args.get('subagent_type') or 'general-purpose') in listed(
+            config(repo)[1], 'allowed_subagents', lambda name: isinstance(name, str) and name):
         return
     raise Blocked(f'unsupported tool {tool!r}: no verified mutation contract; add an explicit adapter')
 

@@ -73,13 +73,14 @@ flowchart TB
 | 항상 로드 | `AGENTS.md`, `CLAUDE.md` | 모든 세션에 들어가는 운영 계약 (120줄 상한) |
 | 앱별 | `apps/<app>/AGENTS.md` | 그 앱 아래에서 일할 때만 로드 (80줄 상한) |
 | 온디맨드 | `.agents/skills/**` | 이름으로 호출하는 스킬 |
-| 결정적 게이트 | `.claude/settings.json`, `.codex/hooks.json`, `.husky/pre-commit` | 모델 판단과 무관하게 도는 훅 |
+| 결정적 게이트 | `.claude/settings.json`, `.codex/hooks.json`, `.husky/pre-commit`, `.husky/commit-msg` | 모델 판단과 무관하게 도는 훅 |
 | 산출물 | `docs/changes/**` | 변경마다 로컬에만 두는 의도·명세·계획 작업 폴더 (커밋 금지, 이력은 PR) |
 | 회귀 | `.claude/evals/**` | 에이전트가 규칙을 따르는지 재는 행동 케이스 |
 
 `.agents/harness.yaml` 이 계약의 단일 정본이고 호스트 파일은 그 어댑터다.
 훅을 하나 추가하려면 `shared_hook_intents` 에 선언하고 해당 호스트 파일에 배선한다.
-선언과 배선 중 하나만 있으면 `check:harness` 가 실패한다.
+선언과 배선 중 하나만 있거나 선언과 다른 이벤트에 배선하면 `check:harness` 가 실패한다
+(호스트 파일이 실행하는 `scripts/…` 경로 기준).
 
 ## 스킬 계층
 
@@ -103,7 +104,8 @@ flowchart TB
 ## 검사는 스크립트가 한다
 
 - `scripts/check-agent-harness.py` — `.agents/harness.yaml` 의 선언과 실제 호스트 파일이 어긋난 지점을 잡는다.
-  선언만 있고 배선이 없는 훅, 어댑터가 감싸는데 호출 불가로 잠긴 스킬, 심링크가 아닌 스킬 미러 등.
+  선언만 있고 배선이 없는 훅, 배선만 있고 선언이 없는 훅, 선언과 다른 이벤트에 걸린 훅,
+  어댑터가 감싸는데 호출 불가로 잠긴 스킬, 심링크가 아닌 스킬 미러 등.
 - `scripts/agent-harness-fast-guard.py` — 변경 파일만 빠르게 훑는다. 활성 문서 루트 밖에 생긴 문서,
   사용자 홈 디렉터리가 박힌 절대경로, husky 훅이 배선되지 않은 체크아웃을 잡는다.
 - `scripts/protected-paths-guard.py` — `protected_paths` 에 선언된 파일에 대한 에이전트의 편집을 PreToolUse 에서 막는다.
@@ -117,6 +119,8 @@ flowchart TB
 - `scripts/agreement-gate.py` — Claude/Codex의 입력·도구 실행 전·종료 훅과 pre-commit에서
   승인, 정확한 파일 범위, 현재 코드의 검증 기록을 검사한다. 스킬은 준비·진행을 맡는다.
   신뢰·활성화된 훅이 필요하며 OS 보안 격리는 아니다.
+- `scripts/commit-msg-gate.py` — `.husky/commit-msg` 에서 커밋 메시지 첫 줄이 형식을 따르는지,
+  `Plan-Ref` 외 트레일러(`Co-Authored-By` 등)가 없는지 본다. 규칙 원본은 `docs/standards/COMMIT_CONVENTION.md`.
 - `scripts/harness/agreement-snapshot.py` — 승인 참조와 초안의 파일 해시를 보존한다.
   기존 리비전 덮어쓰기를 거절하고 `--check`로 합의본 변조·누락을 검출한다. 승인 자체를 인증하지는 않는다.
 - `scripts/harness/check-plan-artifact.sh` — 여러 앱·공유 계약을 건드린 PR 에 `Plan-Ref` 커밋

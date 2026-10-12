@@ -37,6 +37,10 @@ USER_PATH_PATTERNS = (
 )
 # This file names the removed scripts on purpose (see REMOVED_SCRIPT_REFS).
 SELF_REL = "scripts/check-agent-harness.py"
+# A `scripts/…` path in a hook command (see HarnessCheck._script_refs for which ones count).
+SCRIPT_REF = re.compile(r"scripts/[\w./-]*\w")
+# Script runners, as scripts/agreement-gate.py SCRIPT_RUNNERS: with one more word the entry must be exact.
+SCRIPT_RUNNERS = ("pnpm", "npm", "npx", "yarn", "bun", "node", "python", "python3", "bash", "sh", "uv", "poetry")
 
 
 @dataclass
@@ -70,6 +74,7 @@ class HarnessCheck:
         self._check_protected_paths()
         self._check_documentation_layout()
         self._check_artifact_chain()
+        self._check_agreement_gate()
         self._check_repo_wide_terms()
         self._check_ci()
 
@@ -138,8 +143,22 @@ class HarnessCheck:
             self._error("missing_skill_root", root_rel, "skill root directory is missing")
             return
         exemptions = set(self.manifest.get("local_artifacts", {}).get("claude_skill_symlink_exemptions", []))
+        # Personal skills (`local-*`) are per clone: the real directory lives under the mirror root,
+        # the skill-root entry links back to it, and .git/info/exclude hides both. Not harness surface.
+        local_prefix = skills.get("local_prefix")
 
         names = sorted(p.name for p in root.iterdir() if p.is_dir())
+        if local_prefix:
+            names = [name for name in names if not name.startswith(local_prefix)]
+            # The skip covers untracked clones only; a committed personal skill is shared surface.
+            code, tracked = self._run(["git", "ls-files", "--", f"{root_rel}/{local_prefix}*", f"{mirror_rel}/{local_prefix}*"])
+            for rel in tracked.splitlines() if code == 0 else []:
+                self._error(
+                    "tracked_local_skill",
+                    rel,
+                    f"`{local_prefix}*` skills are personal: `git rm --cached` it and hide it in .git/info/exclude "
+                    "(docs/standards/AGENT_HARNESS.md, Personal skills)",
+                )
         for name in names:
             skill_dir = root / name
             if not ((skill_dir / "SKILL.md").is_file() or (skill_dir / "SKILL.md.disabled").is_file()):
@@ -157,6 +176,8 @@ class HarnessCheck:
             for entry in sorted(mirror_root.iterdir(), key=lambda p: p.name):
                 rel = f"{mirror_rel}/{entry.name}"
                 if rel in exemptions:
+                    continue
+                if local_prefix and entry.name.startswith(local_prefix):
                     continue
                 mirrored.add(entry.name)
                 expected = f"../../{root_rel}/{entry.name}"
@@ -282,7 +303,8 @@ class HarnessCheck:
             except (OSError, json.JSONDecodeError) as exc:
                 self._error("invalid_host_config", rel, f"must be valid JSON: {exc}")
 
-        for intent in self.manifest.get("shared_hook_intents", []):
+        intents = [i for i in self.manifest.get("shared_hook_intents", []) if isinstance(i, dict)]
+        for intent in intents:
             intent_id = intent.get("id", "?")
             scripts = intent.get("required_scripts", [])
             for script in scripts:
@@ -293,46 +315,112 @@ class HarnessCheck:
                 if not host_path.is_file():
                     self._error("missing_hook_host_file", host_file, f"hook intent {intent_id} declares this host file")
                     continue
-                text = self._hook_surface(host_path)
-                for script in scripts:
-                    if script not in text:
+                wiring = self._hook_wiring(host_path)
+                if wiring is None:
+                    continue  # reported as invalid_host_config
+                # Each declared event must run the script; without an event, anywhere in the file.
+                # Compare exact repo-root paths, as the reverse direction does: `apps/web/scripts/x.py`
+                # or `scripts/x.py.bak` does not run `scripts/x.py`.
+                for event in self._intent_events(intent) or [None]:
+                    text = wiring.get(event, "") if event else "\n".join(wiring.values())
+                    for script in scripts:
+                        if script not in self._script_refs(text):
+                            on = f" on {event}" if event else ""
+                            self._error(
+                                "unwired_hook_intent",
+                                host_file,
+                                f"hook intent {intent_id} ({host}) does not run {script}{on}",
+                            )
+
+        # Reverse direction: a hook wired without a declaration is invisible to anyone reading the
+        # manifest. Every root `scripts/…` path a host file runs needs an intent that lists this host
+        # file (a script shared by several intents is told apart by host_files) and this event.
+        husky_dir = self.repo_root / ".husky"
+        husky_files = sorted(
+            f".husky/{p.name}" for p in (husky_dir.iterdir() if husky_dir.is_dir() else [])
+            if p.is_file() and not p.name.startswith((".", "_")) and p.suffix != ".sh"
+        )
+        for host_file in [".claude/settings.json", ".codex/hooks.json", *husky_files]:
+            host_path = self.repo_root / host_file
+            wiring = self._hook_wiring(host_path) if host_path.is_file() else None
+            for event, text in (wiring or {}).items():
+                for script in sorted(set(self._script_refs(text))):
+                    owners = [
+                        i for i in intents
+                        if host_file in (i.get("host_files") or {}).values() and script in (i.get("required_scripts") or [])
+                    ]
+                    if not owners:
                         self._error(
-                            "unwired_hook_intent",
+                            "undeclared_hook",
                             host_file,
-                            f"hook intent {intent_id} ({host}) does not reference {script}",
+                            f"{event} runs {script}, but no shared_hook_intents entry declares it for this host file",
+                        )
+                    elif not any(event in self._intent_events(i) for i in owners):
+                        declared = ", ".join(f"{i.get('id', '?')} ({i.get('event') or 'no event'})" for i in owners)
+                        self._error(
+                            "hook_event_mismatch",
+                            host_file,
+                            f"{script} runs on {event}, but its intents here declare {declared}",
                         )
 
-    def _hook_surface(self, host_path: Path) -> str:
-        """The part of a host file that actually runs hooks.
+    @staticmethod
+    def _intent_events(intent: dict[str, Any]) -> list[str]:
+        """`A|B|C` in an intent's event field names three events."""
+        return [e.strip() for e in str(intent.get("event") or "").split("|") if e.strip()]
+
+    def _hook_wiring(self, host_path: Path) -> dict[str, str] | None:
+        """The part of a host file that actually runs hooks, by event.
 
         A plain substring test passed when the invocation was commented out but
         the script name survived in a comment — the "documented, not enforced"
         phantom this repo has already been bitten by. JSON adapters contribute
-        only their `command` strings; shell hooks contribute only lines that are
-        not comments.
+        only the `command` strings under `hooks.<Event>`; a shell hook (husky)
+        contributes its non-comment lines under its own file name as the event.
+        None when a JSON adapter does not parse (reported as invalid_host_config).
         """
         text = self._read_text(host_path)
-        if host_path.suffix == ".json":
-            try:
-                data = json.loads(text)
-            except json.JSONDecodeError:
-                return text  # reported separately as invalid_host_config
-            commands: list[str] = []
+        if host_path.suffix != ".json":
+            return {host_path.name: "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))}
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        hooks = data.get("hooks") if isinstance(data, dict) else None
+        if not isinstance(hooks, dict):
+            return {}
 
-            def walk(node: object) -> None:
-                if isinstance(node, dict):
-                    for key, value in node.items():
-                        if key == "command" and isinstance(value, str):
-                            commands.append(value)
-                        else:
-                            walk(value)
-                elif isinstance(node, list):
-                    for item in node:
-                        walk(item)
+        def commands(node: object) -> Iterable[str]:
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    if key == "command" and isinstance(value, str):
+                        yield value
+                    else:
+                        yield from commands(value)
+            elif isinstance(node, list):
+                for item in node:
+                    yield from commands(item)
 
-            walk(data)
-            return "\n".join(commands)
-        return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        return {event: "\n".join(commands(entries)) for event, entries in hooks.items()}
+
+    @staticmethod
+    def _script_refs(text: str) -> list[str]:
+        """Repo-root `scripts/…` paths in executable hook text.
+
+        A path counts when it starts a word (`python3 scripts/x.py`) or follows a root expression
+        (`"$CLAUDE_PROJECT_DIR"/`, `$repo/`, `$(git rev-parse --show-toplevel)/`, `./`). A path under
+        a literal directory (`apps/web/scripts/x.sh`) belongs to that directory and does not count.
+        """
+        refs = []
+        for match in SCRIPT_REF.finditer(text):
+            before = text[: match.start()]
+            if before.endswith("/"):
+                segment = re.search(r"[\w.$-]*$", before[:-1]).group()
+                if segment not in ("", ".") and not segment.startswith("$"):
+                    continue
+            elif before and re.match(r"[\w.-]", before[-1]):
+                continue
+            refs.append(match.group())
+        return refs
 
     # ------------------------------------------------------ protected paths
     def _check_protected_paths(self) -> None:
@@ -437,6 +525,93 @@ class HarnessCheck:
                 if not case.get("id") or not case.get("prompt") or not isinstance(case.get("expect"), dict):
                     self._error("invalid_eval_case", f"{cases}:{index}", "case needs id, prompt, and an expect object")
 
+    # ------------------------------------------------------- agreement gate
+    def _check_agreement_gate(self) -> None:
+        """The gate opens exactly what these lists say, so a typo must fail here, not widen access."""
+        gate = self.manifest.get("agreement_gate")
+        if not isinstance(gate, dict):
+            return
+        subagents = gate.get("allowed_subagents")
+        if not isinstance(subagents, list) or not all(isinstance(s, str) and s for s in subagents):
+            self._error("agreement_gate_lists", MANIFEST_REL, "agreement_gate.allowed_subagents must list subagent type names")
+        commands = gate.get("read_only_commands")
+        if not isinstance(commands, list) or not all(self._command_entry(p) for p in commands):
+            self._error(
+                "agreement_gate_lists",
+                MANIFEST_REL,
+                'agreement_gate.read_only_commands must list argv prefixes (["git", "log"]) or {"exact": [argv]}; '
+                "no wildcards; an entry naming a script or path, or a script runner with more words "
+                "(pnpm check:harness), must be exact",
+            )
+        # A one-token entry opens every subcommand and argument of that program (`git` → `git ci -n`
+        # through an alias, `python3` → any code), so it must be named in reviewed_whole_programs too.
+        reviewed = gate.get("reviewed_whole_programs", [])
+        if not isinstance(reviewed, list) or not all(isinstance(s, str) and s for s in reviewed):
+            self._error("agreement_gate_lists", MANIFEST_REL, "agreement_gate.reviewed_whole_programs must list program names")
+            reviewed = []
+        for prefix in commands if isinstance(commands, list) else []:
+            if isinstance(prefix, list) and len(prefix) == 1 and prefix[0] not in reviewed:
+                self._error(
+                    "agreement_gate_lists",
+                    MANIFEST_REL,
+                    f"agreement_gate.read_only_commands entry {prefix} opens every argument of `{prefix[0]}`; "
+                    "list a subcommand, or add it to reviewed_whole_programs after review (AGREEMENT_REVIEW.md)",
+                )
+        pattern = gate.get("branch_pattern")
+        try:
+            valid = isinstance(pattern, str) and bool(re.compile(pattern))
+        except re.error:
+            valid = False
+        if not valid:
+            self._error("agreement_gate_lists", MANIFEST_REL, "agreement_gate.branch_pattern must be a valid regex")
+        browser = gate.get("agent_browser")
+        commands = browser.get("commands") if isinstance(browser, dict) else None
+        if not (
+            isinstance(browser, dict)
+            and re.fullmatch(r"\$TMPDIR/[A-Za-z0-9_-][A-Za-z0-9._-]*", str(browser.get("artifact_dir")))
+            and self._browser_flags(browser.get("global_flags"))
+            and isinstance(commands, dict)
+            and all(
+                isinstance(spec, dict)
+                and re.fullmatch(r"[a-z]+( [a-z]+){0,2}", name)
+                and self._browser_flags(spec.get("flags", {}))
+                and (spec.get("args") is None or (
+                    isinstance(spec["args"], list) and all(a in ("path", "path?", "text") for a in spec["args"])))
+                for name, spec in commands.items()
+            )
+        ):
+            self._error(
+                "agreement_gate_lists",
+                MANIFEST_REL,
+                'agreement_gate.agent_browser needs artifact_dir "$TMPDIR/<name>", global_flags and commands '
+                "in the shape docs/standards/AGREEMENT_REVIEW.md describes",
+            )
+
+    @staticmethod
+    def _command_entry(entry: object) -> bool:
+        """["git", "log"] opens that argv prefix; {"exact": [...]} only that whole argv. A prefix entry
+        naming a script or path would pass it any argument (`--repo-root <elsewhere>`), so those are exact;
+        so is a script runner with one more word (`pnpm check:harness`), as the gate's SCRIPT_RUNNERS."""
+        argv = entry.get("exact") if isinstance(entry, dict) and list(entry) == ["exact"] else entry
+        if not (isinstance(argv, list) and argv and all(isinstance(s, str) and s and "*" not in s for s in argv)):
+            return False
+        runner = argv[0] in SCRIPT_RUNNERS and len(argv) > 1
+        return isinstance(entry, dict) or not (runner or any(re.search(r"/|\.(py|sh|[cm]?js|ts|rb|pl)$", s) for s in argv))
+
+    @staticmethod
+    def _browser_flags(flags: object) -> bool:
+        """option -> value shape: "" (switch), "path" (inside artifact_dir) or a regex that compiles."""
+        if not isinstance(flags, dict):
+            return False
+        for flag, shape in flags.items():
+            if not (isinstance(flag, str) and flag.startswith("-") and isinstance(shape, str)):
+                return False
+            try:
+                re.compile(shape)
+            except re.error:
+                return False
+        return True
+
     # ----------------------------------------------------------- repo scans
     def _check_repo_wide_terms(self) -> None:
         layout = self.manifest.get("documentation_layout", {})
@@ -463,6 +638,12 @@ class HarnessCheck:
     def _scan_files(self) -> Iterable[tuple[str, str]]:
         excluded = self.manifest.get("local_artifacts", {}).get("scan_excluded_paths", [])
         excluded_prefixes = tuple(item.split("**")[0] for item in excluded if isinstance(item, str))
+        skills = self.manifest.get("skills", {})
+        local_prefix = skills.get("local_prefix")
+        if local_prefix:
+            skill_root = skills.get("root", ".agents/skills")
+            skill_mirror = skills.get("claude_mirror", ".claude/skills")
+            excluded_prefixes += (f"{skill_root}/{local_prefix}", f"{skill_mirror}/{local_prefix}")
         # Per-app AGENTS.md files are the most-read layer; the artifact chain and
         # tracker config are agent-facing too. Scan them along with the static set.
         per_app = tuple(p for p in self.manifest.get("layers", {}).get("per_app", []) if isinstance(p, str))

@@ -19,10 +19,12 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
      --project-name acme-platform --prefix acme --app web \
      --apps-overview "Polyglot monorepo: apps/web (React, Vite), apps/api (Spring Boot, Java 21)." \
      --package-manager pnpm --node-version 22.12.0 \
-     --default-branch main --integration-branch develop \
      --ui-source-glob 'apps/web/src/**/{ui,routes}/**' \
-     --human-doc-lang Korean --ci-file .github/workflows/harness.yml
+     --human-doc-lang Korean
    ```
+
+   브랜치는 트렁크(`main` 하나)가, CI 파일은 "없음"이 기본값이다. 다르면 `--default-branch`,
+   `--integration-branch`, `--ci-file <경로>` 로 준다. `--integration-branch` 를 주지 않으면 기본 브랜치를 따른다.
 
    스킬 디렉터리 `__PREFIX__-*` 와 `apps/__APP__` 도 함께 rename 되고 `.claude/skills` 심링크가 다시 걸린다.
    실행 후 `scripts/harness/init-template.sh` 는 지운다.
@@ -47,18 +49,20 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 | `__APPS_OVERVIEW__` | AGENTS.md 첫 문단: 앱 목록과 스택 한 덩어리 | "Polyglot monorepo … pnpm 9, Node ≥ 22.12." |
 | `__PACKAGE_MANAGER__` | 문서에 적히는 패키지 매니저 명령 | `pnpm` |
 | `__NODE_VERSION__` | `package.json` engines.node 하한 | `22.12.0` |
-| `__COMMIT_FORMAT__` | 커밋 메시지 포맷 한 줄 | `{type}: [{모듈명}] {변경 내용}` |
+| `__COMMIT_FORMAT__` | 커밋 메시지 첫 줄 형식. `COMMIT_CONVENTION.md` 와 commit-msg 훅(`commit_message.format`)이 같은 값을 쓴다 — `{type}` 은 `commit_message.types` 중 하나, `[{…}]`·`({…})` 칸은 생략 가능, 나머지 `{…}` 는 빈칸 아닌 글 | `{type}: [{모듈명}] {변경 내용}` (기본값) |
 | `__DEFAULT_BRANCH__` | 운영 브랜치 | `main` |
-| `__INTEGRATION_BRANCH__` | 통합 브랜치 (PR 대상, plan 게이트 기본 base) | `develop` |
+| `__INTEGRATION_BRANCH__` | 통합 브랜치 (PR 대상, plan 게이트 기본 base). 트렁크면 기본 브랜치와 같다 | 기본값: `__DEFAULT_BRANCH__` 값 |
 | `__UI_SOURCE_GLOB__` | UI 리뷰가 필요한 소스 범위 | `apps/frontend/src/**/{ui,host,routes}/**` |
 | `__HUMAN_DOC_LANG__` | 사람이 읽는 산출물의 언어 | `Korean` |
-| `__CI_FILE__` | CI 파이프라인 정의 파일 경로 | `bitbucket-pipelines.yml` |
+| `__CI_FILE__` | CI 파이프라인 정의 파일 경로. 기본 없음(`none`) → 문서에 `<ci-file>` 로 남는다 | `bitbucket-pipelines.yml` |
 
 `__HUMAN_DOC_LANG__` 을 Korean 이외로 바꾸면 `docs/changes/_templates/*.md` 와 구조 마커
 (`상태: draft`, `## 티켓`, `시각 변경 없음`) 도 함께 번역해야 한다 — 이 마커들은 어댑터 스킬과
 `.agents/harness.yaml` 이 문자열로 참조한다.
 `__PACKAGE_MANAGER__` 를 pnpm 이외로 바꾸면 `package.json` 의 `test:harness` 스크립트 본문과
 `packageManager` 필드도 직접 고친다(치환 대상이 아니다).
+커밋 트레일러는 기본이 `Plan-Ref` 외 금지다(`commit_message.forbid_other_trailers: true` — commit-msg 훅이
+거절하고, `.claude/settings.json` `attribution` 이 Claude Code 꼬리말을 끈다). 허용하기로 정하면 둘을 함께 바꾼다.
 
 ## 무엇이 들어 있나 (A/B 버킷)
 
@@ -67,10 +71,11 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 - 벤더 스킬 18종: `grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`, `to-spec`,
   `to-tickets`, `implement`, `tdd`, `review-since`, `diagnosing-bugs`, `prototype`,
   `writing-for-agents`, `handoff`, `web-design-guidelines`, `review-animations`,
-  `animation-vocabulary`, `git-commit`, `draw-diagram`.
+  `animation-vocabulary`, `git-commit`(커밋 규칙 절만 `COMMIT_CONVENTION.md` 참조로 바꿈), `draw-diagram`.
 - `scripts/harness/`: `vendor-skills.py`, `run-evals.py`, `ensure-husky.sh`, `check-plan-artifact.sh`.
 - `scripts/`: `check-agent-harness.py`, `agent-harness-fast-guard.py`, `protected-paths-guard.py`.
-- `scripts/test/`: 하네스 가드 회귀 테스트 7종.
+- `scripts/test/`: 하네스 가드 회귀 테스트 15종(`test:harness` 가 전부 돌린다. 그중 `commit-msg-gate`·`init-template`
+  테스트는 템플릿에서 새로 씀).
 - `docs/changes/_templates/{intent,spec,plan}.md`, `.claude/evals/README.md`,
   `.codex/hooks.json`, `.codex/config.toml`, `.claude/agents/verifier.md`.
 
@@ -79,8 +84,12 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 `AGENTS.md`, `CLAUDE.md`, `.agents/harness.yaml`, 어댑터 스킬 5종(`__PREFIX__-intent`/`-spec`/
 `-tickets`/`-implement`/`-ui-review`), `docs/agents/issue-tracker.md`,
 `docs/standards/AGENT_HARNESS.md`, `.claude/settings.json`, `.husky/pre-commit`,
-`.codex/rules/commit-convention.mdc`, `apps/__APP__/AGENTS.md`, `package.json`,
-`.claude/evals/cases.jsonl`.
+`apps/__APP__/AGENTS.md`, `package.json`, `.claude/evals/cases.jsonl`.
+
+원본을 일반화해 다시 쓴 것: `REVIEW.md`(제품 고유 검사 줄을 뺌), `docs/standards/COMMIT_CONVENTION.md`
+(원본의 커밋 규칙 문서와 `.codex/rules/commit-convention.mdc` 를 한 곳으로 모음 — `.mdc` 는 Codex 가 읽지 않아 지웠다).
+템플릿에서 새로 쓴 것: `.codex/rules/harness.rules`(`git push`·`--no-verify` 두 번째 울타리),
+`.husky/commit-msg` + `scripts/commit-msg-gate.py`(커밋 메시지 첫 줄·트레일러 검사).
 
 ### C. 일부러 뺀 것 (프로젝트 고유)
 
@@ -90,7 +99,7 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
   `ledger-update.sh`(데스크톱 capability ledger), `brs-skill-sync-check.sh`,
   `frontend-quality-check.sh` 와 그 테스트들 — husky 훅과 `.claude/settings.json` 에서도 뺐다.
 - `docs/standards/<domain>/**`, `docs/knowledge/**`(생성 인덱스 시스템 포함), `docs/adr/**`,
-  실제 변경 폴더 `docs/changes/<날짜>-*`, `REVIEW.md`, `ui-critic`/`agent-thread-inspector`
+  실제 변경 폴더 `docs/changes/<날짜>-*`, `ui-critic`/`agent-thread-inspector`
   서브에이전트, `bitbucket-pipelines.yml`.
 - 원본 evals 9케이스(하드코딩된 색상 hex, `*.generated.ts` 등 프로젝트 규칙을 검사) → 일반 3케이스로 교체.
 
@@ -116,10 +125,12 @@ PR에 추가된 `## 가치 확인` 제목과 상태 문자열도 언어 변경 �
 ## 게이트 추가하는 법
 
 - **커밋 게이트**: `.husky/pre-commit` 에 한 줄 추가(무엇을 막는지 + 끄는 법을 주석으로) →
-  `.agents/harness.yaml` `shared_hook_intents` 에 같은 스크립트를 선언. 선언과 배선 중 하나만
-  있으면 `check:harness` 가 실패한다.
+  `.agents/harness.yaml` `shared_hook_intents` 에 같은 스크립트를 선언(`event` 는 husky 파일 이름,
+  `host_files` 에 그 파일). 선언만 있고 배선이 없거나, 배선만 있고 선언이 없거나, 선언과 다른
+  이벤트에 배선하면 `check:harness` 가 실패한다. 이 대조는 호스트 파일이 실행하는 저장소 루트
+  `scripts/…` 경로만 본다 — 스크립트 없이 도는 명령(`pnpm lint` 등)은 `scripts/` 파일로 감싸야 대조된다.
 - **세션 훅**: `.claude/settings.json` (Claude) / `.codex/hooks.json` (Codex) 의 해당 이벤트에 추가하고
-  같은 intent 의 `host_files` 에 그 호스트 파일을 적는다.
+  같은 intent 의 `host_files` 에 그 호스트 파일을, `event` 에 그 이벤트 키를 적는다(여러 개는 `A|B|C`).
 - **편집 차단**: `.agents/harness.yaml` `protected_paths` 에 `{id, globs, reason, instead}` 추가.
   비활성 예시는 `protected_paths_examples` 에 들어 있다.
 
