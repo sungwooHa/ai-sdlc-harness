@@ -282,6 +282,11 @@ with tempfile.TemporaryDirectory() as tmp:
                        ('rg --files --no-ignore --sortr modified -g intent.md docs/changes', 0),
                        ('ls -t docs/changes/*/intent.md', 2)] + [(c, 2) for c in ('git -C . status', 'git -c core.pager=x log', 'GIT_PAGER=x git log',
                                          'git diff -Oorder.txt', 'git log --output=leak.txt')])
+    # Listing-only git readers open before approval exactly as written; any other argument stays refused
+    # (`git branch foo` creates, `git branch -D` deletes, `git remote add` writes config).
+    failures += wrong([(c, 0) for c in ('git branch', 'git remote -v', 'git stash list')] + [(c, 2) for c in (
+        'git branch foo', 'git branch -D x', 'git remote add x y', 'git stash list -p', 'git remote -v show',
+        'git stash')])
     # N2: a script entry matches its whole argv, so `--repo-root <elsewhere>` or any other argument stays refused.
     # N3: plain readers may name the gate's own files. ui-review resolves its base with git merge-base.
     failures += wrong([('python3 scripts/check-agent-harness.py --format text', 0), ('cat scripts/agreement-gate.py', 0),
