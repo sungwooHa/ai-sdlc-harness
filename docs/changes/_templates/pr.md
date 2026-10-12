@@ -1,7 +1,10 @@
 # <누가 · 무엇을 · 얻나 — 완성된 한 문장, 60자 이내>
 
-Plan-Ref: <YYMMDD_NN>-<slug>
+Plan-Ref: <work-slug>
 Agreement-Ref: agreements/<승인한 리비전>
+
+## 계획 요약
+<변경 목적 · 포함/제외 범위 · 검증 기준을 1–3줄로 적는다. 이름표나 로컬 경로로 대신하지 않는다.>
 
 ## 그림
 합의본과 실제 결과: <첨부 묶음의 두 설명서 경로; 해당 HTML이 없으면 spec/plan 기준 명시>

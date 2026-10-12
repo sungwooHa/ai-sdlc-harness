@@ -1,6 +1,7 @@
 # Plan: <제목>
 
 > 근거: ./spec.md · 승인: <실제 합의 기록> · 상태: draft | approved | done · 완료 커밋: <sha>
+> 작업명: <work-slug> — 변경 목적을 구분하는 이름(폴더 이름에서 `<YYMMDD_NN>-`을 뺀 것). 같은 계획의 브랜치·Plan-Ref·PR에 공유한다.
 > 계획과 해당 HTML 초안을 구현 전에 제시하고 합의한다. 이 파일은 로컬 작업 문서다.
 > prepare 전에 아래 참조를 채운다. 승인 훅이 스냅샷을 보존한다. 이후 체크 결과는 progress.md에 기록한다.
 
@@ -39,7 +40,7 @@ Agreement-Ref: agreements/<승인한 리비전>
 ## 완료 증거 (Definition of Done)
 
 - [ ] 테스트/타입체크 명령과 결과를 pr.md 증거에 붙였다
-- [ ] 구현 커밋에 `Plan-Ref: <YYMMDD_NN>-<slug>` 트레일러가 있다
+- [ ] 구현 커밋에 `Plan-Ref: <work-slug>` 트레일러가 있다
 - [ ] 합의한 User Stories를 검증했다 — 미충족은 명시하고 범위 변경은 재합의했다
 - [ ] `/review-since <base>`가 보존된 합의본 대비로 통과했다
 - [ ] 계약 변경이 있으면 공유 계약과 소비 앱을 함께 갱신했다 (해당 없으면 이유 기록)
