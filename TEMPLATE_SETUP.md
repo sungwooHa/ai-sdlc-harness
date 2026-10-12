@@ -35,6 +35,9 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
    pnpm test:harness     # 하네스 계약 + 가드 회귀 테스트
    ```
 
+   deny 규칙이 `git -c` 를 막으므로, 에이전트 세션에서 커밋하기 전에 저장소 로컬 설정에 작성자를 넣어 둔다
+   (`git config user.name "…"`, `git config user.email "…"`).
+
 그 다음 실제로 채워야 할 것: `AGENTS.md` 의 `## Commands` 와 `<!-- project hard rules here -->`,
 `apps/<app>/AGENTS.md`, `.husky/pre-commit` 의 프로젝트 게이트, `docs/agents/issue-tracker.md`
 (트래커를 쓴다면), CI 레인(`__CI_FILE__`).
