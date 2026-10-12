@@ -141,12 +141,14 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
   `npm`, `npx`, `yarn`, `bun`, `node`, `python`, `python3`, `bash`, `sh`, `uv`, `poetry`) and names
   more than the runner (`pnpm check:harness`, `npm run x`, `python3 -m pkg`). The default list opens
   `python3 scripts/check-agent-harness.py --format text` exactly, and `git merge-base` for
-  `__PREFIX__-ui-review`. These stay refused whatever the list says: unsafe flags (`rg --pre`/`--hostname-bin`; git
+  `__PREFIX__-ui-review`. It opens `git branch`, `git remote -v` and `git stash list` exactly (any
+  other argument is refused; some create, delete or write). It searches with `rg`, not `grep` or `find`: use
+  `rg --files -g <glob>` to find files. These stay refused whatever the list says: unsafe flags (`rg --pre`/`--hostname-bin`; git
   `--output`, `--ext-diff`, `--textconv`, `--no-index`, `--open-files-in-pager`, and `-O` in any
   short cluster) and gate-owned commands in any spelling (`git add|commit|switch|push|checkout`;
   an argument naming `agreement-gate` for any program except git and the plain readers `cat`,
-  `head`, `tail`, `wc`, `rg`, `grep`, `ls`, which may read the gate's files). A listed command never records
-  verification; only `agreement-gate.py verify` does.
+  `head`, `tail`, `wc`, `rg`, `ls`, which may read the gate's files; so may `grep` if a project lists
+  it). A listed command never records verification; only `agreement-gate.py verify` does.
 - `reviewed_whole_programs`: a one-token `read_only_commands` entry (`["rg"]`) opens every argument
   of that program, so `check:harness` refuses it unless the program is named here too. Add a name
   only after checking that no argument of the program writes files, runs code, or reaches a

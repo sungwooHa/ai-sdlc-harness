@@ -294,6 +294,35 @@ def main() -> int:
                 mismatches.append((label, expect_error, code, payload["errors"]))
         assert not mismatches, mismatches
 
+        # commit_message is data the commit-msg hook trusts: a string where a list belongs is read letter
+        # by letter (allowed: P, l, a, n, ...), so a wrong shape must fail here. Keys the hook defaults
+        # (forbid_other_trailers true, allowed_trailers [Plan-Ref]) may be left out; None drops a key.
+        commit = {"format": "{type}: {summary}", "types": ["feat", "fix"], "forbid_other_trailers": True,
+                  "allowed_trailers": ["Plan-Ref"]}
+        for label, change, expect_error in (
+            ("commit valid", {}, False),
+            ("commit trailers as string", {"allowed_trailers": "Plan-Ref"}, True),
+            ("commit types as string", {"types": "feat"}, True),
+            ("commit types empty", {"types": []}, True),
+            ("commit format not string", {"format": ["{type}"]}, True),
+            ("commit forbid not bool", {"forbid_other_trailers": "yes"}, True),
+            ("commit forbid left out", {"forbid_other_trailers": None}, False),
+            ("commit trailers left out", {"allowed_trailers": None}, False),
+            ("commit trailers empty", {"allowed_trailers": []}, False),
+        ):
+            root = Path(temp_dir) / label.replace(" ", "-")
+            root.mkdir()
+            build_fixture(root, f"{IMPORT_LINE}\n")
+            manifest = json.loads(json.dumps(MANIFEST))
+            manifest["commit_message"] = {k: v for k, v in {**commit, **change}.items() if v is not None}
+            (root / ".agents/harness.yaml").write_text(json.dumps(manifest), encoding="utf-8")
+            code, out = run(root)
+            payload = json.loads(out)
+            errors = [item for item in payload["errors"] if item["code"] == "commit_message_shape"]
+            if bool(errors) != expect_error or (code == 1) != expect_error:
+                mismatches.append((label, expect_error, code, payload["errors"]))
+        assert not mismatches, mismatches
+
     print("PASS: check-agent-harness smoke tests")
     return 0
 

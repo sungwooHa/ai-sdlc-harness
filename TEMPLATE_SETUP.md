@@ -35,6 +35,9 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
    pnpm test:harness     # 하네스 계약 + 가드 회귀 테스트
    ```
 
+   deny 규칙이 `git -c` 를 막으므로, 에이전트 세션에서 커밋하기 전에 저장소 로컬 설정에 작성자를 넣어 둔다
+   (`git config user.name "…"`, `git config user.email "…"`).
+
 그 다음 실제로 채워야 할 것: `AGENTS.md` 의 `## Commands` 와 `<!-- project hard rules here -->`,
 `apps/<app>/AGENTS.md`, `.husky/pre-commit` 의 프로젝트 게이트, `docs/agents/issue-tracker.md`
 (트래커를 쓴다면), CI 레인(`__CI_FILE__`).
@@ -71,11 +74,12 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 - 벤더 스킬 18종: `grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`, `to-spec`,
   `to-tickets`, `implement`, `tdd`, `review-since`, `diagnosing-bugs`, `prototype`,
   `writing-for-agents`, `handoff`, `web-design-guidelines`, `review-animations`,
-  `animation-vocabulary`, `git-commit`(커밋 규칙 절만 `COMMIT_CONVENTION.md` 참조로 바꿈), `draw-diagram`.
+  `animation-vocabulary`, `git-commit`(개요·커밋 규칙 절·2–4단계·Best Practices·훅 건너뛰기 줄을
+  `COMMIT_CONVENTION.md`·합의 게이트에 맞게 고침), `draw-diagram`.
 - `scripts/harness/`: `vendor-skills.py`, `run-evals.py`, `ensure-husky.sh`, `check-plan-artifact.sh`.
 - `scripts/`: `check-agent-harness.py`, `agent-harness-fast-guard.py`, `protected-paths-guard.py`.
-- `scripts/test/`: 하네스 가드 회귀 테스트 15종(`test:harness` 가 전부 돌린다. 그중 `commit-msg-gate`·`init-template`
-  테스트는 템플릿에서 새로 씀).
+- `scripts/test/`: 하네스 가드 회귀 테스트 15종(`test:harness` 가 전부 돌린다. init 을 마친 프로젝트에서는
+  `init-template` 테스트가 SKIP 으로 끝난다. 그중 `commit-msg-gate`·`init-template` 테스트는 템플릿에서 새로 씀).
 - `docs/changes/_templates/{intent,spec,plan}.md`, `.claude/evals/README.md`,
   `.codex/hooks.json`, `.codex/config.toml`, `.claude/agents/verifier.md`.
 

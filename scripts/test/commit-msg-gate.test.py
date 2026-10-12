@@ -4,7 +4,8 @@
 First line: checked against `commit_message.format` unless that is still a template placeholder;
 git-written first lines (Merge branch/branches/pull request/remote-tracking branch/tag/commit, Revert ",
 Reapply ", fixup!, squash!, amend!) pass; a comment line first is refused. Trailers: checked always; only
-`allowed_trailers` pass while `forbid_other_trailers` is on (the default).
+`allowed_trailers` pass while `forbid_other_trailers` is on (the default), and then a `Co-Authored-By:` line
+is refused anywhere git may store it unless `allowed_trailers` lists it.
 """
 
 from __future__ import annotations
@@ -54,7 +55,11 @@ def main() -> int:
             # refused rather than skipped (`git commit -m "# wip" -m "feat: x"`).
             ("# wip\n\nfeat: [x] y\n", False),
             ("\n# Write the message below.\nfeat: x\n", False),
-            ("feat: x\n# ------------------------ >8 ------------------------\n\nCo-Authored-By: below scissors\n", True),
+            # -m/-F keep the scissors line and what is below it, so a Co-Authored-By line there is stored.
+            ("feat: x\n# ------------------------ >8 ------------------------\n\nCo-Authored-By: below scissors\n", False),
+            # A --verbose diff below the scissors line is dropped; its lines start with +, - or a space.
+            ("feat: x\n# ------------------------ >8 ------------------------\n# Do not modify or remove the line above.\n"
+             "diff --git a/f b/f\n+Co-Authored-By: A <a@example.com>\n Co-Authored-By: B <b@example.com>\n", True),
             ("Merge branch 'feature/x' into main\n", True),
             ("Merge branches 'a' and 'b'\n", True),
             ("Merge pull request #12 from org/feature-x\n", True),
@@ -73,11 +78,31 @@ def main() -> int:
             ("Feat: y\n", False),
             ("feat:y\n", False),
             ("feat: \n", False),
+            # The optional slot alone is not a summary: a summary cannot start with the slot's bracket.
+            ("feat: [x]\n", False),
+            ("feat: [Harness]\n", False),
+            ("feat: [x] y\n", True),
+            ("feat: y\n", True),
             ("feat: [Harness] x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n", False),
+            # Moved out of the trailers it is still stored: above Plan-Ref, or inside a prose paragraph.
+            ("feat: x\n\nCo-Authored-By: C <c@example.com>\n\nPlan-Ref: 261008_00-a\n", False),
+            ("feat: x\n\nCo-Authored-By: C <c@example.com>\n이 커밋은 함께 썼다.\n", False),
+            ("feat: x\n\n본문에서 co-authored-by: 를 언급하는 문장은 막지 않는다.\n\nPlan-Ref: 261008_00-a\n", True),
             ("feat: x\n\nPlan-Ref: 261008_00-a\nSigned-off-by: A <a@example.com>\n", False),
             ("Merge branch 'x'\n\nCo-authored-by: A <a@example.com>\n", False),  # trailers still checked
         ):
             expect(root, bracket, message, ok, f"bracket format: {message!r}")
+        # A last paragraph that is only a URL or `Key: value` lines is read as trailers; the refusal says so.
+        for body in ("https://github.com/o/r/issues/1", "Why: hooks were skipped", "Follow-up: 다음 묶음에서"):
+            result = gate(root, bracket, f"fix: [x] y\n\n{body}\n")
+            assert result.returncode == 1 and "read as trailers" in result.stderr, (body, result.stderr)
+            assert "add a sentence" in result.stderr and "remove that trailer" not in result.stderr, (body, result.stderr)
+        # A real trailer must be removed: the hint to add a sentence would keep it in the message.
+        result = gate(root, bracket, "fix: [x] y\n\nCo-Authored-By: C <c@example.com>\n")
+        assert result.returncode == 1 and "add a sentence" not in result.stderr, result.stderr
+        assert "remove that trailer" in result.stderr, result.stderr
+        expect(root, bracket, "fix: [x] y\n\nhttps://github.com/o/r/issues/1\n\nPlan-Ref: 261008_00-a\n", True,
+               "a URL paragraph before Plan-Ref is body text")
 
         conventional = config(format="{type}({scope}): {description}", types=TYPES)
         for message, ok in (("feat(api): add x\n", True), ("feat: add x\n", True), ("feat(api) add x\n", False)):
@@ -96,6 +121,8 @@ def main() -> int:
         # The human decision slot: allow any trailer.
         expect(root, config(format=BRACKET, types=TYPES, forbid_other_trailers=False),
                "feat: x\n\nCo-Authored-By: A <a@example.com>\n", True, "trailers allowed when not forbidden")
+        expect(root, config(format=BRACKET, types=TYPES, allowed_trailers=["Plan-Ref", "Co-authored-by"]),
+               "feat: x\n\nCo-Authored-By: A <a@example.com>\n본문.\n", True, "a listed Co-Authored-By passes in the body")
 
         # End to end: the real .husky/commit-msg behind the shim ensure-husky.sh writes, with messages
         # git itself writes for merge and revert.
@@ -122,6 +149,9 @@ def main() -> int:
         assert git("commit", "-q", "-m", "chore: [harness] 시작").returncode == 0
         refused = git("commit", "-q", "--allow-empty", "-m", "feat: x", "-m", "Co-Authored-By: A <a@example.com>")
         assert refused.returncode != 0 and "Co-Authored-By" in refused.stderr, refused.stderr
+        moved = git("commit", "-q", "--allow-empty", "-m", "feat: x", "-m", "Co-Authored-By: A <a@example.com>",
+                    "-m", "Plan-Ref: 261008_00-x")
+        assert moved.returncode != 0 and "Co-Authored-By" in moved.stderr, moved.stderr
         assert git("commit", "-q", "--allow-empty", "-m", "feat: x", "-m", "Plan-Ref: 261008_00-x").returncode == 0
         git("switch", "-q", "-c", "side")
         assert git("commit", "-q", "--allow-empty", "-m", "fix: 옆 가지").returncode == 0
