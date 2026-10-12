@@ -56,7 +56,9 @@ One logical change per commit; split unrelated work.
 `.husky/commit-msg` runs `scripts/commit-msg-gate.py`:
 
 - The first line against the format above. `{type}` is one of `commit_message.types`, any other
-  field is nonempty text. Skipped while the format is still the template placeholder.
+  field is nonempty text. A field in brackets or parentheses may be left out; left out, the summary
+  cannot start with that bracket (`feat: [x]` is a module with no summary). Skipped while the format
+  is still the template placeholder.
 - First lines git writes itself pass: `Merge branch`, `Merge pull request`,
   `Merge remote-tracking branch`, `Merge tag`, `Merge commit`, `Revert "`, `Reapply "`, `fixup!`,
   `squash!`, `amend!`. Any other first line follows the format.
