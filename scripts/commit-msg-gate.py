@@ -101,10 +101,11 @@ def trailer_problems(message: str, cfg: dict) -> list[str]:
         CO_AUTHOR.match(line) for line in message.splitlines())
     if co_author:
         found.append("a `Co-Authored-By:` line is not allowed anywhere in the message")
-    if refused and all("-" not in key for key in refused):  # prose or a link read as trailers (`Why:`, `https:`)
+    attribution = [key for key in refused if key.lower().endswith("-by")]  # Co-authored-by, Signed-off-by, ...
+    if refused and not attribution:  # prose or a link read as trailers (`Why:`, `Follow-up:`, `https:`)
         found.append("a last paragraph made only of `Key: value` lines (or a bare URL) is read as trailers"
                      " — add a sentence or end with Plan-Ref")
-    if co_author or any("-" in key for key in refused):
+    if co_author or attribution:
         found.append("remove that trailer — moving it into the body does not make it allowed")
     return found
 

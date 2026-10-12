@@ -93,7 +93,7 @@ def main() -> int:
         ):
             expect(root, bracket, message, ok, f"bracket format: {message!r}")
         # A last paragraph that is only a URL or `Key: value` lines is read as trailers; the refusal says so.
-        for body in ("https://github.com/o/r/issues/1", "Why: hooks were skipped"):
+        for body in ("https://github.com/o/r/issues/1", "Why: hooks were skipped", "Follow-up: 다음 묶음에서"):
             result = gate(root, bracket, f"fix: [x] y\n\n{body}\n")
             assert result.returncode == 1 and "read as trailers" in result.stderr, (body, result.stderr)
             assert "add a sentence" in result.stderr and "remove that trailer" not in result.stderr, (body, result.stderr)
