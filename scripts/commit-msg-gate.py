@@ -50,7 +50,8 @@ def subject_pattern(fmt: str, types: list[str]) -> re.Pattern[str]:
 
 
 def stored_text(raw: str) -> str:
-    """The message as git will store it: comment lines dropped, nothing below the scissors line."""
+    """What git reads as trailers: comment lines dropped, nothing below the scissors line. Not what git
+    stores: with `-m`/`-F` it keeps the scissors line and what is below it."""
     lines = []
     for line in raw.splitlines():
         if line.startswith("# -") and " >8 " in line:

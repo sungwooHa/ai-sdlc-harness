@@ -13,7 +13,7 @@ __COMMIT_FORMAT__
 - `{type}`: one of the types below, lowercase.
 - A field written in brackets or parentheses (a module or scope) is optional. Leave it out, with
   the space after it, when the change spans several areas or none.
-- The summary says what changed, in __HUMAN_DOC_LANG__, clear and short (50–72 characters).
+- The summary says what changed, in __HUMAN_DOC_LANG__, clear and short (at most 72 characters).
 
 | Type | Use for |
 |---|---|

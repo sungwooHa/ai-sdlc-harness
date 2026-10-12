@@ -71,7 +71,8 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 - 벤더 스킬 18종: `grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`, `to-spec`,
   `to-tickets`, `implement`, `tdd`, `review-since`, `diagnosing-bugs`, `prototype`,
   `writing-for-agents`, `handoff`, `web-design-guidelines`, `review-animations`,
-  `animation-vocabulary`, `git-commit`(커밋 규칙 절만 `COMMIT_CONVENTION.md` 참조로 바꿈), `draw-diagram`.
+  `animation-vocabulary`, `git-commit`(개요·커밋 규칙 절·2–4단계·Best Practices·훅 건너뛰기 줄을
+  `COMMIT_CONVENTION.md`·합의 게이트에 맞게 고침), `draw-diagram`.
 - `scripts/harness/`: `vendor-skills.py`, `run-evals.py`, `ensure-husky.sh`, `check-plan-artifact.sh`.
 - `scripts/`: `check-agent-harness.py`, `agent-harness-fast-guard.py`, `protected-paths-guard.py`.
 - `scripts/test/`: 하네스 가드 회귀 테스트 15종(`test:harness` 가 전부 돌린다. 그중 `commit-msg-gate`·`init-template`

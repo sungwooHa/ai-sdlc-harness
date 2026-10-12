@@ -90,6 +90,6 @@ git commit -m "<first line>" -m "<why>" -m "Plan-Ref: <YYMMDD_NN>-<slug>"
 
 - NEVER update git config
 - NEVER run destructive commands (--force, hard reset) without explicit request
-- NEVER skip hooks (--no-verify) unless user asks
+- NEVER skip hooks (--no-verify): agents cannot (it is blocked); if it is truly needed, a human runs it
 - NEVER force push to main/master
 - If commit fails due to hooks, fix and create NEW commit (don't amend)
