@@ -75,6 +75,7 @@ class HarnessCheck:
         self._check_documentation_layout()
         self._check_artifact_chain()
         self._check_agreement_gate()
+        self._check_commit_message()
         self._check_repo_wide_terms()
         self._check_ci()
 
@@ -585,6 +586,28 @@ class HarnessCheck:
                 MANIFEST_REL,
                 'agreement_gate.agent_browser needs artifact_dir "$TMPDIR/<name>", global_flags and commands '
                 "in the shape docs/standards/AGREEMENT_REVIEW.md describes",
+            )
+
+    def _check_commit_message(self) -> None:
+        """The commit-msg hook reads these values as given; a string where a list belongs is read letter by letter."""
+        cfg = self.manifest.get("commit_message")
+        if not isinstance(cfg, dict):
+            return
+
+        def names(value: object) -> bool:
+            return isinstance(value, list) and bool(value) and all(isinstance(s, str) and s for s in value)
+
+        if not (
+            isinstance(cfg.get("format"), str)
+            and names(cfg.get("types"))
+            and names(cfg.get("allowed_trailers"))
+            and isinstance(cfg.get("forbid_other_trailers"), bool)
+        ):
+            self._error(
+                "commit_message_shape",
+                MANIFEST_REL,
+                "commit_message needs format (a string), types and allowed_trailers (non-empty lists of strings) "
+                "and forbid_other_trailers (true or false); see docs/standards/COMMIT_CONVENTION.md",
             )
 
     @staticmethod
