@@ -63,7 +63,7 @@
     "plan_gate": {
       "base": "origin/__INTEGRATION_BRANCH__",
       "evidence": "commit trailer `Plan-Ref: <work-slug>` (the change folder name without YYMMDD_NN-; the older dated name also counts) on at least one commit in the PR range",
-      "rule": "A PR that touches more than one app or any packages/* contract must carry a Plan-Ref trailer; the PR compares value and refers to the attached agreement for the full plan. CI check: scripts/harness/check-plan-artifact.sh (warn, PLAN_GATE=enforce to block)."
+      "rule": "A PR that touches more than one app or any packages/* contract must carry a Plan-Ref trailer; the PR compares value and refers to the attached agreement for the full plan. Local tool run by hand (no CI runs it): scripts/harness/check-plan-artifact.sh warns in the terminal of whoever runs it, PLAN_GATE=enforce blocks. The commit-msg gate checks each Plan-Ref value at commit time."
     },
     "pr_body": {
       "template": "docs/changes/_templates/pr.md",
