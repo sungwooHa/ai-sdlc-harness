@@ -36,7 +36,7 @@ Then call the Skill tool with `to-spec` and apply these overrides while followin
 - Output: draft the spec with the section headings of `docs/changes/_templates/spec.md` (keep the
   headings, fill the body in __HUMAN_DOC_LANG__, no implementation file paths or code snippets; artifact links are allowed) and header status
   `draft`.
-- Visual agreement: read `docs/standards/AGREEMENT_REVIEW.md`. Before asking for spec approval,
+- Visual agreement: read `docs/standards/AGREEMENT_REVIEW.md` (§1 says how to make each view). Before asking for spec approval,
   create applicable draft HTML in the working `deliverables/` from the planned affected paths.
   Present the explainer as the entrypoint to mockup, flow and architecture when required. Label
   assumptions and unresolved plan details; refine the same drafts during plan mode.

@@ -27,6 +27,17 @@ Use inline styles/diagrams and embedded images; no external hosting or remote as
 A proposed mockup is not execution evidence. If the app cannot run, label actual verification as
 unavailable and record the missing environment instead of implying that the mockup was tested.
 
+How to make the views — one at a time in the main session; a subagent's calls pass the same hook
+and have no edit path (`allowed_subagents` below):
+
+- Explainer: picture first (an inline SVG analogy), then a "who sees what" table, three
+  cause→effect boxes and a checklist. It is HTML, not Markdown.
+- Mockup: numbered steps, each with what was done, what is visible and the related US. Embed
+  images as base64, put the capture conditions in a footer, and leave no screenshot folder behind.
+  If the app cannot run, say so and show only the static parts.
+- Capturing screens needs a shell: declare the capture command among the `scope.json`
+  verification commands, or state that a human runs it.
+
 ## 2. Agree, then preserve the baseline
 
 Present the applicable HTML drafts with the spec and plan. Ask about unresolved decisions;

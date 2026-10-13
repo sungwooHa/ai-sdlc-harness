@@ -46,7 +46,7 @@ unless the user disabled Ponytail. Then call the Skill tool with `implement` and
 ## Prepare the PR value review
 
 The HTML already existed for pre-implementation agreement. After verification, update only the
-working `deliverables/` using the result-evidence column in `AGREEMENT_REVIEW.md`; preserve all
+working `deliverables/` using the result-evidence column and the how-to in `AGREEMENT_REVIEW.md` §1; preserve all
 agreed copies. Recheck the actual changed paths against `required_when`. An unexpected required
 view or materially different behavior returns to agreement for the remaining work; never label
 a retrospective draft as pre-implementation approval. If no HTML condition applies, document
@@ -66,6 +66,7 @@ is outside this adapter. Use scoped remove/move helpers for deletion/rename and 
 Write/Edit/apply_patch tools for edits. Arbitrary shell mutation is blocked.
 
 Before finishing, consider knowledge beyond this change: put durable rules in the relevant
-app's `AGENTS.md`, or state `지식 승격 없음`. Report implementation/verification status, the
+app's `AGENTS.md`, or state `지식 승격 없음`. The agreement gate refuses writes outside the approved scope:
+put that `AGENTS.md` in scope from the start, or propose the line in pr.md for the next revision. Report implementation/verification status, the
 agreement reference, deviations, unverified value, required attachments and actual test results.
 Human value review may remain pending after implementation handoff; label it as pending.
