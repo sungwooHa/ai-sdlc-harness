@@ -9,8 +9,10 @@ Checks supported in `expect`:
   files_changed_not_matching:   no changed file may contain the regex
   command_succeeds:             shell command (run in the worktree) must exit 0
 
-Usage: python3 scripts/harness/run-evals.py [--only id,id] [--model claude-sonnet-5] [--max-turns 20] [--login]
+Usage: python3 scripts/harness/run-evals.py [--only id,id] [--model sonnet] [--max-turns 20] [--runs 1] [--login]
 Requires the `claude` CLI and API access; not run in the default test:harness lane.
+`--model` takes the CLI's alias (default `sonnet`); pin an exact model ID only for comparison runs.
+`--runs N` runs each case N times and prints k/N; a case passes only when all N runs pass.
 `--login` drops ANTHROPIC_API_KEY from the child environment so the claude.ai login is used — needed
 when running from inside a Claude Code session, which exports a session-scoped key that `claude -p`
 rejects with 401. An authentication failure aborts the run instead of failing every case.
@@ -56,7 +58,7 @@ def run_case(case: dict, model: str, max_turns: int, env: dict[str, str]) -> tup
             raise AuthFailure(output.strip().splitlines()[-1] if output.strip() else "authentication failed")
         if not wt.is_dir():
             return False, [f"worktree {wt} vanished during the run; cannot evaluate file checks"]
-        changed = sh(["git", "status", "--porcelain"], wt).stdout.splitlines()
+        changed = sh(["git", "status", "--porcelain", "--untracked-files=all"], wt).stdout.splitlines()
         changed_files = [line[3:] for line in changed]
         exp = case.get("expect", {})
         if res.returncode != 0:
@@ -90,11 +92,14 @@ def run_case(case: dict, model: str, max_turns: int, env: dict[str, str]) -> tup
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default=None)
-    ap.add_argument("--model", default="claude-sonnet-5")
+    ap.add_argument("--model", default="sonnet")
     ap.add_argument("--max-turns", type=int, default=20)
+    ap.add_argument("--runs", type=int, default=1, help="run each case N times; PASS needs N/N")
     ap.add_argument("--login", action="store_true",
                     help="ignore ANTHROPIC_API_KEY and use the claude.ai login of the `claude` CLI")
     args = ap.parse_args()
+    if args.runs < 1:
+        ap.error("--runs must be at least 1")
     env = dict(os.environ)
     if args.login:
         env.pop("ANTHROPIC_API_KEY", None)
@@ -105,13 +110,18 @@ def main() -> int:
     for case in cases:
         if only and case["id"] not in only:
             continue
-        try:
-            ok, problems = run_case(case, args.model, args.max_turns, env)
-        except AuthFailure as exc:
-            hint = " (ANTHROPIC_API_KEY is set; retry with --login)" if "ANTHROPIC_API_KEY" in env else ""
-            print(f"ABORT: claude could not authenticate — {exc}{hint}", flush=True)
-            return 2
-        print(f"{case['id']:<28} {'PASS' if ok else 'FAIL'}", flush=True)
+        passed, problems = 0, []
+        for run in range(1, args.runs + 1):
+            try:
+                run_ok, run_problems = run_case(case, args.model, args.max_turns, env)
+            except AuthFailure as exc:
+                hint = " (ANTHROPIC_API_KEY is set; retry with --login)" if "ANTHROPIC_API_KEY" in env else ""
+                print(f"ABORT: claude could not authenticate — {exc}{hint}", flush=True)
+                return 2
+            passed += run_ok
+            problems.extend(f"run {run}: {p}" for p in run_problems)
+        ok = passed == args.runs
+        print(f"{case['id']:<28} {'PASS' if ok else 'FAIL'} {passed}/{args.runs}", flush=True)
         for p in problems:
             print(f"    - {p}", flush=True)
         failures += 0 if ok else 1

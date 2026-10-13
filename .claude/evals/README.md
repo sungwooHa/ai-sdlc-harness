@@ -7,8 +7,9 @@ do the right thing on tasks we have actually seen go wrong? Run when `AGENTS.md`
 - `cases.jsonl`: one case per line — `id`, `prompt` (what a user would type), `expect` (checks the
   runner can evaluate: `output_matches`, `output_not_matches`, `files_unchanged_glob`,
   `files_changed_not_matching`, `command_succeeds`).
-- `scripts/harness/run-evals.py`: runs each case with `claude -p` in a throwaway git worktree,
-  evaluates `expect`, prints a table, exits non-zero on any failure. Declared in
+- `scripts/harness/run-evals.py`: runs each case with `claude -p` (model alias `sonnet` unless
+  `--model` says otherwise) in a throwaway git worktree, evaluates `expect`, prints a table with
+  k/N per case, exits non-zero on any failure. `--runs N` repeats each case; PASS needs N/N. Declared in
   `.agents/harness.yaml` `evals`; `__PACKAGE_MANAGER__ evals:harness` is the entry point. It spends model quota,
   so it is not part of `__PACKAGE_MANAGER__ test:harness`. The `claude` CLI uses whatever login it has — with no
   `ANTHROPIC_API_KEY` in the environment a claude.ai subscription login is used, not API billing.
@@ -26,5 +27,6 @@ Keep prompts realistic and short; the point is the repo's instructions, not the 
 ```bash
 __PACKAGE_MANAGER__ evals:harness                                    # all cases
 __PACKAGE_MANAGER__ evals:harness --login                             # from inside a Claude Code session (see below)
+__PACKAGE_MANAGER__ evals:harness --login --runs 3                    # each case three times; PASS needs 3/3
 python3 scripts/harness/run-evals.py --only protected-path-untouched
 ```
