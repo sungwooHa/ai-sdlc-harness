@@ -70,6 +70,8 @@ yours: compare against a clean checkout before claiming or fixing it.
 
 - Branches: `__DEFAULT_BRANCH__` (production), `__INTEGRATION_BRANCH__` (integration), `feature/*`.
   PRs target `__INTEGRATION_BRANCH__`.
+- Shared name: the work slug (change folder name without `YYMMDD_NN-`) names the branch
+  `feature/<work-slug>`, the `Plan-Ref: <work-slug>` trailer and the PR; the date stays local.
 - Commit messages: read `docs/standards/COMMIT_CONVENTION.md` before your first commit (a
   commit-msg hook checks it).
 - Pre-commit (husky) runs the harness fast guard. the agreement gate requires scope, current verification and local PR value review; agent

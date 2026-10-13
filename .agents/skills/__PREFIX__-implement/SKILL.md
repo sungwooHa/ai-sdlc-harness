@@ -31,8 +31,9 @@ unless the user disabled Ponytail. Then call the Skill tool with `implement` and
 
 - TDD at the agreed seams (`/tdd`); use the repo's narrow-to-wide test ladder. Run declared checks through `python3 scripts/agreement-gate.py verify` to record source-bound
   evidence. Show actual commands and results. Respect protected paths and the commit convention in `AGENTS.md`.
-- Implementation commits carry `Plan-Ref: <YYMMDD_NN>-<slug>`; the first commit supplies the
-  trailer checked by CI. Keep the entire change folder local and uncommitted.
+- Implementation commits carry `Plan-Ref: <work-slug>` (the folder name without `YYMMDD_NN-`); the
+  commit-msg hook checks its value, and `check:plan`, a local tool run by hand, looks for it on
+  multi-app PRs. Keep the entire change folder local and uncommitted.
 - Run `/review-since <branch-base>` in a fresh subagent against the referenced agreement's
   spec/plan, with `REVIEW.md` as a standards source. This is code correctness review. Run
   `/__PREFIX__-ui-review <branch-base>` for UI changes unless the approved plan explicitly says

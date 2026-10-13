@@ -35,7 +35,8 @@ the PR description, not the commit.
 
 ## Trailers
 
-`Plan-Ref: <YYMMDD_NN>-<slug>` is the only trailer. It links commits to the local change folder;
+`Plan-Ref: <work-slug>` is the only trailer, the change folder name without `YYMMDD_NN-` (the
+branch and the PR share it; the date stays local). It links commits to the local change folder;
 a PR that touches more than one app or any shared contract needs it on at least one commit
 (`check:plan`). No other trailer: no `Co-Authored-By`, `Signed-off-by` or tool footers.
 The hook refuses them while `commit_message.forbid_other_trailers` is true (the default), and
@@ -48,7 +49,7 @@ Plan-Ref value: a work slug (`^[a-z0-9]+(-[a-z0-9]+)*$`) or the older dated fold
 Agent shells take one direct command without newlines, so pass each paragraph as its own `-m`:
 
 ```sh
-git commit -m "<first line>" -m "<why, at most three lines>" -m "Plan-Ref: <YYMMDD_NN>-<slug>"
+git commit -m "<first line>" -m "<why, at most three lines>" -m "Plan-Ref: <work-slug>"
 ```
 
 One logical change per commit; split unrelated work.

@@ -25,12 +25,14 @@ constraints, and open questions.
 
 When the user confirms shared understanding:
 
-1. Resolve the folder name `<YYMMDD_NN>-<slug>`. Use `$0` as the slug when given; otherwise pick a
-   short kebab-case slug with the user. There is no external tracker — the folder is the change
+1. Resolve the folder name `<YYMMDD_NN>-<work-slug>`. Use `$0` as the work slug when given;
+   otherwise pick with the user a short kebab-case work slug that tells this change's purpose
+   apart — a different change gets a different name. The work slug is the one shared name (branch,
+   `Plan-Ref: <work-slug>`, PR); the date and sequence stay local. There is no external tracker — the folder is the change
    identifier. Assign the id yourself unless the user passes an explicit one: `<YYMMDD>` is today's
    date (2-digit year, month, day), and `<NN>` is that day's sequence starting at `00`: run
    `ls docs/changes/`, count the folders whose name starts with today's `YYMMDD_` prefix, and
-   zero-pad that count to two digits (e.g. `260910_00-<slug>`, then `260910_01-...`).
+   zero-pad that count to two digits (e.g. `260910_00-<work-slug>`, then `260910_01-...`).
 2. Copy `docs/changes/_templates/intent.md` to `docs/changes/<YYMMDD_NN>-<slug>/intent.md` and fill
    every section in the requester's own words (__HUMAN_DOC_LANG__). Put each unresolved decision
    under "열린 질문" with your recommended answer. Write the header status as `상태: draft`.

@@ -78,7 +78,7 @@ Pass each paragraph as its own `-m`; agent shells refuse newlines and command su
 
 ```bash
 git commit -m "<first line>"
-git commit -m "<first line>" -m "<why>" -m "Plan-Ref: <YYMMDD_NN>-<slug>"
+git commit -m "<first line>" -m "<why>" -m "Plan-Ref: <work-slug>"
 ```
 
 ## Best Practices
