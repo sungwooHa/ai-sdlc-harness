@@ -145,7 +145,9 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
 - `allowed_subagents` (default `Explore`, `Plan`, `verifier`, `general-purpose`): subagent types
   the Agent/Task tool may start. A call without `subagent_type` counts as `general-purpose`, the
   host default that `/review-since` starts. A subagent's own tool calls pass the same PreToolUse
-  hook (the payload carries `agent_id`/`agent_type`), so a listed type gains no edit path.
+  hook (the payload carries `agent_id`/`agent_type`), so a listed type gains no edit path. One tool
+  opens for a listed type's own call only: its report back (`SubagentHandback`), text to the main
+  session that touches no file or shell. `SendMessage` and `ToolSearch` stay refused.
 - `read_only_commands`: commands that run before and after approval, no wildcards. Each entry is
   an argv prefix (`["git", "log"]`: any later argument opens) or `{"exact": [...]}` (only that
   whole argv). An entry that names a script or a path must be exact (`check:harness` and the gate
