@@ -165,6 +165,14 @@ def main() -> int:
             "Plan-Ref: 260914_01-invite-gate", "<!-- Plan-Ref: 260914_01-invite-gate -->")))[0], 2)
         check("Plan-Ref only after the first section blocks",
               run(root, write(no_ref.replace("## 세 상자", "Plan-Ref: 260914_01-invite-gate\n\n## 세 상자")))[0], 2)
+        # In the header area itself, a fence or a multi-line comment hides its Plan-Ref (GitHub shows code or
+        # nothing); the line after the block closes is read again.
+        ref = "Plan-Ref: 260914_01-invite-gate\n"
+        for opening, closing in (("```\n", "```\n"), ("~~~\n", "~~~\n"), ("<!--\n", "-->\n")):
+            check(f"Plan-Ref only inside a header {opening.strip()} block blocks",
+                  run(root, write(GOOD.replace(ref, opening + ref + closing)))[0], 2)
+            check(f"Plan-Ref after a closed header {opening.strip()} block passes",
+                  run(root, write(GOOD.replace(ref, opening + "메모\n" + closing + ref)))[0], 0)
         check("Plan-Ref with capitals or underscores blocks",
               run(root, write(GOOD_SLUG.replace("Plan-Ref: invite-gate", "Plan-Ref: Invite_Gate")))[0], 2)
         # A work slug needs a plan summary and the folder's work slug; the dated form (GOOD) needs neither.

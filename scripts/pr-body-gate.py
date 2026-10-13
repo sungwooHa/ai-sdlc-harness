@@ -105,7 +105,7 @@ def metadata_values(text: str, key: str) -> list[str]:
         if in_comment:
             in_comment = "-->" not in stripped
             continue
-        if stripped.startswith("```"):
+        if stripped.startswith(("```", "~~~")):
             in_fence = not in_fence
             continue
         if in_fence:
