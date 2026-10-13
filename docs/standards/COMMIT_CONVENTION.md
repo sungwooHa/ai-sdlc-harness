@@ -36,7 +36,9 @@ the PR description, not the commit.
 ## Trailers
 
 `Plan-Ref: <work-slug>` is the only trailer, the change folder name without `YYMMDD_NN-` (the
-branch and the PR share it; the date stays local). It links commits to the local change folder;
+branch and the PR share it; the date stays local). A plan split into parts uses
+`feature/<work-slug>/<part>` branches, and every part's commits carry the same `Plan-Ref: <work-slug>`,
+not a per-part value. It links commits to the local change folder;
 a PR that touches more than one app or any shared contract needs it on at least one commit
 (`check:plan`). No other trailer: no `Co-Authored-By`, `Signed-off-by` or tool footers.
 The hook refuses them while `commit_message.forbid_other_trailers` is true (the default), and
