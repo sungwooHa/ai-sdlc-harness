@@ -39,7 +39,9 @@ the PR description, not the commit.
 a PR that touches more than one app or any shared contract needs it on at least one commit
 (`check:plan`). No other trailer: no `Co-Authored-By`, `Signed-off-by` or tool footers.
 The hook refuses them while `commit_message.forbid_other_trailers` is true (the default), and
-`.claude/settings.json` `attribution` keeps Claude Code from adding its own.
+`.claude/settings.json` `attribution` keeps Claude Code from adding its own. It also checks each
+Plan-Ref value: a work slug (`^[a-z0-9]+(-[a-z0-9]+)*$`) or the older dated folder name
+(`^[0-9]{6}_[0-9]{2}-[a-z0-9-]+$`). A commit without Plan-Ref passes; one commit cannot tell what the PR covers.
 
 ## Writing the message as an agent
 
@@ -73,6 +75,9 @@ One logical change per commit; split unrelated work.
   that starts with `Co-Authored-By:` is refused anywhere in the stored message (the body, or below
   the scissors line, which `-m`/`-F` keep) unless `allowed_trailers` lists it.
   A mid-line mention, a comment line and a `--verbose` diff pass.
+- Each `Plan-Ref` trailer git reads (key in any case) has a work-slug value or the older dated
+  folder name, also while the format is still the template placeholder. Whether the PR carries one
+  at all is for the PR stage (`check:plan`, the PR body gate).
 
 `git commit --no-verify` (or `-n`) skips it. Use it only in an emergency and say so in the PR.
 What stops an agent from skipping it, by layer:

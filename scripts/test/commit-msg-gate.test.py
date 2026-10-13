@@ -130,6 +130,18 @@ def main() -> int:
         expect(root, placeholder, "update stuff\n", True, "placeholder skips the format")
         expect(root, placeholder, "update stuff\n\nPlan-Ref: x\n", True, "placeholder keeps Plan-Ref")
         expect(root, placeholder, "update stuff\n\nCo-Authored-By: A <a@example.com>\n", False, "placeholder keeps the trailer check")
+        # Plan-Ref values: a work slug, or the dated form of older history. A commit need not carry one.
+        for value, ok in (("harness-naming-evals", True), ("261008_00-harness-baseline", True), ("x", True),
+                          ("<work-slug>", False), ("Harness_Baseline", False), ("a--b", False), ("a-", False),
+                          ("a b", False), ("", False)):
+            expect(root, bracket, f"feat: x\n\nPlan-Ref: {value}\n", ok, f"Plan-Ref value {value!r}")
+        expect(root, bracket, "feat: x\n\nplan-ref: ok\n", True, "Plan-Ref key in any case")
+        expect(root, bracket, "feat: x\n\n왜 바꿨는지 한 줄.\n", True, "no Plan-Ref is not required at commit time")
+        expect(root, bracket, "feat: x\n\n---\n\nPlan-Ref: Bad_Value\n", False, "a wrong value below `---`")
+        expect(root, placeholder, "update stuff\n\nPlan-Ref: Bad_Value\n", False, "placeholder keeps the value check")
+        result = gate(root, bracket, "feat: x\n\nPlan-Ref: Harness_Baseline\n")
+        assert "`Plan-Ref: Harness_Baseline`" in result.stderr and "YYMMDD_NN-" in result.stderr, result.stderr
+        assert 'Plan-Ref: <work-slug>"' in result.stderr, f"the closing hint shows the work-slug form: {result.stderr}"
         # Defaults without a commit_message section: no format, trailers other than Plan-Ref refused.
         expect(root, config(), "anything\n\nCo-Authored-By: A <a@example.com>\n", False, "default forbids trailers")
         expect(root, config(), "anything\n\nPlan-Ref: x\n", True, "default allows Plan-Ref")
