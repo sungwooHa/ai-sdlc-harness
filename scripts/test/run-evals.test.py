@@ -53,12 +53,12 @@ CASES = [
     {"id": "auth", "prompt": "auth", "expect": {}},
 ]
 # What would take the child off the subscription login, as claude 2.1.296 reads it (key credentials, workload
-# identity, provider switches, endpoint), and the subscription OAuth token that must stay. Kept apart from the
-# runner's own list so the test pins it.
+# identity, an explicit profile, provider switches, endpoint and socket), and the subscription OAuth token that
+# must stay. Kept apart from the runner's own list so the test pins it.
 OFF_LOGIN = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
-             "ANTHROPIC_FEDERATION_RULE_ID", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+             "ANTHROPIC_FEDERATION_RULE_ID", "ANTHROPIC_PROFILE", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
              "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS", "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
-             "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL"]
+             "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL", "ANTHROPIC_UNIX_SOCKET"]
 KEPT = ["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"]
 
 
@@ -100,7 +100,7 @@ def main() -> int:
             assert result.returncode == 2 and "unrecognized arguments" in result.stderr, \
                 f"{flag} must not exist: {result.returncode} {result.stderr}"
         result = run("--only", "auth")
-        assert result.returncode == 2 and "/login" in result.stdout and "--login" not in result.stdout, \
+        assert result.returncode == 2 and "/login" in result.stdout and "--login" not in result.stdout + result.stderr, \
             f"an authentication failure must abort with the login hint only: {result.stdout}{result.stderr}"
 
         result = run("--only", "abs")

@@ -34,12 +34,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / ".claude" / "evals" / "cases.jsonl"
 # What would take `claude -p` off the CLI's subscription login, as claude 2.1.296 reads it: key credentials,
-# workload identity, provider switches and an endpoint override. The OAuth token variables are the
-# subscription itself and stay.
+# workload identity, an explicit profile (it outranks a stored login), provider switches, an endpoint override and
+# a request socket (without the OAuth token it carries no login). The OAuth token variables are the subscription
+# itself and stay.
 OFF_LOGIN_ENV = (
     "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR", "ANTHROPIC_FEDERATION_RULE_ID",
-    "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS",
-    "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_PROFILE", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+    "CLAUDE_CODE_USE_ANTHROPIC_AWS", "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "CLAUDE_CODE_USE_MANTLE",
+    "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL", "ANTHROPIC_UNIX_SOCKET",
 )
 
 
