@@ -65,6 +65,9 @@ One logical change per commit; split unrelated work.
 - A first line that starts with `#` is refused: with `-m`/`-F` git keeps it as the subject, and the
   hook cannot tell that from an editor comment.
 - Trailers as git reads them (the last paragraph of `Key: value` lines), on every commit.
+  Reading stops only at git's exact scissors line (`# ------------------------ >8 ------------------------`
+  at the start or after a line feed, ending in one); a look-alike (other dashes, CRLF, a trailing
+  blank) is a comment line and the lines below it are read. A `---` line is text, as in `git log`.
   When that paragraph is prose or a link (`Why: ...`, `Follow-up: ...`, a bare URL), add a sentence
   or end with Plan-Ref. An attribution trailer (a key ending in `-by`) has to be removed: a line
   that starts with `Co-Authored-By:` is refused anywhere in the stored message (the body, or below

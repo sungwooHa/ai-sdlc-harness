@@ -5,11 +5,13 @@ First line: checked against `commit_message.format` unless that is still a templ
 git-written first lines (Merge branch/branches/pull request/remote-tracking branch/tag/commit, Revert ",
 Reapply ", fixup!, squash!, amend!) pass; a comment line first is refused. Trailers: checked always; only
 `allowed_trailers` pass while `forbid_other_trailers` is on (the default), and then a `Co-Authored-By:` line
-is refused anywhere git may store it unless `allowed_trailers` lists it.
+is refused anywhere git may store it unless `allowed_trailers` lists it. Only git's exact scissors line ends
+the message, and a `---` line does not: the gate reads the trailers `git log` reads.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -21,6 +23,8 @@ REPO = Path(__file__).resolve().parents[2]
 GATE = REPO / "scripts/commit-msg-gate.py"
 TYPES = ["feat", "fix", "docs", "style", "refactor", "test", "chore"]
 BRACKET = "{type}: [{모듈명}] {변경 내용}"
+SCISSORS = "# ------------------------ >8 ------------------------"
+SIGNED = "Signed-off-by: A <a@example.com>"
 
 
 def config(**commit_message: object) -> dict:
@@ -90,6 +94,17 @@ def main() -> int:
             ("feat: x\n\n본문에서 co-authored-by: 를 언급하는 문장은 막지 않는다.\n\nPlan-Ref: 261008_00-a\n", True),
             ("feat: x\n\nPlan-Ref: 261008_00-a\nSigned-off-by: A <a@example.com>\n", False),
             ("Merge branch 'x'\n\nCo-authored-by: A <a@example.com>\n", False),  # trailers still checked
+            # Only git's exact scissors line ends the message (`wt_status_locate_end`: at the start or after LF,
+            # ending in LF, comment char `#`). A look-alike is a comment line, and reading goes on below it.
+            # CRLF and a trailing blank are refused even where git would have cut them: wrong on the blocking side.
+            (f"feat: x\n\n{SCISSORS}\n\n{SIGNED}\n", True),
+            (f"feat: x\n\n# - >8 x\n\n{SIGNED}\n", False),
+            (f"feat: x\n\n{SCISSORS}\r\n\r\n{SIGNED}\r\n", False),
+            (f"feat: x\n\n{SCISSORS} \n\n{SIGNED}\n", False),
+            (f"feat: x\n\n{SCISSORS.replace('# -', '# ', 1)}\n\n{SIGNED}\n", False),  # one dash short
+            # git log reads trailers below a `---` line; so does the gate (`--no-divider`).
+            (f"feat: x\n\n---\n\n{SIGNED}\n", False),
+            ("feat: x\n\n---\n\nPlan-Ref: 261008_00-a\n", True),
         ):
             expect(root, bracket, message, ok, f"bracket format: {message!r}")
         # A last paragraph that is only a URL or `Key: value` lines is read as trailers; the refusal says so.
@@ -124,6 +139,28 @@ def main() -> int:
         expect(root, config(format=BRACKET, types=TYPES, allowed_trailers=["Plan-Ref", "Co-authored-by"]),
                "feat: x\n\nCo-Authored-By: A <a@example.com>\n본문.\n", True, "a listed Co-Authored-By passes in the body")
 
+        # Oracle: the trailers `git log` reads from the stored message (--cleanup=verbatim keeps all of it).
+        spec = importlib.util.spec_from_file_location("commit_msg_gate", GATE)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        scratch = Path(temp_dir) / "scratch"
+        scratch.mkdir()
+
+        def scratch_git(*args: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
+                                  cwd=scratch, capture_output=True, text=True, errors="replace")
+
+        assert scratch_git("init", "-q", "-b", "main").returncode == 0
+        for message in (f"feat: x\n\n{SCISSORS}\n\n{SIGNED}\n", f"feat: x\n\n# - >8 x\n\n{SIGNED}\n",
+                        f"feat: x\n\n---\n\n{SIGNED}\n"):
+            (Path(temp_dir) / "scratch.msg").write_text(message, encoding="utf-8")
+            committed = scratch_git("commit", "-q", "--allow-empty", "--cleanup=verbatim", "-F", str(Path(temp_dir) / "scratch.msg"))
+            assert committed.returncode == 0, committed.stderr
+            stored = scratch_git("log", "-1", "--format=%(trailers:only)").stdout
+            git_keys = [line.split(":", 1)[0] for line in stored.splitlines() if ":" in line]
+            gate_keys = module.trailer_keys(module.stored_text(message))
+            assert gate_keys == git_keys, f"gate reads {gate_keys}, git log reads {git_keys}: {message!r}"
+
         # End to end: the real .husky/commit-msg behind the shim ensure-husky.sh writes, with messages
         # git itself writes for merge and revert.
         repo = Path(temp_dir) / "e2e"
@@ -153,6 +190,8 @@ def main() -> int:
                     "-m", "Plan-Ref: 261008_00-x")
         assert moved.returncode != 0 and "Co-Authored-By" in moved.stderr, moved.stderr
         assert git("commit", "-q", "--allow-empty", "-m", "feat: x", "-m", "Plan-Ref: 261008_00-x").returncode == 0
+        fake = git("commit", "-q", "--allow-empty", "-m", "feat: x", "-m", "# - >8 x", "-m", SIGNED)
+        assert fake.returncode != 0 and "Signed-off-by" in fake.stderr, f"a look-alike scissors line hides nothing: {fake.stderr}"
         git("switch", "-q", "-c", "side")
         assert git("commit", "-q", "--allow-empty", "-m", "fix: 옆 가지").returncode == 0
         git("switch", "-q", "main")

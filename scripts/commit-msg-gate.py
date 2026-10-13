@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """commit-msg gate: the first line follows the project format, and no trailer but the allowed ones.
 
+Trailers are read as git reads them: nothing below git's exact scissors line, and a `---` line is text.
 Wired from .husky/commit-msg (hook intent commit_msg_gate). The rules live in
 docs/standards/COMMIT_CONVENTION.md; the values checked here live in .agents/harness.yaml
 `commit_message`. Standard library and git only.
@@ -27,6 +28,8 @@ TEXT = r"\S(?:.*?\S)?"  # nonempty, no surrounding blanks
 # `[{field}]` or `({field})` (optional, with the space after it) | `{field}`
 TOKEN = re.compile(r"(?P<opt>\[\{[^{}]+\}\] ?|\(\{[^{}]+\}\) ?)|\{(?P<field>[^{}]+)\}")
 CO_AUTHOR = re.compile(r"co-authored-by:", re.IGNORECASE)
+# git's exact scissors line (wt-status.c cut_line with the default comment char), LF included.
+SCISSORS = "# ------------------------ >8 ------------------------\n"
 
 
 def subject_pattern(fmt: str, types: list[str]) -> re.Pattern[str]:
@@ -51,20 +54,23 @@ def subject_pattern(fmt: str, types: list[str]) -> re.Pattern[str]:
 
 
 def stored_text(raw: str) -> str:
-    """What git reads as trailers: comment lines dropped, nothing below the scissors line. Not what git
+    """What git reads as trailers: comment lines dropped, nothing below git's exact scissors line — only
+    where git finds it (`wt_status_locate_end`: at the start or after LF, ending in LF). A look-alike
+    (other dashes, CRLF, a trailing blank) is a comment line and reading goes on below it. Not what git
     stores: with `-m`/`-F` it keeps the scissors line and what is below it."""
-    lines = []
-    for line in raw.splitlines():
-        if line.startswith("# -") and " >8 " in line:
-            break
-        if not line.startswith("#"):
-            lines.append(line)
+    if raw.startswith(SCISSORS):
+        raw = ""
+    elif (at := raw.find("\n" + SCISSORS)) >= 0:
+        raw = raw[: at + 1]
+    lines = [line for line in raw.splitlines() if not line.startswith("#")]
     return "\n".join(lines).strip("\n") + "\n"
 
 
 def trailer_keys(text: str) -> list[str]:
-    """Trailer keys as git reads them (the last paragraph of `Key: value` lines)."""
-    result = subprocess.run(["git", "interpret-trailers", "--parse"], input=text, capture_output=True, text=True)
+    """Trailer keys as git reads them (the last paragraph of `Key: value` lines). `--no-divider`: like
+    `git log %(trailers)`, a `---` line is message text, not the start of a patch."""
+    result = subprocess.run(["git", "interpret-trailers", "--parse", "--no-divider"], input=text,
+                            capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError(f"git interpret-trailers failed: {result.stderr.strip()}")
     return [line.split(":", 1)[0].strip() for line in result.stdout.splitlines() if ":" in line]
@@ -118,7 +124,8 @@ def main() -> int:
     try:
         manifest = json.loads((Path(args.repo_root) / MANIFEST_REL).read_text(encoding="utf-8"))
         cfg = manifest.get("commit_message") or {}
-        found = problems(Path(args.message_file).read_text(encoding="utf-8"), cfg)
+        # Bytes, not text mode: universal newlines would turn a CRLF scissors line into git's exact one.
+        found = problems(Path(args.message_file).read_bytes().decode("utf-8"), cfg)
     except (OSError, ValueError, RuntimeError, AttributeError) as exc:
         found = [f"cannot check the message: {exc}"]
     if not found:
