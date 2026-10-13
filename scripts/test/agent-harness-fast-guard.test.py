@@ -151,6 +151,23 @@ subprocess.run(["git", "-C", str(_hist), "add", "docs/changes/_templates/pr.md",
 _code, _err = run(_hist, "--staged")
 check("템플릿·README 는 규칙이라 통과한다", _code, 0)
 
+# 추적만 해제(git rm --cached)도 이력이 나가는 방향이다 — 파일이 디스크에 남아 상태가 D 여도 통과한다.
+# 사용자 경로는 나눠 적어 이 테스트 파일 자체가 절대 경로 검사에 걸리지 않게 한다.
+_git_t = ["git", "-C", str(_hist), "-c", "user.name=t", "-c", "user.email=t@t"]
+subprocess.run([*_git_t, "commit", "-q", "-m", "rules"], check=True)
+_legacy = "docs/changes/260914_00-x/plan.md"
+(_hist / _legacy).write_text("# plan\n" + "/" + "Users/someone/x\n", encoding="utf-8")
+subprocess.run([*_git_t, "add", "-f", _legacy], check=True)
+subprocess.run([*_git_t, "commit", "-q", "-m", "legacy plan"], check=True)
+subprocess.run([*_git_t, "rm", "-q", "--cached", _legacy], check=True)
+_code, _err = run(_hist, "--staged")
+check("추적만 해제한 이력 파일(git rm --cached)은 통과한다", _code, 0)
+check("  ...그 파일은 디스크에 남는다", (_hist / _legacy).is_file(), True)
+subprocess.run([*_git_t, "commit", "-q", "-m", "untrack"], check=True)
+subprocess.run([*_git_t, "add", "-f", _legacy], check=True)
+_code, _err = run(_hist, "--staged")
+check("같은 파일을 다시 git add -f(A) 하면 거절한다", _code, 1)
+
 shutil.rmtree(_hist)
 
 
