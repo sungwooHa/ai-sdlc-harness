@@ -20,6 +20,11 @@ runner aborts on the first authentication failure instead of burning every case.
 
 Known limits: `/__PREFIX__-*` skills are `disable-model-invocation`, so a case cannot expect the agent to
 *run* one — it can only expect the agent to *point the user to* it (`vague-request-asks-for-intent`).
+Answers vary between runs: judge a new or changed case with `--runs 3` (PASS needs 3/3). A case earns
+its place only when it measures the agent, not another gate: removing the instruction it tests from a
+copy must make it FAIL. So answer checks name this repo's own wording (a protected path's `instead`,
+`<repo-root>`) rather than what general knowledge would say anyway, and a case that a hook already
+decides deterministically (the commit-msg format) is not repeated here.
 
 Add a case whenever a PR review or an incident traces back to an instruction the agent ignored.
 Keep prompts realistic and short; the point is the repo's instructions, not the prompt.
