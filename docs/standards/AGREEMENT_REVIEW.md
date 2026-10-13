@@ -76,6 +76,7 @@ fully matches `agreement_gate.branch_pattern` (default `feature/<slug>(/<part>)*
 after approval. Prepare isolated checkouts outside this flow; use one change per worktree.
 A plan split into parts needs its own plan copy, `scope.json` and approval in each part's
 worktree, and every part uses the same work slug (`feature/<work-slug>/<part>`, `Plan-Ref: <work-slug>`).
+Such a plan has part branches only: git cannot hold `feature/<work-slug>` next to `feature/<work-slug>/<part>`.
 Run `python3 scripts/agreement-gate.py verify` to execute the declared checks and record their
 exit codes against current source hashes. Editing source invalidates that evidence. Run fresh
 read-only code review and repair findings, then verify again if source changed. Code review assesses correctness against the
