@@ -16,9 +16,9 @@ do the right thing on tasks we have actually seen go wrong? Run when `AGENTS.md`
 Login: the runner uses the `claude` CLI's subscription login, nothing else. Other credentials or
 provider settings in your environment never reach `claude -p`, also inside a Claude Code session.
 Log in once with `claude` (then `/login`). If `claude` itself is set up to use another account or
-credential (a Console login, a key helper, a credentials profile file), evals use that too, so log in
-with your subscription. The runner aborts on the first authentication failure instead of burning
-every case.
+credential (a Console login, a key helper, an active credentials profile), evals use that too: remove the
+key helper setting, turn the profile off (`ant auth logout`), then `/login` with your subscription. The
+runner aborts on the first authentication failure instead of burning every case.
 
 Known limits: `/__PREFIX__-*` skills are `disable-model-invocation`, so a case cannot expect the agent to
 *run* one — it can only expect the agent to *point the user to* it (`vague-request-asks-for-intent`).
