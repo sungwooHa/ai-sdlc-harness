@@ -27,6 +27,16 @@ Use inline styles/diagrams and embedded images; no external hosting or remote as
 A proposed mockup is not execution evidence. If the app cannot run, label actual verification as
 unavailable and record the missing environment instead of implying that the mockup was tested.
 
+How to make the views — one at a time in the main session:
+
+- Explainer: picture first (an inline SVG analogy), then a "who sees what" table, three
+  cause→effect boxes and a checklist. It is HTML, not Markdown.
+- Mockup: numbered steps, each with what was done, what is visible and the related US. Embed
+  images as base64, put the capture conditions in a footer, and leave no screenshot folder behind.
+  If the app cannot run, say so and show only the static parts.
+- Capturing screens needs a shell: declare the capture command among the `scope.json`
+  verification commands, or state that a human runs it.
+
 ## 2. Agree, then preserve the baseline
 
 Present the applicable HTML drafts with the spec and plan. Ask about unresolved decisions;
@@ -64,6 +74,9 @@ Use Write/Edit or Codex apply_patch for edits. For deletion/rename use the scope
 shell commands and unsupported tools are refused. A simple `git switch -c <branch>` whose name
 fully matches `agreement_gate.branch_pattern` (default `feature/<slug>(/<part>)*`) is allowed
 after approval. Prepare isolated checkouts outside this flow; use one change per worktree.
+A plan split into parts needs its own plan copy, `scope.json` and approval in each part's
+worktree, and every part uses the same work slug (`feature/<work-slug>/<part>`, `Plan-Ref: <work-slug>`).
+Such a plan has part branches only: git cannot hold `feature/<work-slug>` next to `feature/<work-slug>/<part>`.
 Run `python3 scripts/agreement-gate.py verify` to execute the declared checks and record their
 exit codes against current source hashes. Editing source invalidates that evidence. Run fresh
 read-only code review and repair findings, then verify again if source changed. Code review assesses correctness against the
@@ -132,7 +145,9 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
 - `allowed_subagents` (default `Explore`, `Plan`, `verifier`, `general-purpose`): subagent types
   the Agent/Task tool may start. A call without `subagent_type` counts as `general-purpose`, the
   host default that `/review-since` starts. A subagent's own tool calls pass the same PreToolUse
-  hook (the payload carries `agent_id`/`agent_type`), so a listed type gains no edit path.
+  hook (the payload carries `agent_id`/`agent_type`), so a listed type gains no edit path. One tool
+  opens for a listed type's own call only: its report back (`SubagentHandback`), text to the main
+  session that touches no file or shell. `SendMessage` and `ToolSearch` stay refused.
 - `read_only_commands`: commands that run before and after approval, no wildcards. Each entry is
   an argv prefix (`["git", "log"]`: any later argument opens) or `{"exact": [...]}` (only that
   whole argv). An entry that names a script or a path must be exact (`check:harness` and the gate

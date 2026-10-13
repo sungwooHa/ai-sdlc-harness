@@ -36,7 +36,7 @@ Then call the Skill tool with `to-spec` and apply these overrides while followin
 - Output: draft the spec with the section headings of `docs/changes/_templates/spec.md` (keep the
   headings, fill the body in __HUMAN_DOC_LANG__, no implementation file paths or code snippets; artifact links are allowed) and header status
   `draft`.
-- Visual agreement: read `docs/standards/AGREEMENT_REVIEW.md`. Before asking for spec approval,
+- Visual agreement: read `docs/standards/AGREEMENT_REVIEW.md` (§1 says how to make each view). Before asking for spec approval,
   create applicable draft HTML in the working `deliverables/` from the planned affected paths.
   Present the explainer as the entrypoint to mockup, flow and architecture when required. Label
   assumptions and unresolved plan details; refine the same drafts during plan mode.
@@ -49,6 +49,6 @@ Then call the Skill tool with `to-spec` and apply these overrides while followin
 
 Finish by telling the user the next step: plan mode for a multi-file change (the approved plan is
 saved locally as `docs/changes/<YYMMDD_NN>-<slug>/plan.md`; implementation commits carry
-`Plan-Ref: <YYMMDD_NN>-<slug>`), or, for a small one, use `__PREFIX__-agreement` to prepare exact scope and obtain hook-owned approval
+`Plan-Ref: <work-slug>`, the folder name without `YYMMDD_NN-`), or, for a small one, use `__PREFIX__-agreement` to prepare exact scope and obtain hook-owned approval
 before `/__PREFIX__-implement`. Plan approval must include the completed applicable HTML;
 intent/spec approval does not authorize an unseen plan.

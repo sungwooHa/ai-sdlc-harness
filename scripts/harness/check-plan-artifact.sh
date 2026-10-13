@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Artifact-chain gate: a change that spans more than one app, or touches a shared
+# Artifact-chain check: a change that spans more than one app, or touches a shared
 # contract in packages/*, must carry a plan. The plan itself lives on the PR (body), not in
-# the repo — the evidence a PR carries is a `Plan-Ref: <YYMMDD_NN>-<slug>` commit trailer on at
-# least one commit in the range (artifact_chain.plan_gate in .agents/harness.yaml).
+# the repo — the evidence a PR carries is a `Plan-Ref: <work-slug>` commit trailer on at
+# least one commit in the range (artifact_chain.plan_gate in .agents/harness.yaml). Only a
+# well-formed value counts: a work slug, or the older dated folder name `<YYMMDD_NN>-<slug>`.
 #
-# Warn-first (exit 0) so the rule can earn trust; PLAN_GATE=enforce turns a missing trailer
-# into exit 1. REVIEW.md's own rule applies: promote to enforce after the same gap has been
-# caught three times.
+# A local tool run by hand: no CI runs it, so its warning reaches only whoever runs it, in their
+# terminal. Warn-first (exit 0) so the rule can earn trust; PLAN_GATE=enforce turns a missing
+# trailer into exit 1. REVIEW.md's own rule applies: promote to enforce after the same gap has
+# been caught three times.
 #
 # Usage: check-plan-artifact.sh [<base-ref>]     default base: origin/__INTEGRATION_BRANCH__
 #        PLAN_GATE=enforce|warn|off
@@ -27,14 +29,15 @@ changed="$(git diff --name-only "$BASE"...HEAD)"
 apps="$(printf '%s\n' "$changed" | sed -nE 's#^apps/([^/]+)/.*#\1#p' | sort -u)"
 app_count="$(printf '%s\n' "$apps" | sed '/^$/d' | wc -l | tr -d ' ')"
 touches_packages="$(printf '%s\n' "$changed" | grep -cE '^packages/[^/]+/' || true)"
-plan_refs="$(git log --format='%(trailers:key=Plan-Ref,valueonly)' "$BASE"..HEAD | sed '/^$/d' | sort -u)"
+plan_refs="$(git log --format='%(trailers:key=Plan-Ref,valueonly)' "$BASE"..HEAD \
+  | grep -xE '[a-z0-9]+(-[a-z0-9]+)*|[0-9]{6}_[0-9]{2}-[a-z0-9-]+' | sort -u || true)"
 has_plan="$(printf '%s\n' "$plan_refs" | sed '/^$/d' | wc -l | tr -d ' ')"
 
 if { [ "$app_count" -ge 2 ] || [ "$touches_packages" -gt 0 ]; } && [ "$has_plan" -eq 0 ]; then
   reason="$([ "$app_count" -ge 2 ] && echo "apps: $(printf '%s ' $apps)" || echo "packages/* contract touched")"
-  echo "check-plan-artifact: this change spans ${reason}but no commit carries a Plan-Ref trailer."
-  echo "  AGENTS.md: 'Plan | change touches several files | plan mode; commits carry Plan-Ref: <YYMMDD_NN>-<slug>; the plan is pasted into the PR body'."
-  echo "  Add the trailer to a commit (git commit --trailer 'Plan-Ref: <YYMMDD_NN>-<slug>') or explain in the PR why no plan is needed."
+  echo "check-plan-artifact: this change spans ${reason% } but no commit carries a Plan-Ref trailer with a well-formed value."
+  echo "  docs/standards/COMMIT_CONVENTION.md (Trailers): a PR that touches more than one app or any shared contract needs Plan-Ref on at least one commit."
+  echo "  Add the trailer to a commit (git commit --trailer 'Plan-Ref: <work-slug>') or explain in the PR why no plan is needed."
   if [ "${PLAN_GATE:-warn}" = "enforce" ]; then
     exit 1
   fi

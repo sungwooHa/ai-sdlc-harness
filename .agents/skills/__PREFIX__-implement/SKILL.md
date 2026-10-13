@@ -31,8 +31,9 @@ unless the user disabled Ponytail. Then call the Skill tool with `implement` and
 
 - TDD at the agreed seams (`/tdd`); use the repo's narrow-to-wide test ladder. Run declared checks through `python3 scripts/agreement-gate.py verify` to record source-bound
   evidence. Show actual commands and results. Respect protected paths and the commit convention in `AGENTS.md`.
-- Implementation commits carry `Plan-Ref: <YYMMDD_NN>-<slug>`; the first commit supplies the
-  trailer checked by CI. Keep the entire change folder local and uncommitted.
+- Implementation commits carry `Plan-Ref: <work-slug>` (the folder name without `YYMMDD_NN-`); the
+  commit-msg hook checks its value, and `check:plan`, a local tool run by hand, looks for it on
+  multi-app PRs. Keep the entire change folder local and uncommitted.
 - Run `/review-since <branch-base>` in a fresh subagent against the referenced agreement's
   spec/plan, with `REVIEW.md` as a standards source. This is code correctness review. Run
   `/__PREFIX__-ui-review <branch-base>` for UI changes unless the approved plan explicitly says
@@ -45,7 +46,7 @@ unless the user disabled Ponytail. Then call the Skill tool with `implement` and
 ## Prepare the PR value review
 
 The HTML already existed for pre-implementation agreement. After verification, update only the
-working `deliverables/` using the result-evidence column in `AGREEMENT_REVIEW.md`; preserve all
+working `deliverables/` using the result-evidence column and the how-to in `AGREEMENT_REVIEW.md` §1; preserve all
 agreed copies. Recheck the actual changed paths against `required_when`. An unexpected required
 view or materially different behavior returns to agreement for the remaining work; never label
 a retrospective draft as pre-implementation approval. If no HTML condition applies, document
@@ -65,6 +66,7 @@ is outside this adapter. Use scoped remove/move helpers for deletion/rename and 
 Write/Edit/apply_patch tools for edits. Arbitrary shell mutation is blocked.
 
 Before finishing, consider knowledge beyond this change: put durable rules in the relevant
-app's `AGENTS.md`, or state `지식 승격 없음`. Report implementation/verification status, the
+app's `AGENTS.md`, or state `지식 승격 없음`. The agreement gate refuses writes outside the approved scope:
+put that `AGENTS.md` in scope from the start, or propose the line in pr.md for the next revision. Report implementation/verification status, the
 agreement reference, deviations, unverified value, required attachments and actual test results.
 Human value review may remain pending after implementation handoff; label it as pending.

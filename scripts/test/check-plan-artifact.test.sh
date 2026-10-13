@@ -35,6 +35,15 @@ check "두 앱 + plan 없음 → enforce exit 1" "$(run "$d" enforce | tail -1)"
 
 d="$(repo packages-enforce)"; commit_files "$d" packages/api-contracts/src/x.ts
 check "packages 계약 + plan 없음 → enforce exit 1" "$(run "$d" enforce | tail -1)" "exit=1"
+check "packages 계약 + plan 없음 → 경고 문구 띄어 씀" "$(run "$d" | grep -c 'touched but')" "1"
+
+d="$(repo two-apps-placeholder)"; COMMIT_MSG=$'feat: x\n\nPlan-Ref: <work-slug>' commit_files "$d" apps/frontend/src/a.ts apps/desktop/src/m.ts
+check "두 앱 + 자리표시자 Plan-Ref → 세지 않음(enforce exit 1)" "$(run "$d" enforce | tail -1)" "exit=1"
+
+d="$(repo two-apps-with-slug)"; COMMIT_MSG=$'feat: x\n\nPlan-Ref: invite-flow' commit_files "$d" apps/frontend/src/a.ts apps/desktop/src/m.ts
+out="$(run "$d" enforce)"
+check "두 앱 + 작업명 Plan-Ref → ok" "$(echo "$out" | tail -1)" "exit=0"
+check "두 앱 + 작업명 Plan-Ref → 값을 보여준다" "$(echo "$out" | grep -c 'Plan-Ref: invite-flow')" "1"
 
 d="$(repo two-apps-with-planref)"; COMMIT_MSG=$'feat: x\n\nPlan-Ref: 260914_00-two-apps' commit_files "$d" apps/frontend/src/a.ts apps/desktop/src/m.ts
 out="$(run "$d" enforce)"

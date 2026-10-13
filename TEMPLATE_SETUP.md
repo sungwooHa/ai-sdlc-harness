@@ -78,8 +78,8 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
   `COMMIT_CONVENTION.md`·합의 게이트에 맞게 고침), `draw-diagram`.
 - `scripts/harness/`: `vendor-skills.py`, `run-evals.py`, `ensure-husky.sh`, `check-plan-artifact.sh`.
 - `scripts/`: `check-agent-harness.py`, `agent-harness-fast-guard.py`, `protected-paths-guard.py`.
-- `scripts/test/`: 하네스 가드 회귀 테스트 15종(`test:harness` 가 전부 돌린다. init 을 마친 프로젝트에서는
-  `init-template` 테스트가 SKIP 으로 끝난다. 그중 `commit-msg-gate`·`init-template` 테스트는 템플릿에서 새로 씀).
+- `scripts/test/`: 하네스 가드 회귀 테스트 16종(`test:harness` 가 전부 돌린다. init 을 마친 프로젝트에서는
+  `init-template` 테스트가 SKIP 으로 끝난다. 그중 `commit-msg-gate`·`init-template`·`run-evals` 테스트는 템플릿에서 새로 씀).
 - `docs/changes/_templates/{intent,spec,plan}.md`, `.claude/evals/README.md`,
   `.codex/hooks.json`, `.codex/config.toml`, `.claude/agents/verifier.md`.
 
@@ -105,7 +105,7 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 - `docs/standards/<domain>/**`, `docs/knowledge/**`(생성 인덱스 시스템 포함), `docs/adr/**`,
   실제 변경 폴더 `docs/changes/<날짜>-*`, `ui-critic`/`agent-thread-inspector`
   서브에이전트, `bitbucket-pipelines.yml`.
-- 원본 evals 9케이스(하드코딩된 색상 hex, `*.generated.ts` 등 프로젝트 규칙을 검사) → 일반 3케이스로 교체.
+- 원본 evals 9케이스(하드코딩된 색상 hex, `*.generated.ts` 등 프로젝트 규칙을 검사) → 하네스 지시를 재는 일반 9케이스로 교체.
 
 ## 체커에서 걷어낸 규칙
 
@@ -128,6 +128,9 @@ PR에 추가된 `## 가치 확인` 제목과 상태 문자열도 언어 변경 �
 
 ## 게이트 추가하는 법
 
+- **어느 층에**: 층 순서는 DB 제약 > CI > pre-commit > 에이전트 훅 > 문서다(앞일수록 우회하기 어렵다).
+  넣지 않은 게이트는 있다고 적지 않는다. 이 템플릿에는 CI 가 없다 — `check:plan` 은 손으로 돌리는 로컬 도구다.
+  아무도 볼 필요가 없는 경고는 강제 수단으로 세지 않는다 — 막거나(exit≠0), 사람이 보는 화면(PR 주석, 그 도구를 직접 돌린 사람의 터미널)에 띄운다.
 - **커밋 게이트**: `.husky/pre-commit` 에 한 줄 추가(무엇을 막는지 + 끄는 법을 주석으로) →
   `.agents/harness.yaml` `shared_hook_intents` 에 같은 스크립트를 선언(`event` 는 husky 파일 이름,
   `host_files` 에 그 파일). 선언만 있고 배선이 없거나, 배선만 있고 선언이 없거나, 선언과 다른

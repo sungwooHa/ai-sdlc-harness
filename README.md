@@ -25,7 +25,8 @@
 변경 하나는 `docs/changes/<YYMMDD_NN>-<slug>/` 폴더 하나에 대응한다. 각 단계는 그 폴더에 파일을
 남기고, 다음 단계는 앞 단계가 남긴 파일을 입력으로 받는다. **이 폴더는 로컬 전용이다** — 커밋하지
 않고(`.gitignore` + fast guard 거절), 변경의 이력은 PR 설명(`pr.md`)과 PR 첨부가 담는다.
-커밋과 계획은 `Plan-Ref: <YYMMDD_NN>-<slug>` 트레일러로 잇는다.
+커밋과 계획은 `Plan-Ref: <work-slug>` 트레일러로 잇는다. 작업명(폴더 이름에서 `YYMMDD_NN-`을 뺀 것)
+하나를 브랜치·커밋·PR이 함께 쓰고, 날짜·순번은 로컬 폴더 이름에만 둔다.
 
 ```mermaid
 flowchart LR

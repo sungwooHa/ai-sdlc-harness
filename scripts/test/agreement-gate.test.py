@@ -153,6 +153,14 @@ with tempfile.TemporaryDirectory() as tmp:
         for tool, args in (('Write', write), ('Edit', edit), ('Bash', {'command': 'touch apps/web/src/ui/screen.tsx'})):
             assert event(root, 'PreToolUse', tool, args, agent_id='a1', agent_type=kind).returncode == 2, (kind, tool)
         assert event(root, 'PreToolUse', 'Bash', {'command': 'git diff --stat'}, agent_id='a1', agent_type=kind).returncode == 0, kind
+    # F2: a listed subagent hands its report back (SubagentHandback carries text to the main session and touches
+    # no file or shell). That one tool opens for it; the main session and unlisted types get nothing more.
+    for extra in ({'agent_type': 'verifier'}, {'agent_type': 'general-purpose'}, {}):
+        assert event(root, 'PreToolUse', 'SubagentHandback', {'report': 'x'}, agent_id='a1', **extra).returncode == 0, extra
+    for extra in ({'agent_id': 'a1', 'agent_type': 'statusline-setup'}, {'agent_type': 'verifier'}, {}):
+        assert event(root, 'PreToolUse', 'SubagentHandback', {'report': 'x'}, **extra).returncode == 2, extra
+    for tool in ('SendMessage', 'ToolSearch'):
+        assert event(root, 'PreToolUse', tool, {}, agent_id='a1', agent_type='verifier').returncode == 2, tool
     for command in ('python3 scripts/check-agent-harness.py --format text', 'agent-browser snapshot -i',
                     'agent-browser open http://localhost:3000/login', 'agent-browser screenshot'):
         assert event(root, 'PreToolUse', 'Bash', {'command': command}).returncode == 0, command
@@ -257,6 +265,8 @@ with tempfile.TemporaryDirectory() as tmp:
     configure(allowed_subagents=['Explore'], read_only_commands=[['make', 'lint']])
     assert event(root, 'PreToolUse', 'Agent', {'subagent_type': 'verifier'}).returncode == 2
     assert event(root, 'PreToolUse', 'Agent', {'prompt': 'x'}).returncode == 2  # The default type is listed data too.
+    for extra in ({'agent_type': 'verifier'}, {}):  # The report tool follows the same list, default type included.
+        assert event(root, 'PreToolUse', 'SubagentHandback', {'report': 'x'}, agent_id='a1', **extra).returncode == 2, extra
     assert event(root, 'PreToolUse', 'Bash', {'command': 'make lint --quiet'}).returncode == 0
     assert event(root, 'PreToolUse', 'Bash', {'command': 'git status'}).returncode == 2
     configure(read_only_commands=[['git'], ['python3']])  # Even a too-broad list cannot reopen gate-owned commands.
@@ -434,6 +444,7 @@ with tempfile.TemporaryDirectory() as tmp:
     for kind in ('verifier', 'general-purpose'):
         assert event(root, 'PreToolUse', 'Write', write, agent_id='a1', agent_type=kind).returncode == 0, kind
         assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / 'other.py')}, agent_id='a1', agent_type=kind).returncode == 2, kind
+        assert event(root, 'PreToolUse', 'SubagentHandback', {'report': 'x'}, agent_id='a1', agent_type=kind).returncode == 0, kind
     # The verifier (.claude/agents/verifier.md) runs tests only through the declared verification commands.
     for command, code in (('python3 scripts/agreement-gate.py verify', 0), ('python3 scripts/agreement-gate.py status', 0),
                           ('pnpm test', 2), ('python3 -m pytest -q', 2)):

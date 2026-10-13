@@ -607,6 +607,11 @@ def pretool(repo, payload):
     if tool in ('Agent', 'Task') and (args.get('subagent_type') or 'general-purpose') in listed(
             config(repo)[1], 'allowed_subagents', lambda name: isinstance(name, str) and name):
         return
+    # A listed subagent hands its report back: text to the main session, no file or shell. Only a subagent's own
+    # call (agent_id) of a listed type opens it; the main session's SendMessage and ToolSearch stay refused.
+    if tool == 'SubagentHandback' and payload.get('agent_id') and (payload.get('agent_type') or 'general-purpose') in listed(
+            config(repo)[1], 'allowed_subagents', lambda name: isinstance(name, str) and name):
+        return
     raise Blocked(f'unsupported tool {tool!r}: no verified mutation contract; add an explicit adapter')
 
 

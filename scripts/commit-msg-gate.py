@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """commit-msg gate: the first line follows the project format, and no trailer but the allowed ones.
 
+Trailers are read as git reads them: nothing below git's exact scissors line, and a `---` line is text.
+Each Plan-Ref trailer has a work slug as its value (or the older dated change-folder name).
 Wired from .husky/commit-msg (hook intent commit_msg_gate). The rules live in
 docs/standards/COMMIT_CONVENTION.md; the values checked here live in .agents/harness.yaml
 `commit_message`. Standard library and git only.
@@ -27,6 +29,10 @@ TEXT = r"\S(?:.*?\S)?"  # nonempty, no surrounding blanks
 # `[{field}]` or `({field})` (optional, with the space after it) | `{field}`
 TOKEN = re.compile(r"(?P<opt>\[\{[^{}]+\}\] ?|\(\{[^{}]+\}\) ?)|\{(?P<field>[^{}]+)\}")
 CO_AUTHOR = re.compile(r"co-authored-by:", re.IGNORECASE)
+# git's exact scissors line (wt-status.c cut_line with the default comment char), LF included.
+SCISSORS = "# ------------------------ >8 ------------------------\n"
+# A work slug, or the dated change-folder form that older history carries.
+PLAN_REF = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*|[0-9]{6}_[0-9]{2}-[a-z0-9-]+")
 
 
 def subject_pattern(fmt: str, types: list[str]) -> re.Pattern[str]:
@@ -51,23 +57,39 @@ def subject_pattern(fmt: str, types: list[str]) -> re.Pattern[str]:
 
 
 def stored_text(raw: str) -> str:
-    """What git reads as trailers: comment lines dropped, nothing below the scissors line. Not what git
+    """What git reads as trailers: comment lines dropped, nothing below git's exact scissors line — only
+    where git finds it (`wt_status_locate_end`: at the start or after LF, ending in LF). A look-alike
+    (other dashes, CRLF, a trailing blank) is a comment line and reading goes on below it. Not what git
     stores: with `-m`/`-F` it keeps the scissors line and what is below it."""
-    lines = []
-    for line in raw.splitlines():
-        if line.startswith("# -") and " >8 " in line:
-            break
-        if not line.startswith("#"):
-            lines.append(line)
+    if raw.startswith(SCISSORS):
+        raw = ""
+    elif (at := raw.find("\n" + SCISSORS)) >= 0:
+        raw = raw[: at + 1]
+    lines = [line for line in raw.splitlines() if not line.startswith("#")]
     return "\n".join(lines).strip("\n") + "\n"
 
 
-def trailer_keys(text: str) -> list[str]:
-    """Trailer keys as git reads them (the last paragraph of `Key: value` lines)."""
-    result = subprocess.run(["git", "interpret-trailers", "--parse"], input=text, capture_output=True, text=True)
+def trailers(text: str) -> list[tuple[str, str]]:
+    """Trailers as git reads them (the last paragraph of `Key: value` lines). `--no-divider`: like
+    `git log %(trailers)`, a `---` line is message text, not the start of a patch."""
+    result = subprocess.run(["git", "interpret-trailers", "--parse", "--no-divider"], input=text,
+                            capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError(f"git interpret-trailers failed: {result.stderr.strip()}")
-    return [line.split(":", 1)[0].strip() for line in result.stdout.splitlines() if ":" in line]
+    pairs = [line.split(":", 1) for line in result.stdout.splitlines() if ":" in line]
+    return [(key.strip(), value.strip()) for key, value in pairs]
+
+
+def trailer_keys(text: str) -> list[str]:
+    return [key for key, _ in trailers(text)]
+
+
+def plan_ref_problems(message: str) -> list[str]:
+    """Each Plan-Ref trailer git reads (key in any case) has a work slug or the older dated value."""
+    bad = [value for key, value in trailers(stored_text(message))
+           if key.lower() == "plan-ref" and not PLAN_REF.fullmatch(value)]
+    return [f"`Plan-Ref: {value}` has no valid value — write `Plan-Ref: <work-slug>`, the change folder"
+            " name without `YYMMDD_NN-` (the older dated folder name also passes)" for value in bad]
 
 
 def problems(message: str, cfg: dict) -> list[str]:
@@ -81,11 +103,11 @@ def problems(message: str, cfg: dict) -> list[str]:
         # would be stored as the subject unchecked. Refuse it instead of guessing.
         if next((line for line in message.splitlines() if line.strip()), "").startswith("#"):
             found.append("first line starts with `#`; with -m/-F git keeps it as the subject — write the subject first")
-            return found + trailer_problems(message, cfg)
+            return found + trailer_problems(message, cfg) + plan_ref_problems(message)
         types = [t for t in cfg.get("types") or [] if isinstance(t, str)]
         if not subject.startswith(GIT_WRITTEN) and not subject_pattern(fmt, types).fullmatch(subject):
             found.append(f"first line `{subject}` does not match `{fmt}`" + (f" (type: {' | '.join(types)})" if types else ""))
-    return found + trailer_problems(message, cfg)
+    return found + trailer_problems(message, cfg) + plan_ref_problems(message)
 
 
 def trailer_problems(message: str, cfg: dict) -> list[str]:
@@ -118,7 +140,8 @@ def main() -> int:
     try:
         manifest = json.loads((Path(args.repo_root) / MANIFEST_REL).read_text(encoding="utf-8"))
         cfg = manifest.get("commit_message") or {}
-        found = problems(Path(args.message_file).read_text(encoding="utf-8"), cfg)
+        # Bytes, not text mode: universal newlines would turn a CRLF scissors line into git's exact one.
+        found = problems(Path(args.message_file).read_bytes().decode("utf-8"), cfg)
     except (OSError, ValueError, RuntimeError, AttributeError) as exc:
         found = [f"cannot check the message: {exc}"]
     if not found:
@@ -127,7 +150,7 @@ def main() -> int:
         print(f"commit-msg-gate: {item}", file=sys.stderr)
     print(
         f"commit-msg-gate: see {CONVENTION}. Agents pass one -m per paragraph: "
-        'git commit -m "<first line>" -m "<why>" -m "Plan-Ref: <YYMMDD_NN>-<slug>"',
+        'git commit -m "<first line>" -m "<why>" -m "Plan-Ref: <work-slug>"',
         file=sys.stderr,
     )
     return 1

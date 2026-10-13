@@ -60,7 +60,7 @@ knowledge, ADRs for durable decisions, and the templates. Per-change execution h
 README and `_templates/`), and `documentation_layout.local_only_roots` makes the fast guard refuse
 any such path that is staged or appears in a PR diff (so `git add -f` and merges from older branches
 are caught at pre-commit and in CI). What leaves the machine: the PR description (from
-`_templates/pr.md`), PR attachments for the deliverables, the `Plan-Ref: <YYMMDD_NN>-<slug>` commit
+`_templates/pr.md`), PR attachments for the deliverables, the `Plan-Ref: <work-slug>` commit
 trailer, and knowledge promoted through the one door below. A multi-session or multi-machine handoff
 mid-change goes through the PR, not through a commit.
 
@@ -305,7 +305,7 @@ file changed. Point `harness.yaml` `ci.pipeline_file` at `__CI_FILE__` once the 
 harness check then warns when the pipeline stops referencing the checker.
 
 Also run `scripts/harness/check-plan-artifact.sh` on every PR: a diff spanning two or more `apps/*`
-or touching a shared contract without a `Plan-Ref: <YYMMDD_NN>-<slug>` commit trailer in the PR
+or touching a shared contract without a `Plan-Ref: <work-slug>` commit trailer in the PR
 range gets a warning in the log. Warn-first; promote with `PLAN_GATE=enforce` once the gate has
 earned trust. CI cannot read the PR description without a token, so the gate reads commit trailers,
 not the description.

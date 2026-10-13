@@ -67,7 +67,8 @@ def run_git(repo: Path, args: list[str]) -> set[str]:
 
 def changed_paths(repo: Path, staged: bool) -> set[str]:
     if staged:
-        return run_git(repo, ["diff", "--cached", "--name-only"])
+        # A staged deletion is history leaving, even when `git rm --cached` keeps the file on disk.
+        return run_git(repo, ["diff", "--cached", "--name-only", "--diff-filter=d"])
     paths = run_git(repo, ["diff", "--name-only", "HEAD"])
     paths.update(run_git(repo, ["ls-files", "--others", "--exclude-standard"]))
     return paths

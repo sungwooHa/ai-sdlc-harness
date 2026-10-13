@@ -5,19 +5,35 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 # 템플릿 원본에서만 돈다: init 뒤 프로젝트(자리표시자 치환, init 스크립트 삭제)에는 시험할 것이 없다.
-# 자리표시자는 나눠 적어 init 이 이 줄까지 치환하지 않게 한다.
-if ! { grep -q '__DEFAULT_''BRANCH__' "$REPO/AGENTS.md" && [ -f "$REPO/scripts/harness/init-template.sh" ]; }; then
+# 원본 = init 스크립트가 있고, 그 subst 줄의 자리표시자가 AGENTS.md·package.json 에 하나라도 남음. 원본은
+# 건너뛰지 않는다. 자리표시자는 나눠 적어 init 이 이 줄까지 치환하지 않게 한다.
+INIT="$REPO/scripts/harness/init-template.sh"
+original=0
+if [ -f "$INIT" ]; then
+  for p in $(sed -n 's/^subst \(__[A-Z0-9_]*__\) .*/\1/p' "$INIT"); do
+    if grep -qF -- "$p" "$REPO/AGENTS.md" "$REPO/package.json"; then original=1; fi
+  done
+fi
+if [ "$original" = 0 ]; then
   echo "SKIP: init-template tests (already initialized)"; exit 0
+fi
+if ! grep -q '__DEFAULT_''BRANCH__' "$REPO/AGENTS.md"; then
+  echo "FAIL: init-template tests — 원본 템플릿(init 스크립트와 자리표시자가 남음)인데 AGENTS.md 에 기본 브랜치 자리표시자가 없다. init 이 sed 로 고치는 Branches 줄을 되돌린다"
+  exit 1
 fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 fail=0
 check() { if [ "$2" = "$3" ]; then echo "ok  $1"; else echo "FAIL $1 — 기대 [$3] 실제 [$2]"; fail=1; fi; }
 
-init() { # $1 name, rest: init options; prints the copy's directory
-  local d="$TMP/$1"; shift
+copy() { # $1 name; prints the directory of a copy of the tracked files
+  local d="$TMP/$1"
   mkdir -p "$d"
   git -C "$REPO" ls-files -z | (cd "$REPO" && tar --null -T - -cf -) | tar -xf - -C "$d"
+  echo "$d"
+}
+init() { # $1 name, rest: init options; prints the copy's directory
+  local d; d="$(copy "$1")"; shift
   sh "$d/scripts/harness/init-template.sh" --project-name demo --prefix demo "$@" >/dev/null
   echo "$d"
 }
@@ -49,5 +65,13 @@ git -C "$d" init -q
 check "init 뒤 프로젝트 → 건너뜀" "$(skipped "$d")" "SKIP: init-template tests (already initialized) exit 0"
 rm -f "$d/scripts/harness/init-template.sh"
 check "init 스크립트까지 지운 프로젝트 → 건너뜀" "$(skipped "$d")" "SKIP: init-template tests (already initialized) exit 0"
+
+# 원본에서 Branches 줄만 고쳐도 건너뛰면 안 된다. 판별 단계에서 실패로 끝나 전체 시험(재귀)까지 가지 않는다.
+d="$(copy edited)"
+sed 's/__DEFAULT_''BRANCH__/main/' "$d/AGENTS.md" > "$d/AGENTS.md.new" && mv "$d/AGENTS.md.new" "$d/AGENTS.md"
+git -C "$d" init -q && git -C "$d" add -A
+out="$(skipped "$d")"
+check "원본에서 Branches 줄을 고침 → exit 1" "${out##* exit }" "1"
+check "원본에서 Branches 줄을 고침 → SKIP 없음" "$(printf '%s' "$out" | grep -c SKIP || true)" "0"
 
 [ "$fail" = 0 ] && echo "PASS: init-template tests" || { echo "FAIL: init-template tests"; exit 1; }
