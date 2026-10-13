@@ -9,13 +9,13 @@ Checks supported in `expect`:
   files_changed_not_matching:   no changed file may contain the regex
   command_succeeds:             shell command (run in the worktree) must exit 0
 
-Usage: python3 scripts/harness/run-evals.py [--only id,id] [--model sonnet] [--max-turns 20] [--runs 1] [--login]
-Requires the `claude` CLI and API access; not run in the default test:harness lane.
+Usage: python3 scripts/harness/run-evals.py [--only id,id] [--model sonnet] [--max-turns 20] [--runs 1]
+Requires the `claude` CLI logged in with a subscription; not run in the default test:harness lane.
 `--model` takes the CLI's alias (default `sonnet`); pin an exact model ID only for comparison runs.
 `--runs N` runs each case N times and prints k/N; a case passes only when all N runs pass.
-`--login` drops ANTHROPIC_API_KEY from the child environment so the claude.ai login is used — needed
-when running from inside a Claude Code session, which exports a session-scoped key that `claude -p`
-rejects with 401. An authentication failure aborts the run instead of failing every case.
+The child `claude -p` runs on that login only: variables that would route it elsewhere are left out of
+its environment, also inside a Claude Code session. An authentication failure aborts the run instead of
+failing every case.
 """
 
 from __future__ import annotations
@@ -33,6 +33,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / ".claude" / "evals" / "cases.jsonl"
+# What would take `claude -p` off the CLI's subscription login, as claude 2.1.296 reads it: key credentials,
+# workload identity, provider switches and an endpoint override. The OAuth token variables are the
+# subscription itself and stay.
+OFF_LOGIN_ENV = (
+    "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR", "ANTHROPIC_FEDERATION_RULE_ID",
+    "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS",
+    "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL",
+)
 
 
 def sh(cmd: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess:
@@ -95,14 +103,10 @@ def main() -> int:
     ap.add_argument("--model", default="sonnet")
     ap.add_argument("--max-turns", type=int, default=20)
     ap.add_argument("--runs", type=int, default=1, help="run each case N times; PASS needs N/N")
-    ap.add_argument("--login", action="store_true",
-                    help="ignore ANTHROPIC_API_KEY and use the claude.ai login of the `claude` CLI")
     args = ap.parse_args()
     if args.runs < 1:
         ap.error("--runs must be at least 1")
-    env = dict(os.environ)
-    if args.login:
-        env.pop("ANTHROPIC_API_KEY", None)
+    env = {key: value for key, value in os.environ.items() if key not in OFF_LOGIN_ENV}
     only = set(args.only.split(",")) if args.only else None
     cases = [json.loads(l) for l in CASES.read_text(encoding="utf-8").splitlines() if l.strip()]
     failures = 0
@@ -115,8 +119,8 @@ def main() -> int:
             try:
                 run_ok, run_problems = run_case(case, args.model, args.max_turns, env)
             except AuthFailure as exc:
-                hint = " (ANTHROPIC_API_KEY is set; retry with --login)" if "ANTHROPIC_API_KEY" in env else ""
-                print(f"ABORT: claude could not authenticate — {exc}{hint}", flush=True)
+                print(f"ABORT: claude could not authenticate — {exc} Check that the `claude` CLI is logged in "
+                      "(run `claude`, then /login).", flush=True)
                 return 2
             passed += run_ok
             problems.extend(f"run {run}: {p}" for p in run_problems)

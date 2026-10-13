@@ -4,7 +4,9 @@
 The runner is copied into a throwaway git repository with its own cases.jsonl, and a fake `claude`
 first on PATH stands in for the CLI. Checks: the default model is the `sonnet` alias; a new file in a
 new directory is seen by `files_changed_not_matching`; `--runs N` prints k/N and passes a case only
-when every run passes; the runner leaves no worktree behind.
+when every run passes; the runner leaves no worktree behind. The child gets the CLI's subscription login
+only: the variables that would route it elsewhere are left out, the OAuth token stays, `--login` and
+`--api` do not exist, and an authentication failure aborts with a login hint.
 """
 
 from __future__ import annotations
@@ -20,15 +22,21 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 RUNNER = REPO / "scripts/harness/run-evals.py"
 
-# Logs its argv, then acts on the prompt: `abs` writes a user path into a new directory, `flaky`
-# answers wrongly on its second call only. The user path is split so the fast guard does not read it.
+# Logs its argv and the ANTHROPIC_/CLAUDE_CODE_ variables it received, then acts on the prompt: `auth`
+# fails to authenticate, `abs` writes a user path into a new directory, `flaky` answers wrongly on its
+# second call only. The user path is split so the fast guard does not read it.
 FAKE_CLAUDE = """#!/usr/bin/env python3
 import json, os, sys
 from pathlib import Path
 state = Path(os.environ["FAKE_CLAUDE_STATE"])
 with (state / "argv.jsonl").open("a", encoding="utf-8") as log:
     log.write(json.dumps(sys.argv[1:]) + "\\n")
+with (state / "env.jsonl").open("a", encoding="utf-8") as log:
+    log.write(json.dumps(sorted(k for k in os.environ if k.startswith(("ANTHROPIC_", "CLAUDE_CODE_")))) + "\\n")
 prompt = sys.argv[sys.argv.index("-p") + 1]
+if prompt == "auth":
+    print("Failed to authenticate. Please log in.")
+    sys.exit(1)
 if prompt == "abs":
     Path("newdir").mkdir()
     Path("newdir/a.md").write_text("see /" + "Users/x/notes\\n", encoding="utf-8")
@@ -42,7 +50,16 @@ CASES = [
     {"id": "plain", "prompt": "plain", "expect": {"output_matches": "^done$"}},
     {"id": "abs", "prompt": "abs", "expect": {"files_changed_not_matching": "/Users/[^/]+/"}},
     {"id": "flaky", "prompt": "flaky", "expect": {"output_matches": "^done$"}},
+    {"id": "auth", "prompt": "auth", "expect": {}},
 ]
+# What would take the child off the subscription login, as claude 2.1.296 reads it (key credentials, workload
+# identity, provider switches, endpoint), and the subscription OAuth token that must stay. Kept apart from the
+# runner's own list so the test pins it.
+OFF_LOGIN = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
+             "ANTHROPIC_FEDERATION_RULE_ID", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+             "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS", "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
+             "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL"]
+KEPT = ["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"]
 
 
 def main() -> int:
@@ -64,7 +81,8 @@ def main() -> int:
         assert git("init", "-q", "-b", "main").returncode == 0
         git("add", "-A")
         assert git("commit", "-q", "-m", "chore: [eval] fixture").returncode == 0
-        env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_CLAUDE_STATE": str(state)}
+        env = {**os.environ, **{name: "x" for name in OFF_LOGIN + KEPT},
+               "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_CLAUDE_STATE": str(state)}
 
         def run(*args: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run([sys.executable, "scripts/harness/run-evals.py", *args], cwd=repo, env=env,
@@ -74,6 +92,16 @@ def main() -> int:
         assert result.returncode == 0, f"plain case must pass: {result.stdout}{result.stderr}"
         argv = json.loads((state / "argv.jsonl").read_text(encoding="utf-8").splitlines()[-1])
         assert argv[argv.index("--model") + 1] == "sonnet", f"default model must be the sonnet alias: {argv}"
+        seen = set(json.loads((state / "env.jsonl").read_text(encoding="utf-8").splitlines()[-1]))
+        assert not seen & set(OFF_LOGIN) and set(KEPT) <= seen, \
+            f"the child must get the subscription login only: {sorted(seen)}"
+        for flag in ("--login", "--api"):
+            result = run("--only", "plain", flag)
+            assert result.returncode == 2 and "unrecognized arguments" in result.stderr, \
+                f"{flag} must not exist: {result.returncode} {result.stderr}"
+        result = run("--only", "auth")
+        assert result.returncode == 2 and "/login" in result.stdout and "--login" not in result.stdout, \
+            f"an authentication failure must abort with the login hint only: {result.stdout}{result.stderr}"
 
         result = run("--only", "abs")
         assert result.returncode == 1 and "newdir/a.md contains forbidden" in result.stdout, \
@@ -88,7 +116,7 @@ def main() -> int:
         worktrees = git("worktree", "list", "--porcelain").stdout
         assert worktrees.count("worktree ") == 1, f"the runner must remove its worktrees: {worktrees}"
 
-    print("PASS: run-evals runner (sonnet alias default, files in new directories, --runs k/N)")
+    print("PASS: run-evals runner (sonnet alias default, files in new directories, --runs k/N, subscription login only)")
     return 0
 
 
