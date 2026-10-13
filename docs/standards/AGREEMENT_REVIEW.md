@@ -27,8 +27,7 @@ Use inline styles/diagrams and embedded images; no external hosting or remote as
 A proposed mockup is not execution evidence. If the app cannot run, label actual verification as
 unavailable and record the missing environment instead of implying that the mockup was tested.
 
-How to make the views — one at a time in the main session; a subagent's calls pass the same hook
-and have no edit path (`allowed_subagents` below):
+How to make the views — one at a time in the main session:
 
 - Explainer: picture first (an inline SVG analogy), then a "who sees what" table, three
   cause→effect boxes and a checklist. It is HTML, not Markdown.
