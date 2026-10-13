@@ -66,6 +66,10 @@ pnpm --dir apps/frontend test src/domains/member → 12 passed
 ```
 """
 
+# The work-slug form of the template, filled: Plan-Ref names the folder's work slug and a plan summary follows.
+SUMMARY = "팀장만 초대 버튼을 보고 API도 403으로 막는다. 범위는 프런트 버튼과 백엔드 컨트롤러, 검증은 권한 테스트다."
+GOOD_SLUG = GOOD.replace("Plan-Ref: 260914_01-invite-gate\n", f"Plan-Ref: invite-gate\n\n## 계획 요약\n{SUMMARY}\n")
+
 
 def run(root: Path, payload: dict) -> tuple[int, str, str]:
     p = subprocess.run([sys.executable, str(GATE), "--repo-root", str(root)],
@@ -153,6 +157,28 @@ def main() -> int:
         check("empty value section is refused", run(root, write(GOOD.replace(
             "- V1: 부분 확인 — 권한 제어는 검증됨; 문의 감소는 담당 미정, 배포 2주 후 문의 건수로 확인", "")))[0], 2)
 
+        # --- Plan-Ref: read only between the title and the first section, outside fences and HTML comments
+        no_ref = GOOD.replace("Plan-Ref: 260914_01-invite-gate\n", "")
+        check("Plan-Ref only in the evidence fence blocks",
+              run(root, write(no_ref.replace("```\npnpm", "```\nPlan-Ref: 260914_01-invite-gate\npnpm")))[0], 2)
+        check("Plan-Ref only in an HTML comment blocks", run(root, write(GOOD.replace(
+            "Plan-Ref: 260914_01-invite-gate", "<!-- Plan-Ref: 260914_01-invite-gate -->")))[0], 2)
+        check("Plan-Ref only after the first section blocks",
+              run(root, write(no_ref.replace("## 세 상자", "Plan-Ref: 260914_01-invite-gate\n\n## 세 상자")))[0], 2)
+        check("Plan-Ref with capitals or underscores blocks",
+              run(root, write(GOOD_SLUG.replace("Plan-Ref: invite-gate", "Plan-Ref: Invite_Gate")))[0], 2)
+        # A work slug needs a plan summary and the folder's work slug; the dated form (GOOD) needs neither.
+        check("work slug with summary and its folder passes", run(root, write(GOOD_SLUG))[0], 0)
+        code, _, err = run(root, write(GOOD_SLUG.replace(f"\n## 계획 요약\n{SUMMARY}\n", "")))
+        check("work slug without a plan summary blocks", (code, "## 계획 요약" in err), (2, True))
+        code, _, err = run(root, write(GOOD_SLUG.replace(SUMMARY, "<변경 목적 · 포함/제외 범위 · 검증 기준을 1–3줄로 적는다.>")))
+        check("a placeholder-only plan summary blocks", (code, "## 계획 요약" in err), (2, True))
+        code, _, err = run(root, write(GOOD_SLUG, "docs/changes/260914_02-other-work/pr.md"))
+        check("work slug that is not the folder's blocks", (code, "other-work" in err), (2, True))
+        template = (GATE.parents[1] / "docs/changes/_templates/pr.md").read_text(encoding="utf-8")
+        code, _, err = run(root, write(template))
+        check("unfilled template blocks with the placeholder hint", (code, "템플릿 자리표시자" in err), (2, True))
+
         # --- Stop: remembered pr.md + deliverables requirement
         (root / pr_rel).parent.mkdir(parents=True, exist_ok=True)
         (root / pr_rel).write_text(GOOD, encoding="utf-8")
@@ -222,6 +248,9 @@ def main() -> int:
         (root / pr_rel).write_text(long_body, encoding="utf-8")
         decision = json.loads(run(root, stop())[1])
         check("shape broken later: Stop blocks", decision.get("decision"), "block")
+        (root / pr_rel).write_text(GOOD_SLUG.replace("Plan-Ref: invite-gate", "Plan-Ref: other-work"), encoding="utf-8")
+        decision = json.loads(run(root, stop())[1])
+        check("work slug not the folder's: Stop names it", "`Plan-Ref: other-work`" in decision.get("reason", ""), True)
         (root / pr_rel).write_text(GOOD, encoding="utf-8")
 
         # re-entry passes

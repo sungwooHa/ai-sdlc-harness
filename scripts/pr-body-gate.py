@@ -14,7 +14,10 @@ Agreement snapshots are validated against their recorded hashes, not authenticat
 Value status and evidence checks validate structure, not whether the claimed value is true.
 
 Shape rules come from `.agents/harness.yaml` `artifact_chain.pr_body`: `max_lines`,
-`max_evidence_lines`, `required_headings`, `max_look_items`, `max_title_chars`, `max_box_rows`.
+`max_evidence_lines`, `required_headings`, `max_look_items`, `max_title_chars`, `max_box_rows`,
+`plan_summary_heading`. `Plan-Ref:` is read between the title and the first section only; a work slug
+needs the plan summary section and must be the folder name without `YYMMDD_NN-` (Write and Stop
+here), the older dated form needs neither.
 Fail-open on any parsing problem; a broken hook never blocks normal work.
 """
 
@@ -88,6 +91,45 @@ def remembered(payload: dict) -> list[str]:
 
 # ---------------------------------------------------------------- shape validation
 
+WORK_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+DATED_REF = re.compile(r"[0-9]{6}_[0-9]{2}-[a-z0-9-]+")  # older history: the whole dated folder name
+
+
+def metadata_values(text: str, key: str) -> list[str]:
+    """Values of `key:` lines between the title and the first `## ` section, outside code fences and
+    HTML comments — a Plan-Ref quoted in the evidence or later prose is not the PR's own."""
+    values: list[str] = []
+    in_fence = in_comment = seen_title = False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if in_comment:
+            in_comment = "-->" not in stripped
+            continue
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if stripped.startswith("<!--"):
+            in_comment = "-->" not in stripped
+            continue
+        if line.startswith("## "):
+            break
+        if line.startswith("# "):
+            seen_title = True
+        elif seen_title and line.startswith(f"{key}:"):
+            values.append(line.split(":", 1)[1].strip())
+    return values
+
+
+def folder_problems(rel_pr_md: str, text: str) -> list[str]:
+    """A work-slug Plan-Ref names its change folder: `docs/changes/<YYMMDD_NN>-<work-slug>/pr.md`.
+    Kept out of validate_body, which the agreement gate also calls without the file's path."""
+    folder = Path(rel_pr_md).parent.name
+    expected = re.sub(r"^[0-9]{6}_[0-9]{2}-", "", folder)
+    return [f"`Plan-Ref: {value}` 이 변경 폴더 `{folder}` 의 작업명 `{expected}` 과 다릅니다 — 폴더 이름에서 `YYMMDD_NN-` 을 뺀 값을 쓰세요."
+            for value in metadata_values(text, "Plan-Ref") if WORK_SLUG.fullmatch(value) and value != expected]
+
 def validate_body(text: str, rules: dict) -> list[str]:
     max_lines = int(rules.get("max_lines", 30))
     max_evidence = int(rules.get("max_evidence_lines", 10))
@@ -122,8 +164,10 @@ def validate_body(text: str, rules: dict) -> list[str]:
     elif len(title[2:].strip()) > max_title or "<" in title:
         problems.append(f"제목은 {max_title}자 이내의 완성된 한 문장이어야 합니다(자리표시자 금지).")
 
-    if not re.search(r"^Plan-Ref:\s*\d{6}_\d{2}-[a-z0-9-]+\s*$", text, re.MULTILINE):
-        problems.append("`Plan-Ref: <YYMMDD_NN>-<slug>` 줄이 없거나 자리표시자 그대로입니다.")
+    refs = [v for v in metadata_values(text, "Plan-Ref") if WORK_SLUG.fullmatch(v) or DATED_REF.fullmatch(v)]
+    if not refs:
+        problems.append("제목과 첫 절 사이에 `Plan-Ref: <work-slug>` 줄이 없거나 값이 자리표시자·틀린 모양입니다"
+                        "(작업명 = 변경 폴더 이름에서 `YYMMDD_NN-` 을 뺀 것. 코드 블록·HTML 주석 안은 세지 않습니다).")
 
     for heading in headings:
         if not any(l.strip() == heading for l in lines):
@@ -145,6 +189,10 @@ def validate_body(text: str, rules: dict) -> list[str]:
     blocks = re.findall(r"^```[^\n]*\n(.*?)^```\s*$", evidence, re.MULTILINE | re.DOTALL)
     if len(blocks) != 1 or not blocks[0].strip():
         problems.append("`## 증거` 에 실제 명령/관찰과 결과를 담은 비어 있지 않은 코드 블록 하나가 필요합니다.")
+    if any(WORK_SLUG.fullmatch(v) for v in refs):  # the dated form predates the summary section
+        summary = rules.get("plan_summary_heading", "## 계획 요약")
+        if not any(l.strip() and not re.search(r"<[^>`]+>", l) for l in section(summary)):
+            problems.append(f"작업명 Plan-Ref 에는 `{summary}` 절에 목적·범위·검증을 적은 줄이 1줄 이상 필요합니다(자리표시자 제외).")
     if "## 가치 확인" in headings:
         value = "\n".join(section("## 가치 확인"))
         statuses = rules.get("value_statuses", ["확인됨", "부분 확인", "미검증", "미달"])
@@ -169,7 +217,8 @@ def validate_body(text: str, rules: dict) -> list[str]:
     elif len(look) > max_look:
         problems.append(f"`## 볼 곳` 은 최대 {max_look}개 — 지금 {len(look)}개.")
 
-    if re.search(r"<[^>`]+>", "\n".join(l for l in lines if not l.startswith("#"))) and "<YYMMDD" in text:
+    if re.search(r"<[^>`]+>", "\n".join(l for l in lines if not l.startswith("#"))) and (
+            "<YYMMDD" in text or "<work-slug>" in text):
         problems.append("템플릿 자리표시자(`<...>`)가 남아 있습니다.")
     return problems
 
@@ -277,7 +326,8 @@ def main() -> int:
     rel = rel_of(target, repo, cwd) if target else None
 
     if event == "PreToolUse" and tool_name == "Write" and is_pr_md(rel):
-        problems = validate_body(tool_input.get("content") or "", rules)
+        content = tool_input.get("content") or ""
+        problems = validate_body(content, rules) + folder_problems(rel, content)
         if problems:
             print("pr-body-gate: PR 본문이 규칙에 맞지 않아 쓰기를 막았습니다 (사람이 읽는 것은 짧고 그림 먼저).", file=sys.stderr)
             for p in problems:
@@ -301,7 +351,7 @@ def main() -> int:
                 text = path.read_text(encoding="utf-8")
             except Exception:
                 continue
-            reasons += [f"{rel_pr}: {p}" for p in validate_body(text, rules)]
+            reasons += [f"{rel_pr}: {p}" for p in validate_body(text, rules) + folder_problems(rel_pr, text)]
             reasons += [f"{rel_pr}: {p}" for p in check_deliverables(repo, rel_pr, deliv, base)]
         if reasons:
             reason = "pr-body-gate: PR 본문/첨부가 규칙에 맞지 않습니다. 고친 뒤 끝내세요.\n- " + "\n- ".join(reasons)

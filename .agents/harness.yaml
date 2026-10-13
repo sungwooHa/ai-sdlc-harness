@@ -67,12 +67,13 @@
     },
     "pr_body": {
       "template": "docs/changes/_templates/pr.md",
-      "shape": "one-sentence value title → Plan-Ref and Agreement-Ref when applicable → 그림 (agreement vs actual result) → 세 상자 (agreed expectation | observed change | evidence) → 가치 확인 (status, remaining uncertainty, follow-up) → 볼 곳 (≤3 files) → 증거 (one nonempty fence, ≤10 lines); ≤30 nonempty prose lines",
+      "shape": "one-sentence value title → Plan-Ref (`<work-slug>`, or the older dated folder name) and Agreement-Ref when applicable, before the first section → 계획 요약 (purpose · scope · checks in 1–3 lines; required with a work slug) → 그림 (agreement vs actual result) → 세 상자 (agreed expectation | observed change | evidence) → 가치 확인 (status, remaining uncertainty, follow-up) → 볼 곳 (≤3 files) → 증거 (one nonempty fence, ≤10 lines); ≤30 nonempty prose lines",
       "max_lines": 30,
       "max_evidence_lines": 10,
       "max_title_chars": 60,
       "max_box_rows": 3,
       "max_look_items": 3,
+      "plan_summary_heading": "## 계획 요약",
       "required_headings": [
         "## 그림",
         "## 세 상자",
@@ -370,7 +371,7 @@
     {
       "id": "pr_body_gate",
       "event": "PreToolUse|PostToolUse|Stop",
-      "description": "PR description gate: refuses a Write of docs/changes/*/pr.md that breaks artifact_chain.pr_body (length, title, Plan-Ref, sections, ≤3 boxes, ≤3 files, ≤10 evidence lines); remembers pr.md files touched in the session and blocks Stop while one breaks the shape or lacks a deliverable required by artifact_chain.deliverables.required_when.",
+      "description": "PR description gate: refuses a Write of docs/changes/*/pr.md that breaks artifact_chain.pr_body (length, title, Plan-Ref between the title and the first section — a work slug that is the change folder name without YYMMDD_NN- plus a plan summary, or the older dated name — sections, ≤3 boxes, ≤3 files, ≤10 evidence lines); remembers pr.md files touched in the session and blocks Stop while one breaks the shape or lacks a deliverable required by artifact_chain.deliverables.required_when.",
       "required_scripts": [
         "scripts/pr-body-gate.py"
       ],
