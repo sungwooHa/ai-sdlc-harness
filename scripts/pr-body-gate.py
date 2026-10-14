@@ -24,7 +24,6 @@ Fail-open on any parsing problem; a broken hook never blocks normal work.
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import json
 import re
 import subprocess
@@ -32,7 +31,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-PR_MD_GLOB = "docs/changes/*/pr.md"
+PR_MD = re.compile(r"docs/changes/\d{6}_\d{2}-[a-z0-9-]+/pr\.md")  # a dated change folder; _templates/pr.md is the form
 UI_GLOB = "__UI_SOURCE_GLOB__"          # default; overridden by artifact_chain.deliverables.ui_glob
 DEFAULT_BASE = "origin/__INTEGRATION_BRANCH__"  # default; overridden by artifact_chain.plan_gate.base
 
@@ -56,7 +55,7 @@ def rel_of(target: str, repo: Path, cwd: Path) -> str | None:
 
 
 def is_pr_md(rel: str | None) -> bool:
-    return bool(rel) and fnmatch.fnmatch(rel, PR_MD_GLOB)
+    return bool(rel) and PR_MD.fullmatch(rel) is not None
 
 
 def state_path(payload: dict) -> Path | None:

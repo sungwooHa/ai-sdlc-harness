@@ -100,6 +100,17 @@ def relative(repo, value, cwd=None):
         raise Blocked('target must stay inside this checkout') from exc
 
 
+def change_rule_file(repo, rel):
+    """A tracked rule file under docs/changes (README, _templates): local_only_roots.allow decides, with the fast
+    guard's glob rule. Change folders and baselines never qualify, whatever the list says: it is a scoped setting."""
+    parts = Path(rel).parts
+    if CHANGE_ID.fullmatch(parts[2]) or 'agreements' in parts:
+        return False
+    allow = config(repo)[0].get('documentation_layout', {}).get('local_only_roots', {}).get('allow', [])
+    guard = module('agreement_fast_guard', SCRIPT_DIR / 'agent-harness-fast-guard.py')  # only for these paths
+    return any(isinstance(glob, str) and guard._glob_match(rel, glob) for glob in allow)
+
+
 def read_scope(folder, repo):
     data = json.loads((folder / 'scope.json').read_text(encoding='utf-8'))
     paths = data.get('paths')
@@ -111,7 +122,10 @@ def read_scope(folder, repo):
         if Path(path).is_absolute() or any(c in path for c in '*?[]'):
             raise Blocked('scope paths must be exact relative filenames, not globs')
         rel = relative(repo, path)
-        if rel.startswith(('.git/', 'docs/changes/')) or rel == '.git' or (repo / rel).is_dir():
+        if rel.startswith('docs/changes/') and not change_rule_file(repo, rel):
+            raise Blocked('scope paths under docs/changes/ must be tracked rule files (documentation_layout.'
+                          'local_only_roots.allow); change folders and agreements are never in scope')
+        if rel.startswith('.git/') or rel == '.git' or (repo / rel).is_dir():
             raise Blocked('scope paths must identify product/policy files, not state or directories')
         normalized.append(rel)
     if len(set(normalized)) != len(normalized):

@@ -587,4 +587,31 @@ with tempfile.TemporaryDirectory() as tmp:
         result = run(root, 'verify')
         assert result.returncode == 1 and 'verification_workers' in result.stderr, (bad, result.stderr)
 
+# Bundle 3 V4 (F1): tracked rule files under docs/changes (local_only_roots.allow) can be scoped. Change folders
+# and baselines cannot, even after the allow list, itself a scoped setting, is widened.
+with tempfile.TemporaryDirectory() as tmp:
+    root = checkout(tmp)
+    rules = ['docs/changes/README.md', 'docs/changes/_templates/plan.md']
+    agree(root, '260914_00-rules', rules)
+    for path in rules:
+        assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / path), 'content': 'x'}).returncode == 0, path
+    folder = root / 'docs/changes/260914_00-rules'
+
+    def scoped(path):
+        (folder / 'scope.json').write_text(json.dumps({'paths': [path], 'verification_commands': [['true']]}))
+        return run(root, 'prepare', folder.name, '--revision', '002')
+
+    never = ['docs/changes/260914_01-other/plan.md', 'docs/changes/260914_00-rules/pr.md',
+             'docs/changes/_templates/agreements/001/plan.md']
+    for path in never + ['docs/changes/other.md']:
+        result = scoped(path)
+        assert result.returncode == 1 and 'scope paths' in result.stderr, (path, result.stderr)
+    widened = json.loads(json.dumps(MANIFEST))
+    widened['documentation_layout']['local_only_roots']['allow'] = ['docs/changes/**']
+    (root / '.agents/harness.yaml').write_text(json.dumps(widened))
+    for path in never:
+        result = scoped(path)
+        assert result.returncode == 1 and 'scope paths' in result.stderr, (path, result.stderr)
+    assert scoped('docs/changes/other.md').returncode == 0
+
 print('PASS: agreement gate lifecycle and bypass regression tests')

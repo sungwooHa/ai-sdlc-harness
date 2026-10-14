@@ -48,6 +48,8 @@ Put the proposed decision in spec/plan and include its future ADR path in scope;
 ADR after agreement. Reference an existing ADR when the decision is unchanged.
 
 Create `scope.json` from the template: exact file paths and verification commands as argv arrays.
+Under `docs/changes/` only tracked rule files that match `documentation_layout.local_only_roots.allow`
+(the README, `_templates/`) can be in scope; change folders and `agreements/` never are.
 Use the `__PREFIX__-agreement` skill. Run `python3 scripts/agreement-gate.py prepare <change-id>
 --revision 001`, then present the drafts, scope, checks and generated approval command. Claude uses
 `/__PREFIX__-agreement approve <challenge>`; Codex uses `$__PREFIX__-agreement approve <challenge>`.
