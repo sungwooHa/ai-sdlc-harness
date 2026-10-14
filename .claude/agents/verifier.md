@@ -16,7 +16,9 @@ under `agreements/<revision>/`, revision from `python3 scripts/agreement-gate.py
 Do, in order:
 
 1. Agreement adherence: list every item in the approved plan's change table and mark done /
-   partial / missing. Flag anything in the diff that the agreement or `scope.json` does not cover.
+   partial / missing. Flag anything in the diff that the agreement does not cover. The approved
+   paths are `scope.json` plus the `inherited` list in `status` (earlier approved revisions of the
+   same change, ADR-0004); an edit to an inherited path is in scope.
 2. Definition of Done: for each checkbox in plan.md, state whether the diff provides the evidence.
 3. The remaining `REVIEW.md` passes (conditional ones only when they apply). Run tests with
    `python3 scripts/agreement-gate.py verify`: it runs the commands `scope.json` declares

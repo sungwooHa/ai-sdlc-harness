@@ -13,10 +13,13 @@ import json
 import os
 import re
 import shlex
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -97,6 +100,17 @@ def relative(repo, value, cwd=None):
         raise Blocked('target must stay inside this checkout') from exc
 
 
+def change_rule_file(repo, rel):
+    """A tracked rule file under docs/changes (README, _templates): local_only_roots.allow decides, with the fast
+    guard's glob rule. Change folders and baselines never qualify, whatever the list says: it is a scoped setting."""
+    parts = [part.lower() for part in Path(rel).parts]  # a case-folding checkout opens them under any spelling
+    if CHANGE_ID.fullmatch(parts[2]) or 'agreements' in parts:
+        return False
+    allow = config(repo)[0].get('documentation_layout', {}).get('local_only_roots', {}).get('allow', [])
+    guard = module('agreement_fast_guard', SCRIPT_DIR / 'agent-harness-fast-guard.py')  # only for these paths
+    return any(isinstance(glob, str) and guard._glob_match(rel, glob) for glob in allow)
+
+
 def read_scope(folder, repo):
     data = json.loads((folder / 'scope.json').read_text(encoding='utf-8'))
     paths = data.get('paths')
@@ -108,7 +122,10 @@ def read_scope(folder, repo):
         if Path(path).is_absolute() or any(c in path for c in '*?[]'):
             raise Blocked('scope paths must be exact relative filenames, not globs')
         rel = relative(repo, path)
-        if rel.startswith(('.git/', 'docs/changes/')) or rel == '.git' or (repo / rel).is_dir():
+        if rel.startswith('docs/changes/') and not change_rule_file(repo, rel):
+            raise Blocked('scope paths under docs/changes/ must be tracked rule files (documentation_layout.'
+                          'local_only_roots.allow); change folders and agreements are never in scope')
+        if rel.startswith('.git/') or rel == '.git' or (repo / rel).is_dir():
             raise Blocked('scope paths must identify product/policy files, not state or directories')
         normalized.append(rel)
     if len(set(normalized)) != len(normalized):
@@ -121,11 +138,12 @@ def read_scope(folder, repo):
     return {'paths': normalized, 'verification_commands': commands}
 
 
-def draft_files(folder, manifest, scope):
+def draft_files(folder, manifest, paths):
+    """The drafts to present for `paths` (scope plus inherited): the views they need must exist."""
     if not (folder / 'spec.md').is_file() and not (folder / 'plan.md').is_file():
         raise Blocked('spec.md or plan.md is required')
     views = snapshot.view_directory(folder)
-    required = pr_gate.needs(manifest['artifact_chain']['deliverables'], set(scope['paths']))
+    required = pr_gate.needs(manifest['artifact_chain']['deliverables'], set(paths))
     files = [folder / name for name in ('intent.md', 'spec.md', 'plan.md', 'scope.json') if (folder / name).exists()]
     files += sorted(views.glob('*.html')) if views.exists() else []
     for name in required:
@@ -147,16 +165,25 @@ def prepare(repo, folder_id, revision):
     folder = repo / 'docs/changes' / folder_id
     relative(repo, str(folder))
     scope = read_scope(folder, repo)
-    if len(scope['paths']) > 1 and not (folder / 'plan.md').is_file():
-        raise Blocked('a multi-file scope needs plan.md')
-    files = draft_files(folder, manifest, scope)
+    # Paths approved (or approved, then paused) earlier in this same change carry over; only this state file
+    # holds them. A draft never approved adds nothing, and another change starts empty (ADR-0004).
+    prev = load(repo)
+    inherited = []
+    if prev.get('change') == folder_id:
+        carried = set(prev.get('inherited', []))
+        if prev.get('phase') in ('approved', 'paused'):
+            carried |= set(prev['scope']['paths'])
+        inherited = sorted(carried)
+    if len(set(scope['paths']) | set(inherited)) > 1 and not (folder / 'plan.md').is_file():
+        raise Blocked('a multi-file scope (inherited paths included) needs plan.md')
+    files = draft_files(folder, manifest, set(scope['paths']) | set(inherited))
     if (folder / 'agreements' / revision).exists():
         raise Blocked('that agreement revision already exists')
-    data = {'phase': 'draft', 'change': folder_id, 'revision': revision, 'scope': scope,
+    data = {'phase': 'draft', 'change': folder_id, 'revision': revision, 'scope': scope, 'inherited': inherited,
             'files': files, 'start_head': git(repo, 'rev-parse', 'HEAD')}
     data['challenge'] = fingerprint(data)
     save(repo, data)  # Replacing a candidate revokes the earlier grant.
-    print(json.dumps({'phase': 'draft', 'scope': scope, 'drafts': list(files),
+    print(json.dumps({'phase': 'draft', 'scope': scope, 'inherited_paths': inherited, 'drafts': list(files),
                       'approval_command': f"/{cfg['skill']} approve {data['challenge']}",
                       'codex_approval_command': f"${cfg['skill']} approve {data['challenge']}"}, ensure_ascii=False))
 
@@ -168,7 +195,7 @@ def approve(repo, challenge, source):
         raise Blocked('no matching pending draft; prepare and present the current revision')
     folder = repo / 'docs/changes' / data['change']
     scope = read_scope(folder, repo)
-    if scope != data['scope'] or draft_files(folder, manifest, scope) != data['files']:
+    if scope != data['scope'] or draft_files(folder, manifest, editable(data)) != data['files']:
         raise Blocked('draft or scope changed since presentation; prepare a new challenge')
     dest = snapshot.freeze(folder, data['revision'], source)
     data.update(phase='approved', snapshot_digest=snapshot.digest(dest / 'snapshot.json'), verified=None)
@@ -190,6 +217,11 @@ def approved(repo):
     return data
 
 
+def editable(data):
+    """The approved scope plus the paths approved earlier revisions of the same change scoped (ADR-0004)."""
+    return set(data['scope']['paths']) | set(data.get('inherited', []))
+
+
 def changes(repo, data, staged=False):
     if staged:
         output = git(repo, 'diff', '--cached', '--name-only', '-z')
@@ -200,34 +232,82 @@ def changes(repo, data, staged=False):
 
 
 def check_scope(repo, data, staged=False):
-    outside = changes(repo, data, staged) - set(data['scope']['paths'])
+    outside = changes(repo, data, staged) - editable(data)
     if outside:
         raise Blocked('changes outside the approved scope: ' + ', '.join(sorted(outside)))
 
 
 def source_hash(repo, data):
     files = {}
-    for rel in data['scope']['paths']:
+    for rel in sorted(editable(data)):
         relative(repo, rel)
         path = repo / rel
         files[rel] = snapshot.digest(path) if path.is_file() else None
     return fingerprint(files)
 
 
+def verification_workers(cfg):
+    workers = cfg.get('verification_workers', 1)  # Missing: one command at a time.
+    if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
+        raise Blocked('agreement_gate.verification_workers must be a positive integer; see docs/standards/AGREEMENT_REVIEW.md')
+    return workers
+
+
+def run_check(argv, repo, timeout):
+    """One declared command: exit code (None on timeout, 127 when it cannot start), seconds and combined output."""
+    start = time.monotonic()
+    # A file, not a pipe: a background child that keeps the output open cannot hold a finished command.
+    with tempfile.TemporaryFile() as out:
+        try:
+            proc = subprocess.Popen(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=out,
+                                    stderr=subprocess.STDOUT, start_new_session=True)
+        except OSError as exc:
+            return 127, 0.0, f'cannot start: {exc}'
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # The whole group: a test script's children too.
+            except ProcessLookupError:
+                pass
+            proc.wait()
+            code = None
+        out.seek(0)
+        return code, round(time.monotonic() - start, 2), out.read().decode('utf-8', 'replace')
+
+
 def verify_work(repo):
     _, cfg = config(repo)
+    workers = verification_workers(cfg)
     data = approved(repo)
     check_scope(repo, data)
     before = source_hash(repo, data)
     # Invalidate old success before starting a new attempt.
     data['verified'] = None
     save(repo, data)
-    results = []
-    for argv in data['scope']['verification_commands']:
-        proc = subprocess.run(argv, cwd=repo, timeout=cfg.get('verification_timeout_seconds', 300))
-        results.append({'argv': argv, 'exit_code': proc.returncode})
-        if proc.returncode:
-            raise Blocked('verification failed: ' + shlex.join(argv))
+    commands = data['scope']['verification_commands']
+    timeout = cfg.get('verification_timeout_seconds', 300)
+    start = time.monotonic()
+    results = [None] * len(commands)
+    # Every command runs, so all failures surface at once; results keep the declared order.
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        running = {pool.submit(run_check, argv, repo, timeout): i for i, argv in enumerate(commands)}
+        for future in as_completed(running):
+            argv = commands[running[future]]
+            code, seconds, output = future.result()
+            results[running[future]] = {'argv': argv, 'exit_code': code, 'seconds': seconds}
+            if code == 0:
+                last = [line for line in output.splitlines() if line.strip()][-1:] or ['(no output)']
+                print(f'PASS {seconds:.1f}s {shlex.join(argv)} — {last[0]}', flush=True)
+            else:
+                print(f"FAIL {seconds:.1f}s {shlex.join(argv)} ({'timed out' if code is None else f'exit {code}'})",
+                      flush=True)
+                print(output.rstrip('\n'), flush=True)
+    failed = [r['argv'] for r in results if r['exit_code'] != 0]
+    print(f'{len(commands) - len(failed)}/{len(commands)} passed in {time.monotonic() - start:.1f}s '
+          f'({workers} at a time)', flush=True)
+    if failed:
+        raise Blocked('verification failed: ' + '; '.join(shlex.join(argv) for argv in failed))
     current = approved(repo)
     check_scope(repo, current)
     if current['challenge'] != data['challenge'] or source_hash(repo, current) != before:
@@ -240,7 +320,7 @@ def verify_work(repo):
 def file_operation(repo, action, paths):
     data = approved(repo)
     rels = [relative(repo, path) for path in paths]
-    if data.get('closed') or any(rel not in data['scope']['paths'] for rel in rels):
+    if data.get('closed') or any(rel not in editable(data) for rel in rels):
         raise Blocked('file operation is outside the open approved scope')
     source = repo / rels[0]
     if not source.is_file():
@@ -263,7 +343,7 @@ def delivery(repo, staged=False):
     if receipt.get('source_hash') != source_hash(repo, data):
         raise Blocked('verification missing or stale; run the agreement verification helper')
     # A partial staged version must not borrow evidence from the working copy.
-    if staged and git(repo, 'diff', '--name-only', '--', *data['scope']['paths']):
+    if staged and git(repo, 'diff', '--name-only', '--', *sorted(editable(data))):
         raise Blocked('stage the verified source without unstaged scope changes before committing')
     folder = repo / 'docs/changes' / data['change']
     pr = folder / 'pr.md'
@@ -520,7 +600,7 @@ def pretool(repo, payload):
                 raise Blocked('agreed planning inputs are frozen; record progress separately or prepare a new revision')
             return
         data = approved(repo)
-        if data.get('closed') or rel not in data['scope']['paths']:
+        if data.get('closed') or rel not in editable(data):
             raise Blocked('target is outside the open approved scope')
         return
     if tool == 'Bash':
@@ -561,7 +641,7 @@ def pretool(repo, payload):
                 if len(rest) != (2 if rest[0] == 'remove' else 3):
                     raise Blocked('file operation argument mismatch')
                 data = approved(repo)
-                if not data.get('closed') and all(relative(repo, p) in data['scope']['paths'] for p in rest[1:]):
+                if not data.get('closed') and all(relative(repo, p) in editable(data) for p in rest[1:]):
                     return
             if len(rest) in (2, 4) and rest[0] == 'prepare' and CHANGE_ID.fullmatch(rest[1]):
                 if len(rest) == 2 or (rest[2] == '--revision' and re.fullmatch(r'\d{3,}', rest[3])):
@@ -582,7 +662,7 @@ def pretool(repo, payload):
         if argv[:2] == ['git', 'add']:
             data = approved(repo)
             targets = argv[2:]
-            if targets and all(not p.startswith('-') and relative(repo, p) in data['scope']['paths'] for p in targets):
+            if targets and all(not p.startswith('-') and relative(repo, p) in editable(data) for p in targets):
                 return
         branch = cfg.get('branch_pattern')  # Missing: no branch creation.
         if len(argv) == 4 and argv[:3] == ['git', 'switch', '-c'] and isinstance(branch, str) and re.fullmatch(branch, argv[3]):
@@ -658,7 +738,7 @@ def hook(repo, payload):
             manifest, _ = config(repo)
             folder = repo / 'docs/changes' / data['change']
             scope = read_scope(folder, repo)
-            if scope != data['scope'] or draft_files(folder, manifest, scope) != data['files']:
+            if scope != data['scope'] or draft_files(folder, manifest, editable(data)) != data['files']:
                 raise Blocked('pending draft changed; prepare its current version before presenting it')
             print(json.dumps({'systemMessage': 'Agreement pending: implementation and commit remain blocked.'}))
             return  # A decision handoff, including amendments, is not implementation completion.

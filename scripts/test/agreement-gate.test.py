@@ -4,10 +4,12 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 GATE = Path(__file__).resolve().parents[1] / 'agreement-gate.py'
@@ -484,5 +486,200 @@ with tempfile.TemporaryDirectory() as tmp:
     result = event(root, 'Stop')  # Read before the payload: exit 2, which a Stop hook treats as "keep going".
     assert result.returncode == 2 and 'disabled' in result.stderr, (result.stdout, result.stderr)
     assert run(root, 'check-staged').returncode == 1
+
+
+def checkout(tmp, manifest=MANIFEST):
+    """A fresh fixture checkout at <tmp>/repo; helper files stay in <tmp>, outside the checked scope."""
+    root = Path(tmp) / 'repo'
+    root.mkdir()
+    git(root, 'init', '-q')
+    (root / '.agents').mkdir()
+    (root / '.agents/harness.yaml').write_text(json.dumps(manifest))
+    shutil.copytree(GATE.parent, root / 'scripts', ignore=shutil.ignore_patterns('__pycache__'))
+    (root / '.gitignore').write_text('docs/changes/*\n__pycache__/\n')
+    for name in ('a.py', 'b.py', 'c.py', 'apps/web/src/ui/screen.tsx'):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text('before')
+    commit(root, 'base')
+    return root
+
+
+def commit(root, message):
+    git(root, 'add', '.')
+    git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', message)
+
+
+def gate_setting(**changes):
+    return {**MANIFEST, 'agreement_gate': {key: value for key, value in {**MANIFEST['agreement_gate'], **changes}.items()
+                                           if value is not None}}
+
+
+def agree(root, change, paths, commands=None, revision='001', **extra):
+    """Write plan and scope, prepare and approve as the user would: the prepare output."""
+    folder = root / 'docs/changes' / change
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'plan.md').write_text(f'# plan {revision}\n')
+    (folder / 'scope.json').write_text(json.dumps({
+        'paths': paths, 'verification_commands': commands or [[sys.executable, '-c', 'print("ok")']], **extra}))
+    prepared = run(root, 'prepare', change, '--revision', revision)
+    assert prepared.returncode == 0, prepared.stderr
+    candidate = json.loads(prepared.stdout)
+    approval = event(root, 'UserPromptSubmit', prompt=candidate['approval_command'])
+    assert approval.returncode == 0, approval.stderr
+    return candidate
+
+
+# Bundle 3 V3: verify runs the declared commands verification_workers at a time and times each one. Two commands
+# that each wait for the other pass only when they run together, so concurrency is observed, not assumed.
+with tempfile.TemporaryDirectory() as tmp:
+    meet = Path(tmp) / 'meet.py'
+    meet.write_text('import pathlib, sys, time\n'
+                    'here = pathlib.Path(sys.argv[1])\n'
+                    'here.mkdir(parents=True, exist_ok=True)\n'
+                    '(here / sys.argv[2]).touch()\n'
+                    'deadline = time.monotonic() + 3\n'
+                    'while not (here / sys.argv[3]).exists():\n'
+                    '    if time.monotonic() > deadline:\n'
+                    '        sys.exit("no partner")\n'
+                    '    time.sleep(0.05)\n'
+                    'print(sys.argv[2], "met", sys.argv[3])\n')
+
+    def pair(n):
+        return [[sys.executable, str(meet), str(Path(tmp) / f'meet{n}'), 'a', 'b'],
+                [sys.executable, str(meet), str(Path(tmp) / f'meet{n}'), 'b', 'a']]
+
+    root = checkout(tmp, gate_setting(verification_workers=None))
+    agree(root, '260914_00-verify', ['a.py'], pair(1))
+    result = run(root, 'verify')  # Missing setting: one at a time, as before; the first waits for nobody.
+    assert result.returncode == 1 and shlex.join(pair(1)[0]) in result.stderr, result.stderr
+    assert shlex.join(pair(1)[1]) not in result.stderr, result.stderr
+    assert 'no partner' in result.stdout and re.search(r'^PASS \d+\.\ds .* — b met a$', result.stdout, re.M), result.stdout
+    (root / '.agents/harness.yaml').write_text(json.dumps(gate_setting(verification_workers=2)))
+    commit(root, 'two workers')
+    agree(root, '260914_00-verify', ['a.py'], pair(2), revision='002')
+    result = run(root, 'verify')
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert re.search(r'^PASS \d+\.\ds .* — a met b$', result.stdout, re.M), result.stdout
+    results = json.loads(run(root, 'status').stdout)['verified']['results']
+    assert [r['argv'] for r in results] == pair(2), results  # declared order, whatever finished first
+    assert all(r['exit_code'] == 0 and isinstance(r['seconds'], float) for r in results), results
+    # Every failure is reported at once with its whole output; a passing command shows its last line.
+    boom = [[sys.executable, '-c', f'import sys; print("boom {n}"); sys.exit({n})'] for n in (3, 4)]
+    boom.append(['harness-no-such-command'])  # a command that cannot start is one more failure, not a crash
+    agree(root, '260914_00-verify', ['a.py'], boom + [[sys.executable, '-c', 'print("noise"); print("fine")']],
+          revision='003')
+    result = run(root, 'verify')
+    assert result.returncode == 1 and all(shlex.join(c) in result.stderr for c in boom), result.stderr
+    assert 'boom 3' in result.stdout and 'boom 4' in result.stdout, result.stdout
+    assert '— fine' in result.stdout and not re.search(r'^noise$', result.stdout, re.M), result.stdout
+    assert json.loads(run(root, 'status').stdout)['verified'] is None
+    # A timeout ends the command's whole process group, so a test script's background child cannot hold it open.
+    (root / '.agents/harness.yaml').write_text(json.dumps(gate_setting(verification_workers=2,
+                                                                       verification_timeout_seconds=1)))
+    commit(root, 'short timeout')
+    # A command that exits while its background child still holds the output is done when it exits.
+    agree(root, '260914_00-verify', ['a.py'], [['bash', '-c', 'sleep 30 & wait'], [sys.executable, '-c', 'print(1)'],
+                                               ['bash', '-c', 'sleep 30 & echo started']], revision='004')
+    started = time.monotonic()
+    result = run(root, 'verify')
+    assert result.returncode == 1 and 'timed out' in result.stdout, (result.stdout, result.stderr)
+    assert re.search(r'^PASS \d+\.\ds .* — started$', result.stdout, re.M), result.stdout
+    assert time.monotonic() - started < 15, time.monotonic() - started
+    for bad in (0, -1, '4', True, 1.5):
+        (root / '.agents/harness.yaml').write_text(json.dumps(gate_setting(verification_workers=bad)))
+        result = run(root, 'verify')
+        assert result.returncode == 1 and 'verification_workers' in result.stderr, (bad, result.stderr)
+
+# Bundle 3 V4 (F1): tracked rule files under docs/changes (local_only_roots.allow) can be scoped. Change folders
+# and baselines cannot, even after the allow list, itself a scoped setting, is widened.
+with tempfile.TemporaryDirectory() as tmp:
+    root = checkout(tmp)
+    rules = ['docs/changes/README.md', 'docs/changes/_templates/plan.md']
+    agree(root, '260914_00-rules', rules)
+    for path in rules:
+        assert event(root, 'PreToolUse', 'Write', {'file_path': str(root / path), 'content': 'x'}).returncode == 0, path
+    folder = root / 'docs/changes/260914_00-rules'
+
+    def scoped(path):
+        (folder / 'scope.json').write_text(json.dumps({'paths': [path], 'verification_commands': [['true']]}))
+        return run(root, 'prepare', folder.name, '--revision', '002')
+
+    never = ['docs/changes/260914_01-other/plan.md', 'docs/changes/260914_00-rules/pr.md',
+             'docs/changes/_templates/agreements/001/plan.md',
+             # A case-folding checkout (macOS, Windows) opens the same folders under other spellings.
+             'docs/changes/260914_00-Rules/plan.md', 'docs/changes/_templates/Agreements/001/plan.md']
+    for path in never + ['docs/changes/other.md']:
+        result = scoped(path)
+        assert result.returncode == 1 and 'scope paths' in result.stderr, (path, result.stderr)
+    widened = json.loads(json.dumps(MANIFEST))
+    widened['documentation_layout']['local_only_roots']['allow'] = ['docs/changes/**']
+    (root / '.agents/harness.yaml').write_text(json.dumps(widened))
+    for path in never:
+        result = scoped(path)
+        assert result.returncode == 1 and 'scope paths' in result.stderr, (path, result.stderr)
+    assert scoped('docs/changes/other.md').returncode == 0
+
+# Bundle 3 V2: paths an approved earlier revision of the same change scoped stay editable in the next revision,
+# listed in the presented draft. Only the gate's own state carries them: a draft never approved, another change, a
+# scope.json key or the frozen plan opens nothing, and an inherited UI path still needs its views.
+with tempfile.TemporaryDirectory() as tmp:
+    root = checkout(tmp)
+    x = '260914_00-x'
+
+    def writes(path):
+        return event(root, 'PreToolUse', 'Write', {'file_path': str(root / path), 'content': 'x'}).returncode
+
+    assert agree(root, x, ['a.py'])['inherited_paths'] == []
+    assert agree(root, x, ['b.py'], revision='002')['inherited_paths'] == ['a.py']
+    assert (writes('a.py'), writes('b.py'), writes('c.py')) == (0, 0, 2)
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'git add a.py'}).returncode == 0
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'git add c.py'}).returncode == 2
+    (root / 'a.py').write_text('review fix')
+    result = run(root, 'verify')  # An inherited edit is inside the approved scope ...
+    assert result.returncode == 0, result.stderr
+    (root / 'b.py').write_text('scoped change')
+    git(root, 'add', 'b.py')
+    assert run(root, 'verify').returncode == 0
+    assert 'unstaged' in run(root, 'check-staged').stderr  # ... inside the staged-equals-verified check ...
+    git(root, 'add', 'a.py')
+    assert 'unstaged' not in run(root, 'check-staged').stderr
+    (root / 'a.py').write_text('edited after verification')
+    assert 'stale' in blocked_stop(root)  # ... and bound to the verification.
+    assert run(root, 'verify').returncode == 0
+    assert writes(f'docs/changes/{x}/plan.md') == 2
+    (root / 'docs/changes' / x / 'scope.json').write_text(json.dumps({'paths': ['c.py'], 'verification_commands': [['true']]}))
+    assert json.loads(run(root, 'prepare', x, '--revision', '003').stdout)['inherited_paths'] == ['a.py', 'b.py']
+    assert agree(root, x, ['b.py'], revision='004')['inherited_paths'] == ['a.py', 'b.py']  # 003 was never approved
+    assert (writes('a.py'), writes('c.py')) == (0, 2)
+    assert agree(root, x, ['d.py'], revision='005', inherited=['c.py'])['inherited_paths'] == ['a.py', 'b.py']
+    assert (writes('c.py'), writes('d.py')) == (2, 0)
+    assert event(root, 'UserPromptSubmit', prompt=f"/{MANIFEST['agreement_gate']['skill']} pause").returncode == 0
+    assert agree(root, x, ['b.py'], revision='006')['inherited_paths'] == ['a.py', 'b.py', 'd.py']  # paused passes on
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'python3 scripts/agreement-gate.py remove a.py'}).returncode == 0
+    assert run(root, 'remove', 'a.py').returncode == 0 and run(root, 'remove', 'c.py').returncode == 1
+    assert agree(root, '260914_01-y', ['c.py'])['inherited_paths'] == []
+    assert writes('b.py') == 2
+    assert agree(root, x, ['c.py'], revision='007')['inherited_paths'] == []  # coming back restores nothing
+    assert writes('b.py') == 2
+    views = root / 'docs/changes/260914_02-z/deliverables'
+    views.mkdir(parents=True)
+    for name in ('설명서(eli7).html', 'mockup.html', 'flow.html', 'architecture.html'):
+        (views / name).write_text('<title>proposed experience</title>')
+    agree(root, views.parent.name, ['apps/web/src/ui/screen.tsx'])
+    shutil.rmtree(views)
+    (views.parent / 'scope.json').write_text(json.dumps({'paths': ['b.py'], 'verification_commands': [['true']]}))
+    result = run(root, 'prepare', views.parent.name, '--revision', '002')
+    assert result.returncode == 1 and 'draft missing' in result.stderr, result.stderr
+    # One file per revision still adds up: with an inherited path the scope is multi-file and needs plan.md.
+    w = root / 'docs/changes/260914_03-w'
+    w.mkdir(parents=True)
+    (w / 'spec.md').write_text('# one file at a time\n')
+    for revision, path in (('001', 'a.py'), ('002', 'b.py')):
+        (w / 'scope.json').write_text(json.dumps({'paths': [path], 'verification_commands': [['true']]}))
+        result = run(root, 'prepare', w.name, '--revision', revision)
+        if revision == '001':
+            assert result.returncode == 0, result.stderr
+            assert event(root, 'UserPromptSubmit', prompt=json.loads(result.stdout)['approval_command']).returncode == 0
+    assert result.returncode == 1 and 'plan.md' in result.stderr, result.stderr
 
 print('PASS: agreement gate lifecycle and bypass regression tests')

@@ -16,7 +16,10 @@ roles and host limits. A Skill invocation or an agent-written `approved` field n
    the checks already used by the project, and show their purpose in the review.
 2. Run `python3 scripts/agreement-gate.py prepare <change-id> --revision 001` (next revision
    when amending). The helper checks required views before any implementation, records hashes
-   and prints the approval command. Changes to drafts afterward require preparing again.
+   and prints the approval command. Changes to drafts afterward require preparing again. When
+   amending, it also prints `inherited_paths`: earlier approved revisions' paths that stay
+   editable (ADR-0004). Present them with the scope; a review fix to one of them needs no new
+   revision, while new paths and plan changes do.
 3. If prepare's PreToolUse hook supplied ADR candidates, use `__PREFIX__-adr` to assess the
    actual decision and existing records. Briefly propose useful new decisions with the agreement;
    stay quiet for routine edits and do not turn the hint into an ADR requirement.
@@ -40,7 +43,9 @@ command for the human's own terminal and clearly identify the weaker runtime enf
 ## Verification and handoff
 
 Run `python3 scripts/agreement-gate.py verify` for the declared commands. Only that execution
-records source-bound verification; typed success claims do not count. After any source edit,
+records source-bound verification; typed success claims do not count. It runs them
+`verification_workers` at a time and prints each command's seconds; give the shell call a timeout
+longer than the slowest command. After any source edit,
 rerun verification. Record progress in `progress.md`, leaving agreed planning inputs unchanged.
 Prepare the active `pr.md` against the approved revision; Stop and pre-commit locate it from
 state even if no PR file was previously touched. Human value judgment is separate from this gate.

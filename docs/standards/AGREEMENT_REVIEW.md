@@ -48,6 +48,8 @@ Put the proposed decision in spec/plan and include its future ADR path in scope;
 ADR after agreement. Reference an existing ADR when the decision is unchanged.
 
 Create `scope.json` from the template: exact file paths and verification commands as argv arrays.
+Under `docs/changes/` only tracked rule files that match `documentation_layout.local_only_roots.allow`
+(the README, `_templates/`) can be in scope; change folders and `agreements/` never are.
 Use the `__PREFIX__-agreement` skill. Run `python3 scripts/agreement-gate.py prepare <change-id>
 --revision 001`, then present the drafts, scope, checks and generated approval command. Claude uses
 `/__PREFIX__-agreement approve <challenge>`; Codex uses `$__PREFIX__-agreement approve <challenge>`.
@@ -58,7 +60,14 @@ The hook checks the presented hashes, preserves `agreements/001/`, and records t
 worktree's Git directory. Put `Agreement-Ref: agreements/001` in the plan before preparation and
 in the PR afterward. Approved intent/spec/plan/scope stay frozen; record ticket/DoD results in
 `progress.md`. Result HTML may evolve separately. For amendments, prepare the next revision to
-revoke the old grant, edit the drafts, prepare again, and present the new challenge. A pending
+revoke the old grant, edit the drafts, prepare again, and present the new challenge.
+Paths that an approved (or approved, then paused) earlier revision of the same change scoped carry
+over (ADR-0004): prepare prints them as `inherited_paths`, the challenge binds them, and after
+approval they are editable like the scope, inside its verification, HTML and multi-file `plan.md`
+checks. So a review fix to
+such a path needs no new revision; a new path, a wider scope or a plan change still does. Only the
+gate's state carries them: a draft never approved passes nothing on, preparing another change starts
+empty, and nothing drops an inherited path within the change (start a new change to narrow). A pending
 draft may end a turn to await the user even with existing edits; implementation and commit stay
 blocked. Prior revisions remain unchanged.
 
@@ -78,7 +87,9 @@ A plan split into parts needs its own plan copy, `scope.json` and approval in ea
 worktree, and every part uses the same work slug (`feature/<work-slug>/<part>`, `Plan-Ref: <work-slug>`).
 Such a plan has part branches only: git cannot hold `feature/<work-slug>` next to `feature/<work-slug>/<part>`.
 Run `python3 scripts/agreement-gate.py verify` to execute the declared checks and record their
-exit codes against current source hashes. Editing source invalidates that evidence. Run fresh
+exit codes and seconds against current source hashes. It runs `agreement_gate.verification_workers`
+commands at a time, prints one line per command (seconds and its last output line; a failed one
+shows its whole output), and reports every failure at once. Editing source invalidates that evidence. Run fresh
 read-only code review and repair findings, then verify again if source changed. Code review assesses correctness against the
 agreement. User value review remains a separate human decision.
 
@@ -193,6 +204,10 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
   files `git ls-files --others --exclude-standard` lists); they do not see writes under `.git/`,
   ignored paths or outside the checkout, and Stop checks no files while a draft is pending.
 - `branch_pattern`: full-match regex for `git switch -c <branch>` after approval.
+- `verification_workers`: how many verification commands `verify` runs at once (template: 4; missing:
+  1, one at a time; anything but a positive integer is refused). Set it to 1 when the declared commands
+  share a database, port or build cache. A command that outlives `verification_timeout_seconds` is
+  killed with its whole process group and counts as failed.
 
 **Second fence.** A hook that times out or fails to start does not block the tool call.
 `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules`

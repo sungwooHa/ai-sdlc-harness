@@ -186,6 +186,8 @@ def main() -> int:
         template = (GATE.parents[1] / "docs/changes/_templates/pr.md").read_text(encoding="utf-8")
         code, _, err = run(root, write(template))
         check("unfilled template blocks with the placeholder hint", (code, "템플릿 자리표시자" in err), (2, True))
+        # F1: only a dated change folder holds a PR; the template's pr.md is the form itself, so editing it is free.
+        check("template pr.md is not validated as a PR", run(root, write(template, "docs/changes/_templates/pr.md"))[0], 0)
 
         # --- Stop: remembered pr.md + deliverables requirement
         (root / pr_rel).parent.mkdir(parents=True, exist_ok=True)
