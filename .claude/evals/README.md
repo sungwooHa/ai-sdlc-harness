@@ -32,12 +32,13 @@ key helper setting, turn the profile off (`ant auth logout`), then `/login` with
 runner aborts on the first authentication failure instead of burning every case.
 
 Known limits: `/__PREFIX__-*` skills are `disable-model-invocation`, so a case cannot expect the agent to
-*run* one — it can only expect the agent to *point the user to* it (`vague-request-asks-for-intent`).
+*run* one — it can only expect the agent to *point the user to* it.
 Answers vary between runs: judge a new or changed case with `--runs 3` (PASS needs 3/3). A case earns
 its place only when it measures the agent, not another gate: `--mutate`, which removes the instruction
-it declares in `measures`, must make it FAIL (`KILLED`). So answer checks name this repo's own wording (a protected path's `instead`,
-`<repo-root>`) rather than what general knowledge would say anyway, and a case that a hook already
-decides deterministically (the commit-msg format) is not repeated here.
+it declares in `measures`, must make it FAIL (`KILLED`). So answer checks name this repo's own wording (`<repo-root>`, the reason
+an ADR is reused) rather than what general knowledge or another document would say anyway, and a case
+that a hook already decides (the commit-msg format, a protected path) is not repeated here. A case that
+still survives `--mutate` after one such narrowing is dropped.
 
 `scripts/test/run-evals.test.py` (in `test:harness`) checks that every case's `measures` text occurs
 exactly once and that removing it leaves a JSON file readable. Rewording a measured instruction
@@ -50,5 +51,5 @@ Keep prompts realistic and short; the point is the repo's instructions, not the 
 __PACKAGE_MANAGER__ evals:harness                                    # all cases
 __PACKAGE_MANAGER__ evals:harness --runs 3 --jobs 6                  # each case three times, six copies at once
 __PACKAGE_MANAGER__ evals:harness --mutate --runs 3 --jobs 6         # does each case fail without its instruction?
-python3 scripts/harness/run-evals.py --only protected-path-untouched
+python3 scripts/harness/run-evals.py --only narrow-test-scope
 ```

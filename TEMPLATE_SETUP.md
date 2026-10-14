@@ -105,7 +105,7 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
 - `docs/standards/<domain>/**`, `docs/knowledge/**`(생성 인덱스 시스템 포함), `docs/adr/**`,
   실제 변경 폴더 `docs/changes/<날짜>-*`, `ui-critic`/`agent-thread-inspector`
   서브에이전트, `bitbucket-pipelines.yml`.
-- 원본 evals 9케이스(하드코딩된 색상 hex, `*.generated.ts` 등 프로젝트 규칙을 검사) → 하네스 지시를 재는 일반 9케이스로 교체.
+- 원본 evals 9케이스(하드코딩된 색상 hex, `*.generated.ts` 등 프로젝트 규칙을 검사) → 하네스 지시를 재는 일반 5케이스로 교체.
 
 ## 체커에서 걷어낸 규칙
 
