@@ -13,7 +13,8 @@ do the right thing on tasks we have actually seen go wrong? Run when `AGENTS.md`
   k/N per case, exits non-zero on any failure. `--runs N` repeats each case; PASS needs N/N.
   `--jobs N` runs up to N copies at once (output stays in case order). `--mutate` removes each case's
   `measures` from the copy and expects the case to fail: `KILLED k/N` when every run fails, `SURVIVED`
-  with the agent's words otherwise, `ERROR` when the declaration is missing or does not match. Declared in
+  with the agent's words otherwise, `ERROR` when the declaration is missing or does not match or a run got
+  no answer (`claude` exited non-zero, e.g. a usage limit). Declared in
   `.agents/harness.yaml` `evals`; `__PACKAGE_MANAGER__ evals:harness` is the entry point. It spends model quota,
   so it is not part of `__PACKAGE_MANAGER__ test:harness`.
 

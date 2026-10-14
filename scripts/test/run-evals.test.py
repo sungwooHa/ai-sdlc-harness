@@ -30,8 +30,9 @@ REPO = Path(__file__).resolve().parents[2]
 RUNNER = REPO / "scripts/harness/run-evals.py"
 
 # Logs its argv, the ANTHROPIC_/CLAUDE_CODE_ variables it received and what the copy looks like (one line per
-# call: the gate's hooks, other hooks, remotes, any trace of the real checkout under .git), then acts on the
-# prompt: `auth` fails to authenticate, `abs` writes a user path into a new directory, `flaky` answers wrongly
+# call: the gate's hooks, the other hooks and permissions, remotes, any trace of the real checkout under .git),
+# then acts on the prompt: `auth` fails to authenticate, `crash` exits non-zero as a usage limit would, `abs`
+# writes a user path into a new directory, `flaky` answers wrongly
 # on its second call only, `measured` answers right only while AGENTS.md carries its instruction, `meet-*`
 # answers right only when its partner runs at the same time. The user path is split so the fast guard does
 # not read it.
@@ -44,21 +45,26 @@ with (state / "argv.jsonl").open("a", encoding="utf-8") as log:
 with (state / "env.jsonl").open("a", encoding="utf-8") as log:
     log.write(json.dumps(sorted(k for k in os.environ if k.startswith(("ANTHROPIC_", "CLAUDE_CODE_")))) + "\\n")
 prompt = sys.argv[sys.argv.index("-p") + 1]
-hooks = json.loads(Path(".claude/settings.json").read_text(encoding="utf-8"))["hooks"]
-commands = [h["command"] for groups in hooks.values() for g in groups for h in g["hooks"]]
+settings_file = Path(".claude/settings.json")
+settings = json.loads(settings_file.read_text(encoding="utf-8")) if settings_file.is_file() else {}
+commands = [h["command"] for groups in settings.get("hooks", {}).values() for g in groups for h in g["hooks"]]
 root = os.environ["FAKE_ROOT"].encode()
 dot_git = Path(".git")  # a worktree's .git is a file naming the real checkout
 git_files = [dot_git] if dot_git.is_file() else [p for p in dot_git.rglob("*") if p.is_file()]
 with (state / "copies.jsonl").open("a", encoding="utf-8") as log:
     log.write(json.dumps({
         "prompt": prompt, "cwd": os.getcwd(),
-        "gate_hooks": sum("agreement-gate.py" in c for c in commands), "other_hooks": len(commands),
+        "gate_hooks": sum("agreement-gate.py" in c for c in commands),
+        "kept": sorted(c for c in commands if "agreement-gate.py" not in c), "permissions": settings.get("permissions"),
         "remotes": subprocess.run(["git", "remote", "-v"], capture_output=True, text=True).stdout,
         "root_trace": any(root in p.read_bytes() for p in git_files),
         "clean": subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout == "",
     }) + "\\n")
 if prompt == "auth":
     print("Failed to authenticate. Please log in.")
+    sys.exit(1)
+if prompt == "crash":
+    print("Claude usage limit reached.")
     sys.exit(1)
 if prompt == "abs":
     Path("newdir").mkdir()
@@ -92,6 +98,8 @@ CASES = [
      "measures": [{"file": "AGENTS.md", "text": "Keep it short.\n"}]},
     {"id": "stale", "prompt": "plain", "expect": DONE,
      "measures": [{"file": "AGENTS.md", "text": "A sentence nobody wrote.\n"}]},
+    {"id": "crash", "prompt": "crash", "expect": DONE,
+     "measures": [{"file": "AGENTS.md", "text": "Keep it short.\n"}]},
     {"id": "meet-a", "prompt": "meet-a", "expect": DONE},
     {"id": "meet-b", "prompt": "meet-b", "expect": DONE},
 ]
@@ -137,15 +145,19 @@ def main() -> int:
         git("add", "-A")
         assert git("commit", "-q", "-m", "chore: [eval] fixture").returncode == 0
         assert git("remote", "add", "origin", "https://example.invalid/harness.git").returncode == 0  # not in copies
-        before = [git(*args).stdout for args in (("status", "--porcelain"), ("worktree", "list"), ("branch",),
-                                                 ("remote", "-v"), ("config", "--local", "--list"))]
+        probes = (("status", "--porcelain"), ("worktree", "list"), ("branch",), ("remote", "-v"),
+                  ("config", "--local", "--list"), ("rev-parse", "HEAD"))
+        before = [git(*args).stdout for args in probes]
         env = {**os.environ, **{name: "x" for name in OFF_LOGIN + KEPT}, "TMPDIR": str(copies_tmp),
                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_CLAUDE_STATE": str(state),
                "FAKE_ROOT": str(repo.resolve())}
+        real = json.loads((REPO / ".claude/settings.json").read_text(encoding="utf-8"))
+        kept = sorted(h["command"] for groups in real["hooks"].values() for g in groups for h in g["hooks"]
+                      if "agreement-gate.py" not in h["command"])
 
-        def run(*args: str) -> subprocess.CompletedProcess[str]:
-            return subprocess.run([sys.executable, "scripts/harness/run-evals.py", *args], cwd=repo, env=env,
-                                  capture_output=True, text=True, errors="replace")
+        def run(*args: str, **extra: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run([sys.executable, "scripts/harness/run-evals.py", *args], cwd=repo,
+                                  env={**env, **extra}, capture_output=True, text=True, errors="replace")
 
         def line(result: subprocess.CompletedProcess[str], case: str) -> str:
             return next((l for l in result.stdout.splitlines() if l.startswith(case + " ")), "")
@@ -161,7 +173,8 @@ def main() -> int:
         assert not seen & set(OFF_LOGIN) and set(KEPT) <= seen, \
             f"the child must get the subscription login only: {sorted(seen)}"
         copy = last_copy()
-        assert copy["gate_hooks"] == 0 and copy["other_hooks"] > 0, f"only the agreement gate is off: {copy}"
+        assert copy["gate_hooks"] == 0 and copy["kept"] == kept and copy["permissions"] == real["permissions"], \
+            f"only the agreement gate is off: {copy}"
         assert copy["remotes"] == "" and not copy["root_trace"] and copy["clean"], \
             f"the copy is a new repository that does not lead back to the checkout: {copy}"
         assert not Path(copy["cwd"]).resolve().is_relative_to(repo.resolve()), copy
@@ -187,6 +200,10 @@ def main() -> int:
         assert result.returncode == 0 and "PASS 1/1" in line(result, "measured"), result.stdout
         result = run("--only", "measured", "--mutate", "--runs", "2")
         assert result.returncode == 0 and "KILLED 2/2" in line(result, "measured"), result.stdout
+        assert "output did not match" in result.stdout, f"a kill says why the case failed: {result.stdout}"
+        result = run("--only", "crash", "--mutate")  # a run that never answered proves nothing either way
+        assert result.returncode == 1 and "ERROR" in line(result, "crash") and "claude exited 1" in result.stdout, \
+            result.stdout
         result = run("--only", "survivor", "--mutate")
         assert result.returncode == 1 and "SURVIVED 0/1" in line(result, "survivor") and "| done" in result.stdout, \
             f"a survivor shows the agent's words: {result.stdout}"
@@ -197,15 +214,26 @@ def main() -> int:
         problems = runner.measure_problems(repo, {"measures": [{"file": ".claude/settings.json", "text": '"hooks": {'}]})
         assert problems and "JSON" in problems[0], f"a removal must leave a JSON file readable: {problems}"
         assert runner.measure_problems(repo, CASES[4]) == [], "a sentence that occurs once can be removed"
+        for outside in (str(repo / "AGENTS.md"), "../repo/AGENTS.md"):  # never a file outside the copy
+            problems = runner.measure_problems(repo, {"measures": [{"file": outside, "text": "Keep it short.\n"}]})
+            assert problems and "relative path" in problems[0], (outside, problems)
+        # A GIT_DIR or GIT_WORK_TREE in the caller's environment reaches neither the copy's git nor the agent.
+        result = run("--only", "plain", GIT_DIR=str(repo / ".git"), GIT_WORK_TREE=str(repo))
+        assert result.returncode == 0 and last_copy()["clean"], f"{result.stdout}{result.stderr}"
 
         # --jobs: two cases that only pass together pass side by side, printed in case order.
         result = run("--only", "meet-a,meet-b", "--jobs", "2")
         assert result.returncode == 0, f"--jobs must run copies at the same time: {result.stdout}{result.stderr}"
         assert result.stdout.index("meet-a ") < result.stdout.index("meet-b "), result.stdout
 
-        after = [git(*args).stdout for args in (("status", "--porcelain"), ("worktree", "list"), ("branch",),
-                                                ("remote", "-v"), ("config", "--local", "--list"))]
+        after = [git(*args).stdout for args in probes]
         assert after == before, f"the real checkout must stay as it was: {before} -> {after}"
+        assert not list(copies_tmp.iterdir()), f"copies must be removed: {list(copies_tmp.iterdir())}"
+        # A repository without Claude settings has no hooks to leave out.
+        git("rm", "-q", ".claude/settings.json")
+        assert git("commit", "-q", "-m", "chore: [eval] no settings").returncode == 0
+        result = run("--only", "plain")
+        assert result.returncode == 0 and last_copy()["kept"] == [], f"{result.stdout}{result.stderr}"
         assert not list(copies_tmp.iterdir()), f"copies must be removed: {list(copies_tmp.iterdir())}"
 
     # This repository's cases: each declares the instruction it measures, removable exactly once. Rewording a

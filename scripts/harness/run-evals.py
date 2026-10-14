@@ -56,8 +56,14 @@ COPY_GIT = ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false
             "-c", "user.name=eval", "-c", "user.email=eval@invalid"]
 
 
-def sh(cmd: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check)
+def sh(cmd: list[str], cwd: Path, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check, env=env)
+
+
+def copy_env() -> dict[str, str]:
+    """The environment for anything run in a copy: a GIT_DIR, GIT_WORK_TREE or GIT_INDEX_FILE from the caller (a
+    git hook, an exporting shell) would point git back at this checkout."""
+    return {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
 
 
 class AuthFailure(RuntimeError):
@@ -87,6 +93,9 @@ def mutation(root: Path, case: dict) -> tuple[dict[str, str], list[str]]:
     for measure in case["measures"]:
         name, text = measure["file"], measure["text"]
         path = root / name
+        if Path(name).is_absolute() or ".." in Path(name).parts:
+            problems.append(f"{name}: measures name a file in the repository by a relative path")
+            continue
         if name not in texts:
             if not path.is_file():
                 problems.append(f"{name}: no such file")
@@ -139,9 +148,9 @@ def make_copy(sha: str, case: dict, mutate: bool) -> Path:
             for name, text in texts.items():
                 (copy / name).write_text(text, encoding="utf-8")
         gate_off(copy)
-        sh(["git", "init", "-q"], copy)
-        sh(["git", "add", "--all", "--force"], copy)
-        sh([*COPY_GIT, "commit", "-q", "-m", "eval copy"], copy)
+        sh(["git", "init", "-q"], copy, env=copy_env())
+        sh(["git", "add", "--all", "--force"], copy, env=copy_env())
+        sh([*COPY_GIT, "commit", "-q", "-m", "eval copy"], copy, env=copy_env())
     except BaseException:
         shutil.rmtree(copy, ignore_errors=True)
         raise
@@ -149,8 +158,8 @@ def make_copy(sha: str, case: dict, mutate: bool) -> Path:
 
 
 def run_case(sha: str, case: dict, model: str, max_turns: int, env: dict[str, str],
-             mutate: bool) -> tuple[bool, list[str], str]:
-    """(passed, problems, the agent's last words) for one run in its own copy."""
+             mutate: bool) -> tuple[bool, list[str], str, int]:
+    """(passed, problems, the agent's last words, claude's exit code) for one run in its own copy."""
     copy = make_copy(sha, case, mutate)
     problems: list[str] = []
     try:
@@ -163,8 +172,8 @@ def run_case(sha: str, case: dict, model: str, max_turns: int, env: dict[str, st
         if "Failed to authenticate" in output:
             raise AuthFailure(output.strip().splitlines()[-1] if output.strip() else "authentication failed")
         if not copy.is_dir():
-            return False, [f"copy {copy} vanished during the run; cannot evaluate file checks"], ""
-        changed = sh(["git", "status", "--porcelain", "--untracked-files=all"], copy).stdout.splitlines()
+            return False, [f"copy {copy} vanished during the run; cannot evaluate file checks"], "", res.returncode
+        changed = sh(["git", "status", "--porcelain", "--untracked-files=all"], copy, env=env).stdout.splitlines()
         changed_files = [line[3:] for line in changed]
         exp = case.get("expect", {})
         if res.returncode != 0:
@@ -183,14 +192,14 @@ def run_case(sha: str, case: dict, model: str, max_turns: int, env: dict[str, st
                 if p.is_file() and re.search(rx, p.read_text(errors="replace")):
                     problems.append(f"{f} contains forbidden /{rx}/")
         if (cmd := exp.get("command_succeeds")):
-            if subprocess.run(cmd, shell=True, cwd=copy).returncode != 0:
+            if subprocess.run(cmd, shell=True, cwd=copy, env=env).returncode != 0:
                 problems.append(f"command failed: {cmd}")
         # A result is undiagnosable without the agent's actual words.
         tail = [l for l in output.strip().splitlines() if l.strip()][-12:]
         words = "agent output (tail):\n" + "\n".join(f"      | {l}" for l in tail)
     finally:
         shutil.rmtree(copy, ignore_errors=True)
-    return (not problems), problems, words
+    return (not problems), problems, words, res.returncode
 
 
 def main() -> int:
@@ -207,7 +216,7 @@ def main() -> int:
         ap.error("--runs must be at least 1")
     if args.jobs < 1:
         ap.error("--jobs must be at least 1")
-    env = {key: value for key, value in os.environ.items() if key not in OFF_LOGIN_ENV}
+    env = {key: value for key, value in copy_env().items() if key not in OFF_LOGIN_ENV}
     only = set(args.only.split(",")) if args.only else None
     cases = [json.loads(l) for l in CASES.read_text(encoding="utf-8").splitlines() if l.strip()]
     cases = [case for case in cases if not only or case["id"] in only]
@@ -218,14 +227,20 @@ def main() -> int:
         runs = [[pool.submit(run_case, sha, case, args.model, args.max_turns, env, args.mutate)
                  for _ in range(args.runs)] for case in cases]
         for case, futures in zip(cases, runs):
-            results, notes = [], []
+            results, notes, crashed = [], [], 0
             try:
                 for run, future in enumerate(futures, 1):
-                    ok, problems, words = future.result()
+                    ok, problems, words, exit_code = future.result()
                     results.append(ok)
-                    if args.mutate and ok:
+                    if args.mutate and exit_code != 0:
+                        # No answer (a usage limit, a crash) proves nothing either way.
+                        crashed += 1
+                        notes.extend(f"run {run}: {p}" for p in problems + [words])
+                    elif args.mutate and ok:
                         notes.append(f"run {run}: passed without the measured instruction\n{words}")
-                    elif not args.mutate and not ok:
+                    elif args.mutate:
+                        notes.append(f"run {run}: killed — " + "; ".join(problems))
+                    elif not ok:
                         notes.extend(f"run {run}: {p}" for p in problems + [words])
             except AuthFailure as exc:
                 pool.shutdown(wait=False, cancel_futures=True)
@@ -238,8 +253,14 @@ def main() -> int:
                     print(f"    - {problem}", flush=True)
                 failures += 1
                 continue
+            except BaseException:
+                pool.shutdown(wait=False, cancel_futures=True)  # do not spend quota on runs nobody will read
+                raise
             passed = sum(results)
-            if args.mutate:
+            if args.mutate and crashed:
+                ok = False
+                verdict = f"ERROR {crashed}/{args.runs} runs got no answer"
+            elif args.mutate:
                 ok = passed == 0
                 verdict = f"{'KILLED' if ok else 'SURVIVED'} {args.runs - passed}/{args.runs}"
             else:

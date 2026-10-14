@@ -63,7 +63,8 @@ in the PR afterward. Approved intent/spec/plan/scope stay frozen; record ticket/
 revoke the old grant, edit the drafts, prepare again, and present the new challenge.
 Paths that an approved (or approved, then paused) earlier revision of the same change scoped carry
 over (ADR-0004): prepare prints them as `inherited_paths`, the challenge binds them, and after
-approval they are editable like the scope, inside its verification and HTML checks. So a review fix to
+approval they are editable like the scope, inside its verification, HTML and multi-file `plan.md`
+checks. So a review fix to
 such a path needs no new revision; a new path, a wider scope or a plan change still does. Only the
 gate's state carries them: a draft never approved passes nothing on, preparing another change starts
 empty, and nothing drops an inherited path within the change (start a new change to narrow). A pending

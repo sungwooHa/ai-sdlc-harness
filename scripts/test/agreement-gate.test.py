@@ -565,6 +565,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert all(r['exit_code'] == 0 and isinstance(r['seconds'], float) for r in results), results
     # Every failure is reported at once with its whole output; a passing command shows its last line.
     boom = [[sys.executable, '-c', f'import sys; print("boom {n}"); sys.exit({n})'] for n in (3, 4)]
+    boom.append(['harness-no-such-command'])  # a command that cannot start is one more failure, not a crash
     agree(root, '260914_00-verify', ['a.py'], boom + [[sys.executable, '-c', 'print("noise"); print("fine")']],
           revision='003')
     result = run(root, 'verify')
@@ -576,11 +577,13 @@ with tempfile.TemporaryDirectory() as tmp:
     (root / '.agents/harness.yaml').write_text(json.dumps(gate_setting(verification_workers=2,
                                                                        verification_timeout_seconds=1)))
     commit(root, 'short timeout')
-    agree(root, '260914_00-verify', ['a.py'], [['bash', '-c', 'sleep 30 & wait'], [sys.executable, '-c', 'print(1)']],
-          revision='004')
+    # A command that exits while its background child still holds the output is done when it exits.
+    agree(root, '260914_00-verify', ['a.py'], [['bash', '-c', 'sleep 30 & wait'], [sys.executable, '-c', 'print(1)'],
+                                               ['bash', '-c', 'sleep 30 & echo started']], revision='004')
     started = time.monotonic()
     result = run(root, 'verify')
     assert result.returncode == 1 and 'timed out' in result.stdout, (result.stdout, result.stderr)
+    assert re.search(r'^PASS \d+\.\ds .* — started$', result.stdout, re.M), result.stdout
     assert time.monotonic() - started < 15, time.monotonic() - started
     for bad in (0, -1, '4', True, 1.5):
         (root / '.agents/harness.yaml').write_text(json.dumps(gate_setting(verification_workers=bad)))
@@ -602,7 +605,9 @@ with tempfile.TemporaryDirectory() as tmp:
         return run(root, 'prepare', folder.name, '--revision', '002')
 
     never = ['docs/changes/260914_01-other/plan.md', 'docs/changes/260914_00-rules/pr.md',
-             'docs/changes/_templates/agreements/001/plan.md']
+             'docs/changes/_templates/agreements/001/plan.md',
+             # A case-folding checkout (macOS, Windows) opens the same folders under other spellings.
+             'docs/changes/260914_00-Rules/plan.md', 'docs/changes/_templates/Agreements/001/plan.md']
     for path in never + ['docs/changes/other.md']:
         result = scoped(path)
         assert result.returncode == 1 and 'scope paths' in result.stderr, (path, result.stderr)
@@ -632,6 +637,12 @@ with tempfile.TemporaryDirectory() as tmp:
     (root / 'a.py').write_text('review fix')
     result = run(root, 'verify')  # An inherited edit is inside the approved scope ...
     assert result.returncode == 0, result.stderr
+    (root / 'b.py').write_text('scoped change')
+    git(root, 'add', 'b.py')
+    assert run(root, 'verify').returncode == 0
+    assert 'unstaged' in run(root, 'check-staged').stderr  # ... inside the staged-equals-verified check ...
+    git(root, 'add', 'a.py')
+    assert 'unstaged' not in run(root, 'check-staged').stderr
     (root / 'a.py').write_text('edited after verification')
     assert 'stale' in blocked_stop(root)  # ... and bound to the verification.
     assert run(root, 'verify').returncode == 0
@@ -659,5 +670,16 @@ with tempfile.TemporaryDirectory() as tmp:
     (views.parent / 'scope.json').write_text(json.dumps({'paths': ['b.py'], 'verification_commands': [['true']]}))
     result = run(root, 'prepare', views.parent.name, '--revision', '002')
     assert result.returncode == 1 and 'draft missing' in result.stderr, result.stderr
+    # One file per revision still adds up: with an inherited path the scope is multi-file and needs plan.md.
+    w = root / 'docs/changes/260914_03-w'
+    w.mkdir(parents=True)
+    (w / 'spec.md').write_text('# one file at a time\n')
+    for revision, path in (('001', 'a.py'), ('002', 'b.py')):
+        (w / 'scope.json').write_text(json.dumps({'paths': [path], 'verification_commands': [['true']]}))
+        result = run(root, 'prepare', w.name, '--revision', revision)
+        if revision == '001':
+            assert result.returncode == 0, result.stderr
+            assert event(root, 'UserPromptSubmit', prompt=json.loads(result.stdout)['approval_command']).returncode == 0
+    assert result.returncode == 1 and 'plan.md' in result.stderr, result.stderr
 
 print('PASS: agreement gate lifecycle and bypass regression tests')

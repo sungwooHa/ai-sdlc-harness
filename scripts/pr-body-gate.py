@@ -4,8 +4,8 @@
 What a reviewer reads must cost the least attention possible. `docs/changes/<id>/pr.md` is the
 PR description; this hook makes its shape a rule instead of a wish:
 
-- PreToolUse Write on `docs/changes/*/pr.md`: validate the content before it lands (exit 2 with
-  the fixes on violation).
+- PreToolUse Write on `docs/changes/<YYMMDD_NN>-<slug>/pr.md` (not `_templates/pr.md`, the form): validate
+  the content before it lands (exit 2 with the fixes on violation).
 - PostToolUse Edit/Write/MultiEdit on that path: remember it for this session.
 - Stop: re-validate every remembered pr.md and require the deliverables the change needs
   (`artifact_chain.deliverables.required_when`) to exist next to it; block the turn otherwise.

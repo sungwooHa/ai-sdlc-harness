@@ -103,7 +103,7 @@ def relative(repo, value, cwd=None):
 def change_rule_file(repo, rel):
     """A tracked rule file under docs/changes (README, _templates): local_only_roots.allow decides, with the fast
     guard's glob rule. Change folders and baselines never qualify, whatever the list says: it is a scoped setting."""
-    parts = Path(rel).parts
+    parts = [part.lower() for part in Path(rel).parts]  # a case-folding checkout opens them under any spelling
     if CHANGE_ID.fullmatch(parts[2]) or 'agreements' in parts:
         return False
     allow = config(repo)[0].get('documentation_layout', {}).get('local_only_roots', {}).get('allow', [])
@@ -165,8 +165,6 @@ def prepare(repo, folder_id, revision):
     folder = repo / 'docs/changes' / folder_id
     relative(repo, str(folder))
     scope = read_scope(folder, repo)
-    if len(scope['paths']) > 1 and not (folder / 'plan.md').is_file():
-        raise Blocked('a multi-file scope needs plan.md')
     # Paths approved (or approved, then paused) earlier in this same change carry over; only this state file
     # holds them. A draft never approved adds nothing, and another change starts empty (ADR-0004).
     prev = load(repo)
@@ -176,6 +174,8 @@ def prepare(repo, folder_id, revision):
         if prev.get('phase') in ('approved', 'paused'):
             carried |= set(prev['scope']['paths'])
         inherited = sorted(carried)
+    if len(set(scope['paths']) | set(inherited)) > 1 and not (folder / 'plan.md').is_file():
+        raise Blocked('a multi-file scope (inherited paths included) needs plan.md')
     files = draft_files(folder, manifest, set(scope['paths']) | set(inherited))
     if (folder / 'agreements' / revision).exists():
         raise Blocked('that agreement revision already exists')
@@ -254,18 +254,26 @@ def verification_workers(cfg):
 
 
 def run_check(argv, repo, timeout):
-    """One declared command: exit code (None on timeout), seconds and combined output."""
+    """One declared command: exit code (None on timeout, 127 when it cannot start), seconds and combined output."""
     start = time.monotonic()
-    proc = subprocess.Popen(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, start_new_session=True)
-    try:
-        output, _ = proc.communicate(timeout=timeout)
-        code = proc.returncode
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)  # The whole group: a test script's children hold the pipe too.
-        output, _ = proc.communicate()
-        code = None
-    return code, round(time.monotonic() - start, 2), output.decode('utf-8', 'replace')
+    # A file, not a pipe: a background child that keeps the output open cannot hold a finished command.
+    with tempfile.TemporaryFile() as out:
+        try:
+            proc = subprocess.Popen(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=out,
+                                    stderr=subprocess.STDOUT, start_new_session=True)
+        except OSError as exc:
+            return 127, 0.0, f'cannot start: {exc}'
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # The whole group: a test script's children too.
+            except ProcessLookupError:
+                pass
+            proc.wait()
+            code = None
+        out.seek(0)
+        return code, round(time.monotonic() - start, 2), out.read().decode('utf-8', 'replace')
 
 
 def verify_work(repo):
