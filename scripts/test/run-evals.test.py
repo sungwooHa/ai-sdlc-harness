@@ -208,6 +208,12 @@ def main() -> int:
         assert after == before, f"the real checkout must stay as it was: {before} -> {after}"
         assert not list(copies_tmp.iterdir()), f"copies must be removed: {list(copies_tmp.iterdir())}"
 
+    # This repository's cases: each declares the instruction it measures, removable exactly once. Rewording a
+    # measured instruction fails here until the case's `measures` follows it (.claude/evals/README.md).
+    real = [json.loads(l) for l in (REPO / ".claude/evals/cases.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    stale = {case["id"]: problems for case in real if (problems := runner.measure_problems(REPO, case))}
+    assert not stale, f"every case declares the instruction it measures, each text exactly once: {stale}"
+
     print("PASS: run-evals runner (sonnet alias default, files in new directories, --runs k/N, subscription login "
           "only, isolated copies without the agreement gate, --mutate, --jobs)")
     return 0

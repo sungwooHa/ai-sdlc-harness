@@ -38,6 +38,10 @@ it declares in `measures`, must make it FAIL (`KILLED`). So answer checks name t
 `<repo-root>`) rather than what general knowledge would say anyway, and a case that a hook already
 decides deterministically (the commit-msg format) is not repeated here.
 
+`scripts/test/run-evals.test.py` (in `test:harness`) checks that every case's `measures` text occurs
+exactly once and that removing it leaves a JSON file readable. Rewording a measured instruction
+therefore fails `test:harness` until the case's `measures` follows the new wording.
+
 Add a case whenever a PR review or an incident traces back to an instruction the agent ignored.
 Keep prompts realistic and short; the point is the repo's instructions, not the prompt.
 
