@@ -138,11 +138,12 @@ def read_scope(folder, repo):
     return {'paths': normalized, 'verification_commands': commands}
 
 
-def draft_files(folder, manifest, scope):
+def draft_files(folder, manifest, paths):
+    """The drafts to present for `paths` (scope plus inherited): the views they need must exist."""
     if not (folder / 'spec.md').is_file() and not (folder / 'plan.md').is_file():
         raise Blocked('spec.md or plan.md is required')
     views = snapshot.view_directory(folder)
-    required = pr_gate.needs(manifest['artifact_chain']['deliverables'], set(scope['paths']))
+    required = pr_gate.needs(manifest['artifact_chain']['deliverables'], set(paths))
     files = [folder / name for name in ('intent.md', 'spec.md', 'plan.md', 'scope.json') if (folder / name).exists()]
     files += sorted(views.glob('*.html')) if views.exists() else []
     for name in required:
@@ -166,14 +167,23 @@ def prepare(repo, folder_id, revision):
     scope = read_scope(folder, repo)
     if len(scope['paths']) > 1 and not (folder / 'plan.md').is_file():
         raise Blocked('a multi-file scope needs plan.md')
-    files = draft_files(folder, manifest, scope)
+    # Paths approved (or approved, then paused) earlier in this same change carry over; only this state file
+    # holds them. A draft never approved adds nothing, and another change starts empty (ADR-0004).
+    prev = load(repo)
+    inherited = []
+    if prev.get('change') == folder_id:
+        carried = set(prev.get('inherited', []))
+        if prev.get('phase') in ('approved', 'paused'):
+            carried |= set(prev['scope']['paths'])
+        inherited = sorted(carried)
+    files = draft_files(folder, manifest, set(scope['paths']) | set(inherited))
     if (folder / 'agreements' / revision).exists():
         raise Blocked('that agreement revision already exists')
-    data = {'phase': 'draft', 'change': folder_id, 'revision': revision, 'scope': scope,
+    data = {'phase': 'draft', 'change': folder_id, 'revision': revision, 'scope': scope, 'inherited': inherited,
             'files': files, 'start_head': git(repo, 'rev-parse', 'HEAD')}
     data['challenge'] = fingerprint(data)
     save(repo, data)  # Replacing a candidate revokes the earlier grant.
-    print(json.dumps({'phase': 'draft', 'scope': scope, 'drafts': list(files),
+    print(json.dumps({'phase': 'draft', 'scope': scope, 'inherited_paths': inherited, 'drafts': list(files),
                       'approval_command': f"/{cfg['skill']} approve {data['challenge']}",
                       'codex_approval_command': f"${cfg['skill']} approve {data['challenge']}"}, ensure_ascii=False))
 
@@ -185,7 +195,7 @@ def approve(repo, challenge, source):
         raise Blocked('no matching pending draft; prepare and present the current revision')
     folder = repo / 'docs/changes' / data['change']
     scope = read_scope(folder, repo)
-    if scope != data['scope'] or draft_files(folder, manifest, scope) != data['files']:
+    if scope != data['scope'] or draft_files(folder, manifest, editable(data)) != data['files']:
         raise Blocked('draft or scope changed since presentation; prepare a new challenge')
     dest = snapshot.freeze(folder, data['revision'], source)
     data.update(phase='approved', snapshot_digest=snapshot.digest(dest / 'snapshot.json'), verified=None)
@@ -207,6 +217,11 @@ def approved(repo):
     return data
 
 
+def editable(data):
+    """The approved scope plus the paths approved earlier revisions of the same change scoped (ADR-0004)."""
+    return set(data['scope']['paths']) | set(data.get('inherited', []))
+
+
 def changes(repo, data, staged=False):
     if staged:
         output = git(repo, 'diff', '--cached', '--name-only', '-z')
@@ -217,14 +232,14 @@ def changes(repo, data, staged=False):
 
 
 def check_scope(repo, data, staged=False):
-    outside = changes(repo, data, staged) - set(data['scope']['paths'])
+    outside = changes(repo, data, staged) - editable(data)
     if outside:
         raise Blocked('changes outside the approved scope: ' + ', '.join(sorted(outside)))
 
 
 def source_hash(repo, data):
     files = {}
-    for rel in data['scope']['paths']:
+    for rel in sorted(editable(data)):
         relative(repo, rel)
         path = repo / rel
         files[rel] = snapshot.digest(path) if path.is_file() else None
@@ -297,7 +312,7 @@ def verify_work(repo):
 def file_operation(repo, action, paths):
     data = approved(repo)
     rels = [relative(repo, path) for path in paths]
-    if data.get('closed') or any(rel not in data['scope']['paths'] for rel in rels):
+    if data.get('closed') or any(rel not in editable(data) for rel in rels):
         raise Blocked('file operation is outside the open approved scope')
     source = repo / rels[0]
     if not source.is_file():
@@ -320,7 +335,7 @@ def delivery(repo, staged=False):
     if receipt.get('source_hash') != source_hash(repo, data):
         raise Blocked('verification missing or stale; run the agreement verification helper')
     # A partial staged version must not borrow evidence from the working copy.
-    if staged and git(repo, 'diff', '--name-only', '--', *data['scope']['paths']):
+    if staged and git(repo, 'diff', '--name-only', '--', *sorted(editable(data))):
         raise Blocked('stage the verified source without unstaged scope changes before committing')
     folder = repo / 'docs/changes' / data['change']
     pr = folder / 'pr.md'
@@ -577,7 +592,7 @@ def pretool(repo, payload):
                 raise Blocked('agreed planning inputs are frozen; record progress separately or prepare a new revision')
             return
         data = approved(repo)
-        if data.get('closed') or rel not in data['scope']['paths']:
+        if data.get('closed') or rel not in editable(data):
             raise Blocked('target is outside the open approved scope')
         return
     if tool == 'Bash':
@@ -618,7 +633,7 @@ def pretool(repo, payload):
                 if len(rest) != (2 if rest[0] == 'remove' else 3):
                     raise Blocked('file operation argument mismatch')
                 data = approved(repo)
-                if not data.get('closed') and all(relative(repo, p) in data['scope']['paths'] for p in rest[1:]):
+                if not data.get('closed') and all(relative(repo, p) in editable(data) for p in rest[1:]):
                     return
             if len(rest) in (2, 4) and rest[0] == 'prepare' and CHANGE_ID.fullmatch(rest[1]):
                 if len(rest) == 2 or (rest[2] == '--revision' and re.fullmatch(r'\d{3,}', rest[3])):
@@ -639,7 +654,7 @@ def pretool(repo, payload):
         if argv[:2] == ['git', 'add']:
             data = approved(repo)
             targets = argv[2:]
-            if targets and all(not p.startswith('-') and relative(repo, p) in data['scope']['paths'] for p in targets):
+            if targets and all(not p.startswith('-') and relative(repo, p) in editable(data) for p in targets):
                 return
         branch = cfg.get('branch_pattern')  # Missing: no branch creation.
         if len(argv) == 4 and argv[:3] == ['git', 'switch', '-c'] and isinstance(branch, str) and re.fullmatch(branch, argv[3]):
@@ -715,7 +730,7 @@ def hook(repo, payload):
             manifest, _ = config(repo)
             folder = repo / 'docs/changes' / data['change']
             scope = read_scope(folder, repo)
-            if scope != data['scope'] or draft_files(folder, manifest, scope) != data['files']:
+            if scope != data['scope'] or draft_files(folder, manifest, editable(data)) != data['files']:
                 raise Blocked('pending draft changed; prepare its current version before presenting it')
             print(json.dumps({'systemMessage': 'Agreement pending: implementation and commit remain blocked.'}))
             return  # A decision handoff, including amendments, is not implementation completion.

@@ -614,4 +614,50 @@ with tempfile.TemporaryDirectory() as tmp:
         assert result.returncode == 1 and 'scope paths' in result.stderr, (path, result.stderr)
     assert scoped('docs/changes/other.md').returncode == 0
 
+# Bundle 3 V2: paths an approved earlier revision of the same change scoped stay editable in the next revision,
+# listed in the presented draft. Only the gate's own state carries them: a draft never approved, another change, a
+# scope.json key or the frozen plan opens nothing, and an inherited UI path still needs its views.
+with tempfile.TemporaryDirectory() as tmp:
+    root = checkout(tmp)
+    x = '260914_00-x'
+
+    def writes(path):
+        return event(root, 'PreToolUse', 'Write', {'file_path': str(root / path), 'content': 'x'}).returncode
+
+    assert agree(root, x, ['a.py'])['inherited_paths'] == []
+    assert agree(root, x, ['b.py'], revision='002')['inherited_paths'] == ['a.py']
+    assert (writes('a.py'), writes('b.py'), writes('c.py')) == (0, 0, 2)
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'git add a.py'}).returncode == 0
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'git add c.py'}).returncode == 2
+    (root / 'a.py').write_text('review fix')
+    result = run(root, 'verify')  # An inherited edit is inside the approved scope ...
+    assert result.returncode == 0, result.stderr
+    (root / 'a.py').write_text('edited after verification')
+    assert 'stale' in blocked_stop(root)  # ... and bound to the verification.
+    assert run(root, 'verify').returncode == 0
+    assert writes(f'docs/changes/{x}/plan.md') == 2
+    (root / 'docs/changes' / x / 'scope.json').write_text(json.dumps({'paths': ['c.py'], 'verification_commands': [['true']]}))
+    assert json.loads(run(root, 'prepare', x, '--revision', '003').stdout)['inherited_paths'] == ['a.py', 'b.py']
+    assert agree(root, x, ['b.py'], revision='004')['inherited_paths'] == ['a.py', 'b.py']  # 003 was never approved
+    assert (writes('a.py'), writes('c.py')) == (0, 2)
+    assert agree(root, x, ['d.py'], revision='005', inherited=['c.py'])['inherited_paths'] == ['a.py', 'b.py']
+    assert (writes('c.py'), writes('d.py')) == (2, 0)
+    assert event(root, 'UserPromptSubmit', prompt=f"/{MANIFEST['agreement_gate']['skill']} pause").returncode == 0
+    assert agree(root, x, ['b.py'], revision='006')['inherited_paths'] == ['a.py', 'b.py', 'd.py']  # paused passes on
+    assert event(root, 'PreToolUse', 'Bash', {'command': 'python3 scripts/agreement-gate.py remove a.py'}).returncode == 0
+    assert run(root, 'remove', 'a.py').returncode == 0 and run(root, 'remove', 'c.py').returncode == 1
+    assert agree(root, '260914_01-y', ['c.py'])['inherited_paths'] == []
+    assert writes('b.py') == 2
+    assert agree(root, x, ['c.py'], revision='007')['inherited_paths'] == []  # coming back restores nothing
+    assert writes('b.py') == 2
+    views = root / 'docs/changes/260914_02-z/deliverables'
+    views.mkdir(parents=True)
+    for name in ('설명서(eli7).html', 'mockup.html', 'flow.html', 'architecture.html'):
+        (views / name).write_text('<title>proposed experience</title>')
+    agree(root, views.parent.name, ['apps/web/src/ui/screen.tsx'])
+    shutil.rmtree(views)
+    (views.parent / 'scope.json').write_text(json.dumps({'paths': ['b.py'], 'verification_commands': [['true']]}))
+    result = run(root, 'prepare', views.parent.name, '--revision', '002')
+    assert result.returncode == 1 and 'draft missing' in result.stderr, result.stderr
+
 print('PASS: agreement gate lifecycle and bypass regression tests')

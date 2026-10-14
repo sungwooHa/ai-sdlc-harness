@@ -15,7 +15,7 @@ ADR은 다음 사람이 “왜 이렇게 했지?”를 다시 조사하지 않�
 
 ## 최소 작성 방식
 
-`_template.md`를 복사해 `0004-<slug>.md`처럼 번호와 이름을 붙입니다. 한 결정에 한 문서,
+`_template.md`를 복사해 `0005-<slug>.md`처럼 번호와 이름을 붙입니다. 한 결정에 한 문서,
 가능하면 한 페이지로 씁니다. 번호는 재사용하지 않고 충돌은 머지 전에 정리합니다.
 
 필수 내용은 상태·날짜, 배경, 결정, 검토한 대안, 감수한 비용, 재검토 조건, 근거입니다.
@@ -47,6 +47,7 @@ ADR의 상태는 승인 권한이 아닙니다. 현재 훅은 ADR 파일에도 �
 | [0001](0001-durable-decisions-in-repository.md) | 오래 유지할 결정과 이유는 저장소에 남긴다 | accepted |
 | [0002](0002-agreement-before-implementation.md) | HTML은 구현 전 합의, PR은 가치 리뷰에 사용한다 | accepted |
 | [0003](0003-skills-and-hook-enforcement.md) | 스킬이 안내하고 훅이 실행 조건을 검사한다 | accepted |
+| [0004](0004-approved-paths-carry-over-revisions.md) | 같은 변경에서 승인한 경로는 다음 리비전에서도 고칠 수 있다 | accepted |
 
 ## 하네스에서 사용
 
