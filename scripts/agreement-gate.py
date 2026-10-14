@@ -13,10 +13,13 @@ import json
 import os
 import re
 import shlex
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -214,20 +217,60 @@ def source_hash(repo, data):
     return fingerprint(files)
 
 
+def verification_workers(cfg):
+    workers = cfg.get('verification_workers', 1)  # Missing: one command at a time.
+    if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
+        raise Blocked('agreement_gate.verification_workers must be a positive integer; see docs/standards/AGREEMENT_REVIEW.md')
+    return workers
+
+
+def run_check(argv, repo, timeout):
+    """One declared command: exit code (None on timeout), seconds and combined output."""
+    start = time.monotonic()
+    proc = subprocess.Popen(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+    try:
+        output, _ = proc.communicate(timeout=timeout)
+        code = proc.returncode
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)  # The whole group: a test script's children hold the pipe too.
+        output, _ = proc.communicate()
+        code = None
+    return code, round(time.monotonic() - start, 2), output.decode('utf-8', 'replace')
+
+
 def verify_work(repo):
     _, cfg = config(repo)
+    workers = verification_workers(cfg)
     data = approved(repo)
     check_scope(repo, data)
     before = source_hash(repo, data)
     # Invalidate old success before starting a new attempt.
     data['verified'] = None
     save(repo, data)
-    results = []
-    for argv in data['scope']['verification_commands']:
-        proc = subprocess.run(argv, cwd=repo, timeout=cfg.get('verification_timeout_seconds', 300))
-        results.append({'argv': argv, 'exit_code': proc.returncode})
-        if proc.returncode:
-            raise Blocked('verification failed: ' + shlex.join(argv))
+    commands = data['scope']['verification_commands']
+    timeout = cfg.get('verification_timeout_seconds', 300)
+    start = time.monotonic()
+    results = [None] * len(commands)
+    # Every command runs, so all failures surface at once; results keep the declared order.
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        running = {pool.submit(run_check, argv, repo, timeout): i for i, argv in enumerate(commands)}
+        for future in as_completed(running):
+            argv = commands[running[future]]
+            code, seconds, output = future.result()
+            results[running[future]] = {'argv': argv, 'exit_code': code, 'seconds': seconds}
+            if code == 0:
+                last = [line for line in output.splitlines() if line.strip()][-1:] or ['(no output)']
+                print(f'PASS {seconds:.1f}s {shlex.join(argv)} — {last[0]}', flush=True)
+            else:
+                print(f"FAIL {seconds:.1f}s {shlex.join(argv)} ({'timed out' if code is None else f'exit {code}'})",
+                      flush=True)
+                print(output.rstrip('\n'), flush=True)
+    failed = [r['argv'] for r in results if r['exit_code'] != 0]
+    print(f'{len(commands) - len(failed)}/{len(commands)} passed in {time.monotonic() - start:.1f}s '
+          f'({workers} at a time)', flush=True)
+    if failed:
+        raise Blocked('verification failed: ' + '; '.join(shlex.join(argv) for argv in failed))
     current = approved(repo)
     check_scope(repo, current)
     if current['challenge'] != data['challenge'] or source_hash(repo, current) != before:

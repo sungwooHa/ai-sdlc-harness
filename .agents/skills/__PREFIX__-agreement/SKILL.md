@@ -40,7 +40,9 @@ command for the human's own terminal and clearly identify the weaker runtime enf
 ## Verification and handoff
 
 Run `python3 scripts/agreement-gate.py verify` for the declared commands. Only that execution
-records source-bound verification; typed success claims do not count. After any source edit,
+records source-bound verification; typed success claims do not count. It runs them
+`verification_workers` at a time and prints each command's seconds; give the shell call a timeout
+longer than the slowest command. After any source edit,
 rerun verification. Record progress in `progress.md`, leaving agreed planning inputs unchanged.
 Prepare the active `pr.md` against the approved revision; Stop and pre-commit locate it from
 state even if no PR file was previously touched. Human value judgment is separate from this gate.

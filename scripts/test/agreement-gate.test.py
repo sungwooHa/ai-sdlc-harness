@@ -4,10 +4,12 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 GATE = Path(__file__).resolve().parents[1] / 'agreement-gate.py'
@@ -484,5 +486,105 @@ with tempfile.TemporaryDirectory() as tmp:
     result = event(root, 'Stop')  # Read before the payload: exit 2, which a Stop hook treats as "keep going".
     assert result.returncode == 2 and 'disabled' in result.stderr, (result.stdout, result.stderr)
     assert run(root, 'check-staged').returncode == 1
+
+
+def checkout(tmp, manifest=MANIFEST):
+    """A fresh fixture checkout at <tmp>/repo; helper files stay in <tmp>, outside the checked scope."""
+    root = Path(tmp) / 'repo'
+    root.mkdir()
+    git(root, 'init', '-q')
+    (root / '.agents').mkdir()
+    (root / '.agents/harness.yaml').write_text(json.dumps(manifest))
+    shutil.copytree(GATE.parent, root / 'scripts', ignore=shutil.ignore_patterns('__pycache__'))
+    (root / '.gitignore').write_text('docs/changes/*\n__pycache__/\n')
+    for name in ('a.py', 'b.py', 'c.py', 'apps/web/src/ui/screen.tsx'):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text('before')
+    commit(root, 'base')
+    return root
+
+
+def commit(root, message):
+    git(root, 'add', '.')
+    git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', message)
+
+
+def gate_setting(**changes):
+    return {**MANIFEST, 'agreement_gate': {key: value for key, value in {**MANIFEST['agreement_gate'], **changes}.items()
+                                           if value is not None}}
+
+
+def agree(root, change, paths, commands=None, revision='001', **extra):
+    """Write plan and scope, prepare and approve as the user would: the prepare output."""
+    folder = root / 'docs/changes' / change
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'plan.md').write_text(f'# plan {revision}\n')
+    (folder / 'scope.json').write_text(json.dumps({
+        'paths': paths, 'verification_commands': commands or [[sys.executable, '-c', 'print("ok")']], **extra}))
+    prepared = run(root, 'prepare', change, '--revision', revision)
+    assert prepared.returncode == 0, prepared.stderr
+    candidate = json.loads(prepared.stdout)
+    approval = event(root, 'UserPromptSubmit', prompt=candidate['approval_command'])
+    assert approval.returncode == 0, approval.stderr
+    return candidate
+
+
+# Bundle 3 V3: verify runs the declared commands verification_workers at a time and times each one. Two commands
+# that each wait for the other pass only when they run together, so concurrency is observed, not assumed.
+with tempfile.TemporaryDirectory() as tmp:
+    meet = Path(tmp) / 'meet.py'
+    meet.write_text('import pathlib, sys, time\n'
+                    'here = pathlib.Path(sys.argv[1])\n'
+                    'here.mkdir(parents=True, exist_ok=True)\n'
+                    '(here / sys.argv[2]).touch()\n'
+                    'deadline = time.monotonic() + 3\n'
+                    'while not (here / sys.argv[3]).exists():\n'
+                    '    if time.monotonic() > deadline:\n'
+                    '        sys.exit("no partner")\n'
+                    '    time.sleep(0.05)\n'
+                    'print(sys.argv[2], "met", sys.argv[3])\n')
+
+    def pair(n):
+        return [[sys.executable, str(meet), str(Path(tmp) / f'meet{n}'), 'a', 'b'],
+                [sys.executable, str(meet), str(Path(tmp) / f'meet{n}'), 'b', 'a']]
+
+    root = checkout(tmp, gate_setting(verification_workers=None))
+    agree(root, '260914_00-verify', ['a.py'], pair(1))
+    result = run(root, 'verify')  # Missing setting: one at a time, as before; the first waits for nobody.
+    assert result.returncode == 1 and shlex.join(pair(1)[0]) in result.stderr, result.stderr
+    assert shlex.join(pair(1)[1]) not in result.stderr, result.stderr
+    assert 'no partner' in result.stdout and re.search(r'^PASS \d+\.\ds .* — b met a$', result.stdout, re.M), result.stdout
+    (root / '.agents/harness.yaml').write_text(json.dumps(gate_setting(verification_workers=2)))
+    commit(root, 'two workers')
+    agree(root, '260914_00-verify', ['a.py'], pair(2), revision='002')
+    result = run(root, 'verify')
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert re.search(r'^PASS \d+\.\ds .* — a met b$', result.stdout, re.M), result.stdout
+    results = json.loads(run(root, 'status').stdout)['verified']['results']
+    assert [r['argv'] for r in results] == pair(2), results  # declared order, whatever finished first
+    assert all(r['exit_code'] == 0 and isinstance(r['seconds'], float) for r in results), results
+    # Every failure is reported at once with its whole output; a passing command shows its last line.
+    boom = [[sys.executable, '-c', f'import sys; print("boom {n}"); sys.exit({n})'] for n in (3, 4)]
+    agree(root, '260914_00-verify', ['a.py'], boom + [[sys.executable, '-c', 'print("noise"); print("fine")']],
+          revision='003')
+    result = run(root, 'verify')
+    assert result.returncode == 1 and all(shlex.join(c) in result.stderr for c in boom), result.stderr
+    assert 'boom 3' in result.stdout and 'boom 4' in result.stdout, result.stdout
+    assert '— fine' in result.stdout and not re.search(r'^noise$', result.stdout, re.M), result.stdout
+    assert json.loads(run(root, 'status').stdout)['verified'] is None
+    # A timeout ends the command's whole process group, so a test script's background child cannot hold it open.
+    (root / '.agents/harness.yaml').write_text(json.dumps(gate_setting(verification_workers=2,
+                                                                       verification_timeout_seconds=1)))
+    commit(root, 'short timeout')
+    agree(root, '260914_00-verify', ['a.py'], [['bash', '-c', 'sleep 30 & wait'], [sys.executable, '-c', 'print(1)']],
+          revision='004')
+    started = time.monotonic()
+    result = run(root, 'verify')
+    assert result.returncode == 1 and 'timed out' in result.stdout, (result.stdout, result.stderr)
+    assert time.monotonic() - started < 15, time.monotonic() - started
+    for bad in (0, -1, '4', True, 1.5):
+        (root / '.agents/harness.yaml').write_text(json.dumps(gate_setting(verification_workers=bad)))
+        result = run(root, 'verify')
+        assert result.returncode == 1 and 'verification_workers' in result.stderr, (bad, result.stderr)
 
 print('PASS: agreement gate lifecycle and bypass regression tests')

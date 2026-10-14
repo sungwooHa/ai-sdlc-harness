@@ -78,7 +78,9 @@ A plan split into parts needs its own plan copy, `scope.json` and approval in ea
 worktree, and every part uses the same work slug (`feature/<work-slug>/<part>`, `Plan-Ref: <work-slug>`).
 Such a plan has part branches only: git cannot hold `feature/<work-slug>` next to `feature/<work-slug>/<part>`.
 Run `python3 scripts/agreement-gate.py verify` to execute the declared checks and record their
-exit codes against current source hashes. Editing source invalidates that evidence. Run fresh
+exit codes and seconds against current source hashes. It runs `agreement_gate.verification_workers`
+commands at a time, prints one line per command (seconds and its last output line; a failed one
+shows its whole output), and reports every failure at once. Editing source invalidates that evidence. Run fresh
 read-only code review and repair findings, then verify again if source changed. Code review assesses correctness against the
 agreement. User value review remains a separate human decision.
 
@@ -193,6 +195,10 @@ subcommand (`-C`, `-c`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env
   files `git ls-files --others --exclude-standard` lists); they do not see writes under `.git/`,
   ignored paths or outside the checkout, and Stop checks no files while a draft is pending.
 - `branch_pattern`: full-match regex for `git switch -c <branch>` after approval.
+- `verification_workers`: how many verification commands `verify` runs at once (template: 4; missing:
+  1, one at a time; anything but a positive integer is refused). Set it to 1 when the declared commands
+  share a database, port or build cache. A command that outlives `verification_timeout_seconds` is
+  killed with its whole process group and counts as failed.
 
 **Second fence.** A hook that times out or fails to start does not block the tool call.
 `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules`

@@ -476,6 +476,7 @@
     "skill": "__PREFIX__-agreement",
     "state": "worktree Git directory: harness-agreement.json",
     "verification_timeout_seconds": 300,
+    "verification_workers": 4,
     "scope_template": "docs/changes/_templates/scope.json",
     "fallback_hosts": [
       "husky pre-commit"
