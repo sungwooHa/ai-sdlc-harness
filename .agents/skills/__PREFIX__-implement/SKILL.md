@@ -1,72 +1,57 @@
 ---
 name: __PREFIX__-implement
-description: Implement an approved local change plan (or small-change spec) under docs/changes/<YYMMDD_NN>-<slug>, optionally one plan ticket test-first, using this repo's test ladder, review against the plan, then compare realized value with the preserved agreement in pr.md. Use when the user says "구현해", "플랜대로 만들어", "implement", "이 티켓 해", or hands you a plan/spec to build. Wraps the vendored implement + tdd skills.
-disable-model-invocation: true
-argument-hint: "[폴더명] [티켓 제목] — 예 260910_00-<slug>; 생략하면 plan 또는 합의된 spec 후보를 확인한다"
+description: Implement an approved plan under docs/changes/<YYMMDD_NN>-<slug>/ by orchestrating implementer subagents per work unit, then review and write pr.md. Use right after the user approves a plan, or when the user says "구현해", "플랜대로 만들어", "이 티켓 해", "implement".
+argument-hint: "[폴더명] [티켓 제목] — 예 260910_00-<slug>; 생략하면 방금 승인된 plan 의 폴더를 쓴다"
 ---
 
-Project adapter around the vendored `implement` skill.
+You are the orchestrator: you keep the conversation with the user, the decisions and the
+acceptance of results; implementer subagents make the edits.
 
-## Before implementation
+**Plan-first**: repo edits outside `docs/changes/` are refused until a plan is approved in this
+session. The marker means "this session had a plan approved since its last `EnterPlanMode`", not
+"this change's plan is approved", and subagents share it. Edit files with Edit/Write, never
+through Bash. With no approved plan yet, call `EnterPlanMode`.
 
-1. Resolve the change folder from `$0`. Otherwise consider folders containing a working plan
-   or an agreed spec; use the only candidate, and ask which folder when more than one exists.
-   Read its spec and plan, or the approved spec for a small change without a plan. For a
-   multi-file change, a plan is required. If `$1` is given, implement only that plan ticket's
-   agreed scope. Read each affected app's `AGENTS.md`.
-2. Read `docs/standards/AGREEMENT_REVIEW.md`. Product implementation starts after the applicable
-   HTML drafts and plan/spec were presented and explicitly approved. Reuse approval already
-   given for that exact revision; do not ask for it again. If the draft was never presented,
-   prepare it for agreement before editing product code.
-3. Run `python3 scripts/agreement-gate.py status`. A current hook-owned approved revision is
-   required; a manually written approval or snapshot is insufficient. If absent, use the
-   `__PREFIX__-agreement` skill to prepare and present the decision. Read the preserved spec/plan
-   and HTML as the baseline. Record progress in `progress.md`; never edit approved planning inputs.
-   Material changes use the agreement skill to prepare and approve a new revision.
+## 1. Save the plan (first step after approval)
 
-## Implement and verify
+1. Resolve the change folder: `$0`, else the folder the approved plan names; ask when unclear.
+   `$1` limits the work to that `## 티켓` row.
+2. Save the approved plan — from the conversation, or the `ExitPlanMode` plan file under
+   `~/.claude/plans/` — as `docs/changes/<YYMMDD_NN>-<slug>/plan.md` and commit it on
+   `feature/<work-slug>` before any code edit.
+3. Read `spec.md`, `plan.md` and each affected app's `AGENTS.md`.
 
-Use `__PREFIX__-ponytail` to look for a simpler implementation within the approved outcomes,
-unless the user disabled Ponytail. Then call the Skill tool with `implement` and apply these overrides:
+## 2. Implement through subagents
 
-- TDD at the agreed seams (`/tdd`); use the repo's narrow-to-wide test ladder. Run declared checks through `python3 scripts/agreement-gate.py verify` to record source-bound
-  evidence. Show actual commands and results. Respect protected paths and the commit convention in `AGENTS.md`.
-- Implementation commits carry `Plan-Ref: <work-slug>` (the folder name without `YYMMDD_NN-`); the
-  commit-msg hook checks its value, and `check:plan`, a local tool run by hand, looks for it on
-  multi-app PRs. Keep the entire change folder local and uncommitted.
-- Run `/review-since <branch-base>` in a fresh subagent against the referenced agreement's
-  spec/plan, with `REVIEW.md` as a standards source. This is code correctness review. Run
-  `/__PREFIX__-ui-review <branch-base>` for UI changes unless the approved plan explicitly says
-  `시각 변경 없음`; report the waiver.
-- Repair blockers and majors as `REVIEW.md` defines them. Record DoD and completed tickets in
-  `progress.md` when a plan exists. For spec-only work, record acceptance results against its
-  User Stories in the PR. Deferred or failed acceptance criteria remain explicit; changing their
-  scope requires renewed agreement.
+- Unless the user turned it off, invoke `Skill(__PREFIX__-ponytail)` to look for a simpler design
+  within the plan.
+- Spawn one implementer subagent per plan work unit (or the `$1` ticket); run units in parallel
+  only when their file lists are disjoint. Each prompt names the folder, the unit, its files and
+  its Proof commands, and tells the subagent to:
+  - read `.agents/skills/implement/SKILL.md` and `.agents/skills/tdd/SKILL.md` and follow them,
+    test-first at the plan's seams, skipping their review and commit steps (you run those);
+  - climb the test ladder: one test file → its directory → the whole suite once at the end;
+  - leave the git index to you, and stop and report when blocked: subagents cannot ask the user.
+- Agent calls run in the background: wait for each completion notification. Verify each output
+  before accepting it — read the diff against the unit's files, re-run its tests — then stage that
+  unit's paths and commit per `docs/standards/COMMIT_CONVENTION.md`.
+- When reality departs from the plan, fix `plan.md` in the same commit as the code (and tick the
+  finished `## 티켓` row there). Decisions the plan does not cover go to the user.
+- Call `EnterPlanMode` only after every background implementer has finished: it clears the
+  approval marker and blocks their edits.
 
-## Prepare the PR value review
+## 3. Review
 
-The HTML already existed for pre-implementation agreement. After verification, update only the
-working `deliverables/` using the result-evidence column and the how-to in `AGREEMENT_REVIEW.md` §1; preserve all
-agreed copies. Recheck the actual changed paths against `required_when`. An unexpected required
-view or materially different behavior returns to agreement for the remaining work; never label
-a retrospective draft as pre-implementation approval. If no HTML condition applies, document
-that applicability decision and use the approved spec/plan as the value baseline.
+Run `/review-since <branch-base>` in a fresh subagent against `spec.md` and `plan.md`, with
+`REVIEW.md` as the standards source. For UI changes also invoke `Skill(__PREFIX__-ui-review)`
+unless `plan.md` says `시각 변경 없음`. Fix blockers and majors as `REVIEW.md` defines them through
+implementer subagents, then re-verify.
 
-Fill `_templates/pr.md`: reference the agreement revision, compare agreed expectations with
-observed changes and evidence, and separate verified behavior from value still needing usage
-measurement. Name deviations and the next observation/owner/timing for unverified value (use
-`담당 미정` when no owner was agreed). An honest `미검증` can be a handoff if the agreed DoD does
-not require the measurement before delivery. The agent does not approve value for the human.
+## 4. pr.md
 
-Keep the existing short PR limits. The agreement Stop/pre-commit gate locates the active PR from
-state and requires current verification, approved scope and the baseline. It does not judge value
-or prove attachment. Provide baseline + current result with directory structure and manifest for manual packaging.
-Show pr.md in full for the developer to publish and attach manually; automated push/PR creation
-is outside this adapter. Use scoped remove/move helpers for deletion/rename and supported
-Write/Edit/apply_patch tools for edits. Arbitrary shell mutation is blocked.
-
-Before finishing, consider knowledge beyond this change: put durable rules in the relevant
-app's `AGENTS.md`, or state `지식 승격 없음`. The agreement gate refuses writes outside the approved scope:
-put that `AGENTS.md` in scope from the start, or propose the line in pr.md for the next revision. Report implementation/verification status, the
-agreement reference, deviations, unverified value, required attachments and actual test results.
-Human value review may remain pending after implementation handoff; label it as pending.
+Write `docs/changes/<YYMMDD_NN>-<slug>/pr.md` from `docs/changes/_templates/pr.md`: compare the
+plan's `## Value` with observed results, paste the commands you ran and their output, and keep
+unverified value explicit with its next observation, owner (`담당 미정` if none) and timing. The
+human judges the value. Put a durable rule learned here in the relevant `AGENTS.md`, or state
+`지식 승격 없음`. Commit `pr.md`, show it in full, and report status, deviations and test results;
+pushing and opening the PR are the developer's.

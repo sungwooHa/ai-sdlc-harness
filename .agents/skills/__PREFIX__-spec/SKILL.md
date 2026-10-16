@@ -1,54 +1,29 @@
 ---
 name: __PREFIX__-spec
-description: Synthesize the agreed intent into the local (uncommitted) docs/changes/<YYMMDD_NN>-<slug>/spec.md. Use after /__PREFIX__-intent when the user says "스펙 작성", "spec 만들어", "명세 정리", "to-spec", or asks to turn the discussion into a spec. Wraps the vendored to-spec skill with this repo's paths and language.
-disable-model-invocation: true
+description: Turn an agreed intent into docs/changes/<YYMMDD_NN>-<slug>/spec.md, then enter plan mode. Use right after __PREFIX__-intent, or when the user says "스펙 작성", "명세 정리", "spec", "to-spec".
 argument-hint: "[폴더명] — 예 260910_00-<slug>; 생략하면 docs/changes/ 의 최근 intent 폴더를 쓴다"
 ---
 
-Project adapter around the vendored `to-spec` skill. `to-spec` knows how to synthesize a spec; it
-does not know this repo's folder layout or language — you supply those and never let it fall back
-to its own defaults.
-
-Before calling it:
-
-1. Resolve the change folder. Use `$0` (the folder name `<YYMMDD_NN>-<slug>`) when given; otherwise
-   pick the most recent `docs/changes/<YYMMDD_NN>-<slug>/` that has `intent.md` but no `spec.md`,
-   and confirm it with the user. The folders are local and uncommitted, so most recent = the newest
-   file mtime (`rg --files --no-ignore --sortr modified -g intent.md docs/changes`, newest first;
-   the agreement gate refuses unquoted globs such as `ls -t docs/changes/*/intent.md`, and
-   `_templates` is not a change folder); the folder id sorts chronologically, so break a
-   tie with the larger id; if candidates are still ambiguous, ask the user. If no intent exists,
-   stop and tell the user to run `/__PREFIX__-intent` first.
-2. Read `docs/changes/<YYMMDD_NN>-<slug>/intent.md` and `docs/agents/issue-tracker.md`. There is no
-   external tracker and no `ready-for-agent` label — if the vendored skill asks for one, treat the
-   repo copy as the single source and skip the step.
-
-Then call the Skill tool with `to-spec` and apply these overrides while following it:
-
-- Questions: every question to the user goes through `AskUserQuestion` (the `question_gate` hook
-  refuses numbered text rounds) — at most 4 per round, 3–4 options each with the recommended one
-  first (label ending in `(추천)`) and at least two real alternatives, `header` one of 해법 ·
-  스토리 · 구현 · 테스트 · 우려 · 비범위. Start from the intent's "열린 질문": each one already
-  carries a recommended answer, so present it as the first option. Plan-level questions (file
-  order, rollout) go to Flagged Concerns, not to the user.
-- Seams: check the proposed test seams against `apps/<app>/AGENTS.md` for the touched app before
-  asking the user to confirm them.
-- Output: draft the spec with the section headings of `docs/changes/_templates/spec.md` (keep the
-  headings, fill the body in __HUMAN_DOC_LANG__, no implementation file paths or code snippets; artifact links are allowed) and header status
-  `draft`.
-- Visual agreement: read `docs/standards/AGREEMENT_REVIEW.md` (§1 says how to make each view). Before asking for spec approval,
-  create applicable draft HTML in the working `deliverables/` from the planned affected paths.
-  Present the explainer as the entrypoint to mockup, flow and architecture when required. Label
-  assumptions and unresolved plan details; refine the same drafts during plan mode.
-- Confirm the presented draft: once the seams are agreed, show the whole draft and HTML and wait for
-  the user's explicit confirmation; apply edits and show it again. Only then mark
-  `docs/changes/<YYMMDD_NN>-<slug>/spec.md` with status `agreed` (keep `draft` if the user says
-  they will keep iterating). Never show a spec as agreed that the user has not seen in full.
-- No publishing step and no commit: the folder is local-only; the spec reaches the team through
-  the PR value comparison and its attached agreement baseline.
-
-Finish by telling the user the next step: plan mode for a multi-file change (the approved plan is
-saved locally as `docs/changes/<YYMMDD_NN>-<slug>/plan.md`; implementation commits carry
-`Plan-Ref: <work-slug>`, the folder name without `YYMMDD_NN-`), or, for a small one, use `__PREFIX__-agreement` to prepare exact scope and obtain hook-owned approval
-before `/__PREFIX__-implement`. Plan approval must include the completed applicable HTML;
-intent/spec approval does not authorize an unseen plan.
+1. Resolve the change folder: `$0` when given, otherwise the folder with the largest
+   `<YYMMDD_NN>` id that has `intent.md` but no `spec.md` (`_templates` is not a change folder);
+   ask the user when candidates are ambiguous. If no intent exists, invoke
+   `Skill(__PREFIX__-intent)` and stop here.
+2. Read the folder's `intent.md` and `docs/agents/issue-tracker.md`.
+3. Read `.agents/skills/to-spec/SKILL.md` and follow it, with these overrides:
+   - **Questions**: ask through `AskUserQuestion` — at most 4 per round, 3–4 options each, the
+     recommended one first (label ending in `(추천)`). Start from the intent's "열린 질문"; each
+     already carries a recommended answer, so present it as the first option. Plan-level questions
+     (file order, rollout) wait for plan mode.
+   - **Seams**: check proposed test seams against `apps/<app>/AGENTS.md` for each touched app
+     before asking the user to confirm them.
+   - **Output**: `docs/changes/<YYMMDD_NN>-<slug>/spec.md` with the headings of
+     `docs/changes/_templates/spec.md`, body in __HUMAN_DOC_LANG__, no implementation file paths or
+     code snippets, status `draft`. Skip to-spec's publish and label step. For UI work, a mock or
+     screenshot beside spec.md is recommended.
+   - **Confirm**: show the whole draft and wait for the user's explicit confirmation; apply edits
+     and show it again. Then set status `agreed` and commit `spec.md` on `feature/<work-slug>`.
+4. Call `EnterPlanMode`. Write the plan in the shape of `docs/changes/_templates/plan.md`
+   (`## Files that change` / `## Order of work` / `## Risks` / `## Proof` / `## Value`) and present
+   it with `ExitPlanMode`. Repo edits outside `docs/changes/` stay refused until the user approves.
+5. After the user approves the plan, invoke `Skill(__PREFIX__-implement)` with args
+   `<YYMMDD_NN>-<slug>`.

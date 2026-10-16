@@ -11,7 +11,7 @@ Create git commits that follow this repository's commit convention. Analyze the 
 
 ## Project Commit Convention
 
-Read `docs/standards/COMMIT_CONVENTION.md` before writing the message. It is the only source for the first-line format, the types, the body and the trailers, and it wins over any generic Conventional Commits habit. The commit-msg hook (`scripts/commit-msg-gate.py`) refuses a first line outside that format and any trailer other than `Plan-Ref`.
+Read `docs/standards/COMMIT_CONVENTION.md` before writing the message. It is the only source for the first-line format, the types, the body and the trailers, and it wins over any generic Conventional Commits habit. Commits never carry `Co-Authored-By` or other attribution trailers.
 
 ## Workflow
 
@@ -58,8 +58,7 @@ If nothing is staged or you want to group changes differently:
 git add path/to/file1 path/to/file2
 ```
 
-Name each file exactly. The agreement gate refuses globs (`*.test.*`), directories, files outside the
-approved scope and options such as `-p` or `-A`.
+Name each file exactly.
 
 **Never commit secrets** (.env, credentials.json, private keys).
 
@@ -74,17 +73,16 @@ Analyze the diff to determine:
 
 ### 4. Execute Commit
 
-Pass each paragraph as its own `-m`; agent shells refuse newlines and command substitution:
+Pass each paragraph as its own `-m`:
 
 ```bash
 git commit -m "<first line>"
-git commit -m "<first line>" -m "<why>" -m "Plan-Ref: <work-slug>"
+git commit -m "<first line>" -m "<why>"
 ```
 
 ## Best Practices
 
 - One logical change per commit
-- When the hook refuses a message, fix the message and commit again
 
 ## Git Safety Protocol
 
