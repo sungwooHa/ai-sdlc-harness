@@ -2,7 +2,9 @@
 # Regression test for scripts/harness/init-template.sh on temporary copies of this template.
 # After init: .agents/harness.json parses, the template's own change folders and eval results are gone,
 # ADR-0000 and docs/references/ stay, the Branches line follows the branch options, the harness check
-# passes, and with husky active the first commit succeeds while a staged fake secret is refused.
+# passes, and with husky active the first commit succeeds while a staged fake secret is refused and
+# pre-push runs the tests without the GIT_* variables git exports to hooks. An initialized project
+# (prefix acme, the eval runner's own) passes every scripts/test/*.test.py and *.test.sh.
 # Placeholders are written split ('__X''__') so init never substitutes them in this file.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -77,6 +79,12 @@ code=0; out="$(git -C "$d" commit -q -m "chore: add env" 2>&1)" || code=$?
 check "staged fake secret → pre-commit refuses" "$code" "1"
 check "refusal names file and pattern" "$(printf '%s' "$out" | grep -c 'leak.env:1: aws-access-key' || true)" "1"
 check "refused commit leaves HEAD unchanged" "$(git -C "$d" rev-parse -q --verify HEAD || true)" "$head_before"
+# git exports GIT_DIR and friends to hooks; the tests pre-push runs make their own repositories.
+mkdir -p "$TMP/bin"
+printf '#!/bin/sh\necho "${GIT_DIR-unset} ${GIT_WORK_TREE-unset} ${GIT_INDEX_FILE-unset} $*"\n' > "$TMP/bin/pnpm"
+chmod +x "$TMP/bin/pnpm"
+out="$(cd "$d" && GIT_DIR="$d/.git" GIT_WORK_TREE="$d" GIT_INDEX_FILE="$d/.git/index" PATH="$TMP/bin:$PATH" sh .husky/pre-push)"
+check "pre-push runs tests without GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE" "$out" "unset unset unset test"
 
 d="$(init master --default-branch master)"
 check "default branch master only → master trunk" "$(branches "$d")" '- Branches: `master` (trunk), `feature/*`.'
@@ -97,6 +105,19 @@ git -C "$d" init -q
 check "initialized project → skip" "$(skipped "$d")" "SKIP: init-template tests (already initialized) exit 0"
 rm -f "$d/scripts/harness/init-template.sh"
 check "init script deleted too → skip" "$(skipped "$d")" "SKIP: init-template tests (already initialized) exit 0"
+
+# The initialized project's own suite passes (this file is covered by the skip checks above). Prefix acme
+# is the eval runner's init prefix: the collision that broke a test whose placeholders init had filled.
+d="$(init suite --prefix acme)"
+git -C "$d" init -q
+for t in "$d"/scripts/test/*.test.py "$d"/scripts/test/*.test.sh; do
+  name="${t#"$d"/}"
+  [ "$name" = scripts/test/init-template.test.sh ] && continue
+  case "$name" in *.py) runner=python3 ;; *) runner=bash ;; esac
+  code=0; out="$(cd "$d" && "$runner" "$name" 2>&1)" || code=$?
+  check "initialized project: $name passes" "$code" "0"
+  [ "$code" = 0 ] || printf '%s\n' "$out" | tail -15
+done
 
 # Editing only the Branches line in the original must not skip: it fails at detection, before the
 # full (recursive) run.

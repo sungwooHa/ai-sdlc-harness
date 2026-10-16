@@ -124,7 +124,7 @@
   "hook_intents": [
     {
       "id": "plan_first",
-      "event": "PreToolUse|PostToolUse",
+      "event": "UserPromptSubmit|PreToolUse|PostToolUse",
       "matcher": "Edit|Write|MultiEdit|NotebookEdit|ExitPlanMode|EnterPlanMode",
       "script": "scripts/plan-first.py"
     },

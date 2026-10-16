@@ -11,8 +11,7 @@ Two tool shapes are covered:
   call is blocked only when the command also carries a write marker
   (`>`/`>>` redirection, `sed`, `tee`, `mv`, `cp`, `rm`, ...). Read-only
   commands (`cat`, `grep`, `diff`, ...) on protected files stay allowed.
-  This is a heuristic side fence, not a parser; the pre-commit drift gate is
-  the second fence for anything that slips through.
+  This is a heuristic side fence, not a parser.
 
 Fail-open on any parsing problem so a broken hook never blocks normal work.
 """

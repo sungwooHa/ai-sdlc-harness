@@ -27,6 +27,7 @@
       "Bash(git commit -an*)",
       "Bash(git commit * -n)",
       "Bash(git commit * -an)",
+      "Bash(git commit * -n *)",
       "Bash(git -c *)",
       "Bash(git -C *)",
       "Bash(git --git-dir*)",
@@ -47,6 +48,16 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR\"/scripts/harness/ensure-husky.sh --quiet"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/plan-first.py prompt --repo-root \"$CLAUDE_PROJECT_DIR\""
           }
         ]
       }

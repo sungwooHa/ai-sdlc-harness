@@ -7,7 +7,8 @@ A case: `id`, `prompt`, `expect` (checks below), optional `env` (variables for t
 optional `critical` (N/N is PASS, at least two thirds is WARN instead of FAIL), optional `measures` (the
 instruction it measures: [{"file", "text"}], each text exactly once in its file as committed).
 Checks in `expect`:
-  skill:                a Skill tool call names this skill (`__PREFIX__` also matches the copy's prefix)
+  skill:                a Skill tool call names this skill (the template's prefix placeholder also matches
+                        the copy's prefix)
   no_edits_outside:     the copy's git status shows no changed path outside this prefix (Bash writes count)
   runs_command:         a Bash tool call's command matches this regex
   plan_before_code:     a Write/Edit of a path matching this glob comes before the first Write/Edit of a
@@ -247,7 +248,7 @@ def judge(expect: dict, calls: list[tuple[str, dict]], changed: list[str], copy:
     problems = [f"unknown check {key!r} (known: {', '.join(CHECKS)})" for key in expect if key not in CHECKS]
     if (skill := expect.get("skill")):
         used = [str(args.get("skill") or args.get("command") or "").lstrip("/") for name, args in calls if name == "Skill"]
-        if not {skill, skill.replace("__PREFIX__", INIT_PREFIX)} & set(used):
+        if not {skill, skill.replace("__PRE" "FIX__", INIT_PREFIX)} & set(used):  # split: init must not fill it
             problems.append(f"no Skill call to {skill} (skills called: {used or 'none'})")
     if (prefix := expect.get("no_edits_outside")):
         if (outside := [path for path in changed if not path.startswith(prefix)]):

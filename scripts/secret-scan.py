@@ -3,7 +3,9 @@
 
 Usage: secret-scan.py --staged. Only lines the staged diff adds are scanned (removed lines and
 unstaged files are not), against `.agents/harness.json` `secrets.patterns` ({id, regex}). Findings
-name the file, line and pattern id; the secret itself is never printed.
+name the file, line and pattern id; the secret itself is never printed. The diff is read as bytes and
+decoded with replacement (non-UTF-8 files do not crash the scan) and split on LF only (CR-only line ends
+do not hide a line).
 """
 
 from __future__ import annotations
@@ -26,11 +28,14 @@ def main() -> int:
     top = Path(git("rev-parse", "--show-toplevel").strip())
     config = json.loads((top / ".agents" / "harness.json").read_text(encoding="utf-8"))
     patterns = [(p["id"], re.compile(p["regex"])) for p in config.get("secrets", {}).get("patterns", [])]
-    diff = git("-C", str(top), "diff", "--cached", "--no-color", "--no-ext-diff", "--no-prefix", "-U0", "--diff-filter=ACMR")
+    diff = subprocess.run(
+        ["git", "-C", str(top), "diff", "--cached", "--no-color", "--no-ext-diff", "--no-prefix", "-U0", "--diff-filter=ACMR"],
+        capture_output=True, check=True,
+    ).stdout.decode("utf-8", errors="replace")
 
     findings: list[str] = []
     path, line_no, in_hunk = "", 0, False
-    for line in diff.splitlines():
+    for line in diff.split("\n"):
         if line.startswith("diff --git "):
             in_hunk = False
         elif not in_hunk and line.startswith("+++ "):

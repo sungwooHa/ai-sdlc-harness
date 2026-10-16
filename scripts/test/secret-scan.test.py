@@ -3,7 +3,8 @@
 
 Only lines the staged diff adds are scanned against `.agents/harness.json` `secrets.patterns`: a staged
 secret blocks (non-zero exit, file and pattern id named, secret not echoed), an unstaged one and a line
-the diff removes do not, and a clean staged diff passes. Fake secrets are assembled at run time so this
+the diff removes do not, and a clean staged diff passes. A non-UTF-8 (Latin-1) file does not crash the
+scan and a CR-only file is still scanned. Fake secrets are assembled at run time so this
 file never matches the scan itself.
 """
 
@@ -68,6 +69,22 @@ def main() -> int:
         (root / "leak.py").write_text(f"x = 1\nV = 'ta{SK}'\n", encoding="utf-8")
         git(root, "add", "leak.py")
         check("sk- inside a word passes", scan(root).returncode, 0)
+
+        # Non-UTF-8 text (Latin-1, CP949) must not crash the scan; CR-only line ends must not hide a line.
+        git(root, "rm", "-q", "--cached", "leak.py")
+        (root / "latin1.txt").write_bytes("café crème\n".encode("latin-1"))
+        git(root, "add", "latin1.txt")
+        result = scan(root)
+        check("Latin-1 file without secret passes", (result.returncode, result.stderr), (0, ""))
+        (root / "latin1.txt").write_bytes(f"café\nK = '{AWS}'\n".encode("latin-1"))
+        git(root, "add", "latin1.txt")
+        check("Latin-1 file with secret blocks", "latin1.txt:2: aws-access-key" in scan(root).stderr, True)
+        git(root, "rm", "-q", "--cached", "latin1.txt")
+        (root / "cr.txt").write_bytes(f"x = 1\rK = '{AWS}'\r".encode("ascii"))
+        git(root, "add", "cr.txt")
+        result = scan(root)
+        check("CR-only file with secret blocks", result.returncode != 0, True)
+        check("CR-only file with secret names the file", "cr.txt" in result.stderr, True)
 
     if failures:
         print("FAIL: secret-scan")

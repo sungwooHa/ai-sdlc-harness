@@ -118,23 +118,24 @@ emit({"type": "result", "subtype": "success", "is_error": False, "result": "done
 """
 
 # Fails on FAKE_INIT_FAIL; otherwise renames the prefixed skill and fills one placeholder, as the real one does.
+# Placeholders in this file are written split ('__X''__', "__X" "__") so a project's init never substitutes them.
 FAKE_INIT = """#!/usr/bin/env sh
 set -eu
 if [ -n "${FAKE_INIT_FAIL:-}" ]; then echo "init exploded" >&2; exit 3; fi
 prefix=""
 while [ $# -gt 0 ]; do case "$1" in --prefix) prefix="$2"; shift 2 ;; *) shift ;; esac; done
 cd "$(dirname "$0")/../.."
-mv .agents/skills/__PREFIX__-intent ".agents/skills/$prefix-intent"
-sed 's|__PACKAGE_MANAGER__|pnpm|g' .claude/settings.json > .claude/settings.tmp
+mv .agents/skills/__PRE''FIX__-intent ".agents/skills/$prefix-intent"
+sed 's|__PACKAGE_''MANAGER__|pnpm|g' .claude/settings.json > .claude/settings.tmp
 mv .claude/settings.tmp .claude/settings.json
 """
 
 SETTINGS = {
-    "permissions": {"allow": ["Bash(__PACKAGE_MANAGER__ test *)"], "deny": ["Bash(git push)"]},
+    "permissions": {"allow": ["Bash(__PACKAGE_" "MANAGER__ test *)"], "deny": ["Bash(git push)"]},
     "hooks": {"PreToolUse": [{"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "python3 gate.py"}]}],
               "PostToolUse": [{"matcher": "ExitPlanMode", "hooks": [{"type": "command", "command": "python3 mark.py"}]}]},
 }
-SKILL = {"skill": "__PREFIX__-intent"}
+SKILL = {"skill": "__PRE" "FIX__-intent"}
 CASES = [
     {"id": "route", "prompt": "route", "critical": True, "expect": SKILL},
     {"id": "flaky-critical", "prompt": "flaky-a", "critical": True, "expect": SKILL},
@@ -187,7 +188,7 @@ def main() -> int:
             "scripts/test/run-evals.test.py": "FIXTURE_ANSWERS = 'replaced by a stub in copies'\n",
             ".claude/settings.json": json.dumps(SETTINGS, indent=2) + "\n",
             ".claude/evals/cases.jsonl": "".join(json.dumps(c) + "\n" for c in CASES),
-            ".agents/skills/__PREFIX__-intent/SKILL.md": "---\nname: __PREFIX__-intent\n---\n",
+            ".agents/skills/__PRE" "FIX__-intent/SKILL.md": "---\nname: __PRE" "FIX__-intent\n---\n",
             "AGENTS.md": "# Rules\n\nAlways route.\nKeep it short.\n",
             "docs/changes/README.md": "kept\n",
             "docs/changes/261015_00-old/plan.md": "excluded\n",
