@@ -82,7 +82,7 @@ CI 는 없다. 켜려면 `docs/examples/` 의 비활성 예시에서 시작한�
   어댑터가 경로로 읽는다. 로컬 유틸리티 `git-commit`(커밋 규칙을 `COMMIT_CONVENTION.md` 에 맞게 고침)과
   `draw-diagram` 은 상류가 없어 갱신 대상이 아니다.
 - `scripts/harness/`: `vendor-skills.py`, `run-evals.py`, `ensure-husky.sh`.
-- `scripts/`: `check-agent-harness.py`, `protected-paths-guard.py`.
+- `scripts/`: `check-agent-harness.py`, `plan-first.py`, `protected-paths-guard.py`, `secret-scan.py`, `format-on-edit.py`.
 - `docs/changes/_templates/{intent,spec,plan}.md`, `.claude/evals/README.md`, `.codex/config.toml`,
   `.claude/agents/verifier.md`.
 

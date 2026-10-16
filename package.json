@@ -7,10 +7,10 @@
   },
   "scripts": {
     "prepare": "husky",
-    "check:harness": "python3 scripts/check-agent-harness.py --format text",
-    "check:harness:json": "python3 scripts/check-agent-harness.py --format json",
+    "test": "pnpm test:harness",
+    "check:harness": "python3 scripts/check-agent-harness.py",
     "evals:harness": "python3 scripts/harness/run-evals.py",
-    "test:harness": "pnpm check:harness && python3 scripts/test/check-agent-harness.test.py && python3 scripts/test/vendor-skills.test.py && python3 scripts/test/protected-paths-guard.test.py && bash scripts/test/ensure-husky.test.sh && bash scripts/test/init-template.test.sh && python3 scripts/test/run-evals.test.py"
+    "test:harness": "pnpm check:harness && python3 scripts/test/check-agent-harness.test.py && bash scripts/test/ensure-husky.test.sh && python3 scripts/test/format-on-edit.test.py && bash scripts/test/init-template.test.sh && python3 scripts/test/plan-first.test.py && python3 scripts/test/protected-paths-guard.test.py && python3 scripts/test/run-evals.test.py && python3 scripts/test/secret-scan.test.py && python3 scripts/test/vendor-skills.test.py"
   },
   "devDependencies": {
     "husky": "^9.1.7"

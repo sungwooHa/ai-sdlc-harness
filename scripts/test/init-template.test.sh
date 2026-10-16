@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# init-template.sh 회귀 테스트 — 통합 브랜치는 따로 주지 않으면 기본 브랜치를 따른다(트렁크).
-# 추적 파일을 임시 폴더에 복사해 init 을 돌리고 AGENTS.md 브랜치 줄과 harness.yaml base 를 본다.
+# Regression test for scripts/harness/init-template.sh on temporary copies of this template.
+# After init: .agents/harness.json parses, the template's own change folders and eval results are gone,
+# ADR-0000 and docs/references/ stay, the Branches line follows the branch options, the harness check
+# passes, and with husky active the first commit succeeds while a staged fake secret is refused.
+# Placeholders are written split ('__X''__') so init never substitutes them in this file.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
-# 템플릿 원본에서만 돈다: init 뒤 프로젝트(자리표시자 치환, init 스크립트 삭제)에는 시험할 것이 없다.
-# 원본 = init 스크립트가 있고, 그 subst 줄의 자리표시자가 AGENTS.md·package.json 에 하나라도 남음. 원본은
-# 건너뛰지 않는다. 자리표시자는 나눠 적어 init 이 이 줄까지 치환하지 않게 한다.
+# Runs only in the template original: an initialized project (placeholders filled, init script
+# usually deleted) has nothing to test. Original = the init script exists and one of its subst
+# placeholders is still in AGENTS.md or package.json.
 INIT="$REPO/scripts/harness/init-template.sh"
 original=0
 if [ -f "$INIT" ]; then
@@ -18,18 +21,20 @@ if [ "$original" = 0 ]; then
   echo "SKIP: init-template tests (already initialized)"; exit 0
 fi
 if ! grep -q '__DEFAULT_''BRANCH__' "$REPO/AGENTS.md"; then
-  echo "FAIL: init-template tests — 원본 템플릿(init 스크립트와 자리표시자가 남음)인데 AGENTS.md 에 기본 브랜치 자리표시자가 없다. init 이 sed 로 고치는 Branches 줄을 되돌린다"
+  echo "FAIL: init-template tests — template original (init script and placeholders present) but AGENTS.md lacks the default-branch placeholder. Restore the Branches line init rewrites with sed."
   exit 1
 fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 fail=0
-check() { if [ "$2" = "$3" ]; then echo "ok  $1"; else echo "FAIL $1 — 기대 [$3] 실제 [$2]"; fail=1; fi; }
+check() { if [ "$2" = "$3" ]; then echo "ok  $1"; else echo "FAIL $1 — expected [$3] got [$2]"; fail=1; fi; }
 
-copy() { # $1 name; prints the directory of a copy of the tracked files
+copy() { # $1 name; prints the directory of a copy of the tracked and untracked-not-ignored files
   local d="$TMP/$1"
   mkdir -p "$d"
-  git -C "$REPO" ls-files -z | (cd "$REPO" && tar --null -T - -cf -) | tar -xf - -C "$d"
+  git -C "$REPO" ls-files -z --cached --others --exclude-standard | (cd "$REPO" &&
+    while IFS= read -r -d '' f; do if [ -e "$f" ] || [ -L "$f" ]; then printf '%s\0' "$f"; fi; done |
+    tar --null -T - -cf -) | tar -xf - -C "$d"
   echo "$d"
 }
 init() { # $1 name, rest: init options; prints the copy's directory
@@ -38,23 +43,50 @@ init() { # $1 name, rest: init options; prints the copy's directory
   echo "$d"
 }
 branches() { grep -m1 -- '- Branches:' "$1/AGENTS.md" | sed 's/^ *//'; }
-base() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["artifact_chain"]["plan_gate"]["base"])' "$1/.agents/harness.yaml"; }
+exists() { if [ -e "$1" ]; then echo yes; else echo no; fi; }
 
-d="$(init default)"
-check "기본값 → main 트렁크" "$(branches "$d")" '- Branches: `main` (trunk), `feature/*`.'
-check "기본값 → base origin/main" "$(base "$d")" "origin/main"
+# Default init, seeded with a change folder and eval results so their removal is always exercised.
+d="$(copy default)"
+mkdir -p "$d/docs/changes/000000_00-seeded"; echo "# seeded" > "$d/docs/changes/000000_00-seeded/intent.md"
+echo '{"case":"seeded"}' > "$d/.claude/evals/results.jsonl"
+sh "$d/scripts/harness/init-template.sh" --project-name demo --prefix demo >/dev/null
+check "harness.json parses" "$(python3 -c 'import json,sys; json.load(open(sys.argv[1])); print("ok")' "$d/.agents/harness.json" 2>&1)" "ok"
+check "change folders removed, README and _templates kept" "$(ls "$d/docs/changes" | LC_ALL=C sort | tr '\n' ' ')" "README.md _templates "
+check "eval results removed" "$(exists "$d/.claude/evals/results.jsonl")" "no"
+check "ADR-0000 kept" "$(exists "$d/docs/decisions/0000-harness-decisions.md")" "yes"
+check "docs/references kept" "$(ls "$d/docs/references")" "$(ls "$REPO/docs/references")"
+check "default → main trunk" "$(branches "$d")" '- Branches: `main` (trunk), `feature/*`.'
+
+# The initialized copy as a fresh project: husky active (core.hooksPath as husky's prepare sets it,
+# shims from ensure-husky), harness check green, first commit through pre-commit succeeds.
+git -C "$d" init -q
+git -C "$d" config user.name test && git -C "$d" config user.email test@example.com
+git -C "$d" config commit.gpgsign false && git -C "$d" config core.hooksPath .husky/_
+(cd "$d" && bash scripts/harness/ensure-husky.sh --quiet)
+check "husky pre-commit shim active" "$(test -x "$d/.husky/_/pre-commit" && echo yes || echo no)" "yes"
+check "harness check passes after init" "$(python3 "$d/scripts/check-agent-harness.py" --repo-root "$d" 2>&1 | head -1)" "PASS: agent harness check"
+git -C "$d" add -A
+code=0; out="$(git -C "$d" commit -q -m "chore: init demo" 2>&1)" || code=$?
+check "first commit with husky active succeeds" "$code" "0"
+[ "$code" = 0 ] || echo "$out"
+# Negative: a fake AWS key assembled at run time (so this file never matches the scan) is refused.
+head_before="$(git -C "$d" rev-parse -q --verify HEAD || true)"
+printf 'AWS_KEY=%s%s\n' "AKIA" "QQQQQQQQQQQQQQQQ" > "$d/leak.env"
+git -C "$d" add leak.env
+code=0; out="$(git -C "$d" commit -q -m "chore: add env" 2>&1)" || code=$?
+check "staged fake secret → pre-commit refuses" "$code" "1"
+check "refusal names file and pattern" "$(printf '%s' "$out" | grep -c 'leak.env:1: aws-access-key' || true)" "1"
+check "refused commit leaves HEAD unchanged" "$(git -C "$d" rev-parse -q --verify HEAD || true)" "$head_before"
 
 d="$(init master --default-branch master)"
-check "기본 브랜치만 master → master 트렁크" "$(branches "$d")" '- Branches: `master` (trunk), `feature/*`.'
-check "기본 브랜치만 master → PR 대상 master" "$(grep -c 'PRs target `master`' "$d/AGENTS.md")" "1"
-check "기본 브랜치만 master → base origin/master" "$(base "$d")" "origin/master"
+check "default branch master only → master trunk" "$(branches "$d")" '- Branches: `master` (trunk), `feature/*`.'
+check "default branch master only → PRs target master" "$(grep -c 'PRs target `master`' "$d/AGENTS.md")" "1"
 
 d="$(init two --integration-branch develop)"
-check "통합 브랜치 develop → 두 브랜치" "$(branches "$d")" '- Branches: `main` (production), `develop` (integration), `feature/*`.'
-check "통합 브랜치 develop → base origin/develop" "$(base "$d")" "origin/develop"
+check "integration branch develop → two branches" "$(branches "$d")" '- Branches: `main` (production), `develop` (integration), `feature/*`.'
 
-# 템플릿으로 만든 프로젝트는 자리표시자를 채웠고 대개 init 스크립트도 지웠다. 그 프로젝트의 test:harness 도
-# 이 파일을 돌리므로 실패하지 않고 건너뛰어야 한다.
+# A project made from the template filled the placeholders and usually deleted the init script. Its
+# test:harness runs this file too, so it must skip, not fail.
 skipped() { # $1 copy; prints the copy's own run of this test as test:harness runs it, then its exit code
   local code=0 out
   out="$(cd "$1" && bash scripts/test/init-template.test.sh 2>&1)" || code=$?
@@ -62,16 +94,17 @@ skipped() { # $1 copy; prints the copy's own run of this test as test:harness ru
 }
 d="$(init project)"
 git -C "$d" init -q
-check "init 뒤 프로젝트 → 건너뜀" "$(skipped "$d")" "SKIP: init-template tests (already initialized) exit 0"
+check "initialized project → skip" "$(skipped "$d")" "SKIP: init-template tests (already initialized) exit 0"
 rm -f "$d/scripts/harness/init-template.sh"
-check "init 스크립트까지 지운 프로젝트 → 건너뜀" "$(skipped "$d")" "SKIP: init-template tests (already initialized) exit 0"
+check "init script deleted too → skip" "$(skipped "$d")" "SKIP: init-template tests (already initialized) exit 0"
 
-# 원본에서 Branches 줄만 고쳐도 건너뛰면 안 된다. 판별 단계에서 실패로 끝나 전체 시험(재귀)까지 가지 않는다.
+# Editing only the Branches line in the original must not skip: it fails at detection, before the
+# full (recursive) run.
 d="$(copy edited)"
 sed 's/__DEFAULT_''BRANCH__/main/' "$d/AGENTS.md" > "$d/AGENTS.md.new" && mv "$d/AGENTS.md.new" "$d/AGENTS.md"
 git -C "$d" init -q && git -C "$d" add -A
 out="$(skipped "$d")"
-check "원본에서 Branches 줄을 고침 → exit 1" "${out##* exit }" "1"
-check "원본에서 Branches 줄을 고침 → SKIP 없음" "$(printf '%s' "$out" | grep -c SKIP || true)" "0"
+check "original with Branches line edited → exit 1" "${out##* exit }" "1"
+check "original with Branches line edited → no SKIP" "$(printf '%s' "$out" | grep -c SKIP || true)" "0"
 
 [ "$fail" = 0 ] && echo "PASS: init-template tests" || { echo "FAIL: init-template tests"; exit 1; }

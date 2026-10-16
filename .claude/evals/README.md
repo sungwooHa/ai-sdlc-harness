@@ -24,7 +24,6 @@ One JSON object per line:
   less is FAIL. Other cases need N/N.
 - `measures` (optional, use sparingly): the instruction the case measures, `[{"file", "text"}]`, each text
   occurring exactly once in its file as committed (template paths, before init).
-- `measures_todo` (optional): what `measures` should anchor once the text exists; shown by `--mutate`.
 
 The five cases: routing a new-feature request to `__PREFIX__-intent`; plan-first on a direct edit request
 (nothing outside `docs/changes/` changes); running the test command after approval; writing a `plan.md`

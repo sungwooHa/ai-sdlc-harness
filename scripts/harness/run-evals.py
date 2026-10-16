@@ -374,7 +374,7 @@ def main() -> int:
                 if args.mutate:
                     mutated, mut_ok = "-", True
                     if not case.get("measures"):
-                        notes.append("mutated: no measures" + (f" ({case['measures_todo']})" if case.get("measures_todo") else ""))
+                        notes.append("mutated: no measures")
                     else:
                         mut, mut_error = collect(mut_futures)
                         if mut_error:
