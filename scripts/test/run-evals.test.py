@@ -5,8 +5,8 @@ The runner is copied into a throwaway git repository with its own cases.jsonl, a
 `claude` first on PATH that prints stream-json events and writes files as an agent would. Checks: the child
 gets `--output-format stream-json --verbose --setting-sources project,local`, the `sonnet` alias by default and
 the subscription login only (also when a case's `env` names another credential); HARNESS_PLAN_APPROVED reaches
-it only when the case sets it. Each copy is HEAD's tracked files minus the cases, their test, past change
-folders and reference PDFs, initialized by the init script (a failing init is an ERROR; no script means an
+it only when the case sets it. Each copy is HEAD's tracked files minus the cases, past change folders and
+reference PDFs, with their runner test replaced by a stub that prints SKIP and exits 0, initialized by the init script (a failing init is an ERROR; no script means an
 already initialized project), in a new repository with every hook kept and no trace of the real checkout.
 Judging comes from the trace and the copy's git status: a Skill call by the template or the initialized
 prefix, a Bash write outside docs/changes/, a test command, plan.md written before code, user paths in
@@ -41,6 +41,8 @@ settings = json.loads(settings_file.read_text(encoding="utf-8")) if settings_fil
 root = os.environ["FAKE_ROOT"].encode()
 dot_git = Path(".git")  # a worktree's .git is a file naming the real checkout
 git_files = [dot_git] if dot_git.is_file() else [p for p in dot_git.rglob("*") if p.is_file()]
+runner_test = Path("scripts/test/run-evals.test.py")  # test:harness names it: must run, skip, leak nothing
+stub = subprocess.run([sys.executable, str(runner_test)], capture_output=True, text=True) if runner_test.is_file() else None
 with (state / "calls.jsonl").open("a", encoding="utf-8") as log:
     log.write(json.dumps({
         "argv": sys.argv[1:], "prompt": prompt, "cwd": os.getcwd(),
@@ -48,8 +50,9 @@ with (state / "calls.jsonl").open("a", encoding="utf-8") as log:
         "approved": os.environ.get("HARNESS_PLAN_APPROVED"),
         "hooks": sorted(h["command"] for gs in settings.get("hooks", {}).values() for g in gs for h in g["hooks"]),
         "permissions": settings.get("permissions"),
-        "present": {p: Path(p).exists() for p in (".claude/evals", "scripts/test/run-evals.test.py",
-                    "docs/changes/261015_00-old", "docs/references", "docs/changes/README.md")},
+        "present": {p: Path(p).exists() for p in (".claude/evals", "docs/changes/261015_00-old", "docs/references",
+                    "docs/changes/README.md")},
+        "runner_test": stub and [stub.returncode, stub.stdout, runner_test.read_text(encoding="utf-8")],
         "remotes": subprocess.run(["git", "remote", "-v"], capture_output=True, text=True).stdout,
         "root_trace": any(root in p.read_bytes() for p in git_files),
         "clean": subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout == "",
@@ -181,7 +184,7 @@ def main() -> int:
         files = {
             "scripts/harness/run-evals.py": RUNNER.read_text(encoding="utf-8"),
             "scripts/harness/init-template.sh": FAKE_INIT,
-            "scripts/test/run-evals.test.py": "# excluded from copies\n",
+            "scripts/test/run-evals.test.py": "FIXTURE_ANSWERS = 'replaced by a stub in copies'\n",
             ".claude/settings.json": json.dumps(SETTINGS, indent=2) + "\n",
             ".claude/evals/cases.jsonl": "".join(json.dumps(c) + "\n" for c in CASES),
             ".agents/skills/__PREFIX__-intent/SKILL.md": "---\nname: __PREFIX__-intent\n---\n",
@@ -244,9 +247,11 @@ def main() -> int:
         assert call["approved"] is None, "HARNESS_PLAN_APPROVED reaches the child only when the case sets it"
         assert call["hooks"] == ["python3 gate.py", "python3 mark.py"], f"every hook stays: {call}"
         assert call["permissions"]["allow"] == ["Bash(pnpm test *)"], f"the copy must be initialized: {call}"
-        assert call["present"] == {".claude/evals": False, "scripts/test/run-evals.test.py": False,
-                                   "docs/changes/261015_00-old": False, "docs/references": False,
+        assert call["present"] == {".claude/evals": False, "docs/changes/261015_00-old": False, "docs/references": False,
                                    "docs/changes/README.md": True}, f"excluded paths: {call['present']}"
+        code, out, text = call["runner_test"] or (None, "", "")
+        assert code == 0 and out.startswith("SKIP") and "FIXTURE_ANSWERS" not in text, \
+            f"the runner test is a stub in the copy that skips (test:harness names it): {call['runner_test']}"
         assert call["remotes"] == "" and not call["root_trace"] and call["clean"], \
             f"the copy is a new repository that does not lead back to the checkout: {call}"
         assert not Path(call["cwd"]).resolve().is_relative_to(repo.resolve()), call

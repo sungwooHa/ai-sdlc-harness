@@ -23,7 +23,8 @@ KILLED when every mutated run fails, SURVIVED otherwise. A survivor stays as a b
 its measured instruction is marked a removal candidate in the results for a human to decide in the PR.
 Each case appends one JSON line to the results file (default .claude/evals/results.jsonl).
 
-Each copy is HEAD's tracked files minus EXCLUDE, initialized with INIT_ARGS when the init script is still
+Each copy is HEAD's tracked files minus EXCLUDE (the runner test replaced by a stub that prints SKIP, since
+test:harness names it), initialized with INIT_ARGS when the init script is still
 there (a failing init is an ERROR), in a new git repository: no remote and no path back to this checkout,
 which is never changed. Every hook stays. The child runs with `--setting-sources project,local`; whether
 that keeps the user's own memory file out is unverified and recorded so in each result line.
@@ -64,7 +65,10 @@ OFF_LOGIN_ENV = (
 PLAN_APPROVED_ENV = "HARNESS_PLAN_APPROVED"  # the human-set bypass of the plan-first hook
 SETTING_SOURCES = "project,local"
 # Not part of what the agent should see: the cases and their runner test, past change folders, reference PDFs.
-EXCLUDE = (".claude/evals", "scripts/test/run-evals.test.py", "docs/changes/2*", "docs/references")
+RUNNER_TEST = "scripts/test/run-evals.test.py"
+EXCLUDE = (".claude/evals", RUNNER_TEST, "docs/changes/2*", "docs/references")
+# test:harness runs the runner test by path, so the copy gets this stub in its place: it skips and leaks nothing.
+RUNNER_TEST_STUB = '#!/usr/bin/env python3\nprint("SKIP: run-evals runner test is not part of an eval copy")\n'
 INIT = "scripts/harness/init-template.sh"
 INIT_PREFIX = "acme"
 INIT_ARGS = ("--project-name", "acme", "--prefix", INIT_PREFIX)  # required options only
@@ -174,9 +178,12 @@ def make_copy(sha: str, case: dict, mutate: bool) -> Path:
         archive.stdout.close()
         if archive.wait():
             raise RuntimeError(f"git archive {sha} failed")
+        had_runner_test = (copy / RUNNER_TEST).is_file()
         for pattern in EXCLUDE:
             for path in copy.glob(pattern):
                 shutil.rmtree(path) if path.is_dir() and not path.is_symlink() else path.unlink()
+        if had_runner_test:
+            (copy / RUNNER_TEST).write_text(RUNNER_TEST_STUB, encoding="utf-8")
         if mutate:  # before init, so a measure is matched against the file as committed
             texts, problems = mutation(copy, case)
             if problems:

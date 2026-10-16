@@ -27,12 +27,15 @@ One JSON object per line:
 
 The five cases: routing a new-feature request to `__PREFIX__-intent`; plan-first on a direct edit request
 (nothing outside `docs/changes/` changes); running the test command after approval; writing a `plan.md`
-before code on a multi-app request; no user absolute paths in written files.
+before code on a high-risk request (an app plus a new shared contract under `packages/`, requirements final,
+plan-first hook opened by the case's `env` and not mentioned in the prompt, which agents read as "skip the
+plan"; so only the high-risk rule asks for the plan); no user absolute paths in written files.
 
 ## Runner (`scripts/harness/run-evals.py`)
 
-Each run gets its own copy: HEAD's tracked files minus `.claude/evals/**`,
-`scripts/test/run-evals.test.py`, `docs/changes/2*` and `docs/references/`, initialized with
+Each run gets its own copy: HEAD's tracked files minus `.claude/evals/**`, `docs/changes/2*` and
+`docs/references/`, with `scripts/test/run-evals.test.py` replaced by a stub that prints a SKIP line and
+exits 0 (`test:harness` names it; the fixtures stay out), initialized with
 `scripts/harness/init-template.sh --project-name acme --prefix acme` (an initialized project has no init
 script and is used as is; a failing init is an ERROR and spends no quota), committed in a new git
 repository with no remote and nothing leading back to this checkout, which the runner never changes. Every
