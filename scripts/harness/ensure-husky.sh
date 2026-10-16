@@ -7,6 +7,8 @@
 # minimal shim for each hook file under .husky/ when the husky-generated one is
 # missing. `pnpm install` overwrites it with the real husky shim later; both
 # behave the same for our hooks (they resolve the repo via git rev-parse).
+# A shim exits 0 when its hook file is gone, and the next run deletes shims this
+# script wrote whose hook file no longer exists (husky's own shims are left alone).
 #
 # Idempotent. Writes only inside the gitignored .husky/_/. Usage:
 #   bash scripts/harness/ensure-husky.sh [--quiet]
@@ -52,19 +54,25 @@ case "$HOOKS_PATH" in
 esac
 [ "$HOOKS_PATH" = ".husky/_" ] || exit 0   # not a husky-managed repo; nothing to do
 
+MARK='# shim written by scripts/harness/ensure-husky.sh'
+for shim in "$ROOT"/.husky/_/*; do
+  [ -f "$shim" ] && grep -qF "$MARK" "$shim" || continue
+  [ -f "$ROOT/.husky/$(basename "$shim")" ] || rm -f "$shim"
+done
+
 created=""
 for hook in "$ROOT"/.husky/*; do
   [ -f "$hook" ] || continue
   name="$(basename "$hook")"
   case "$name" in _|*.sh|.*) continue ;; esac
   target="$ROOT/.husky/_/$name"
-  [ -f "$target" ] && continue
+  new=yes
+  if [ -f "$target" ]; then grep -qF "$MARK" "$target" || continue; new=""; fi
   mkdir -p "$ROOT/.husky/_"
-  printf '%s\n' '#!/usr/bin/env sh' \
-    '# shim written by scripts/harness/ensure-husky.sh (pnpm install replaces it)' \
-    'exec sh "$(dirname "$0")/../'"$name"'" "$@"' > "$target"
+  printf '%s\n' '#!/usr/bin/env sh' "$MARK (pnpm install replaces it)" \
+    'hook="$(dirname "$0")/../'"$name"'"' '[ -f "$hook" ] || exit 0' 'exec sh "$hook" "$@"' > "$target"
   chmod +x "$target"
-  created="$created $name"
+  [ -z "$new" ] || created="$created $name"
 done
 [ -f "$ROOT/.husky/_/.gitignore" ] || { mkdir -p "$ROOT/.husky/_"; printf '*\n' > "$ROOT/.husky/_/.gitignore"; }
 

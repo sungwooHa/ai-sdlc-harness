@@ -2,7 +2,7 @@
 """PreToolUse hook: block agent edits to generated or protected files.
 
 Reads the Claude Code hook payload from stdin and exits 2 (block) when the
-target matches a protected pattern declared in `.agents/harness.yaml`
+target matches a protected pattern declared in `.agents/harness.json`
 `protected_paths`.
 
 Two tool shapes are covered:
@@ -11,8 +11,7 @@ Two tool shapes are covered:
   call is blocked only when the command also carries a write marker
   (`>`/`>>` redirection, `sed`, `tee`, `mv`, `cp`, `rm`, ...). Read-only
   commands (`cat`, `grep`, `diff`, ...) on protected files stay allowed.
-  This is a heuristic side fence, not a parser; the pre-commit drift gate is
-  the second fence for anything that slips through.
+  This is a heuristic side fence, not a parser.
 
 Fail-open on any parsing problem so a broken hook never blocks normal work.
 """
@@ -36,7 +35,7 @@ WRITE_MARKERS = {
 
 
 def load_patterns(repo: Path) -> list[dict]:
-    manifest = repo / ".agents" / "harness.yaml"
+    manifest = repo / ".agents" / "harness.json"
     try:
         data = json.loads(manifest.read_text(encoding="utf-8"))
     except Exception:

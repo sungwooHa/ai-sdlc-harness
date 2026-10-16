@@ -4,8 +4,8 @@ description: Review a UI diff for design quality — web-design-guidelines on th
 argument-hint: "[base ref, e.g. origin/__INTEGRATION_BRANCH__] — base defaults to the merge-base with __INTEGRATION_BRANCH__"
 ---
 
-Project adapter that runs the UI quality layer. It wraps the vendored review skills and reports in
-the severities `REVIEW.md` defines.
+Project adapter that runs the UI quality layer. It reads the vendored review skills by path and
+reports in the severities `REVIEW.md` defines.
 
 ## 1. Scope the diff
 
@@ -16,9 +16,10 @@ the severities `REVIEW.md` defines.
 
 ## 2. Code pass (in this session, one after another)
 
-- Call `web-design-guidelines` with the UI files. It fetches its rule set at run time; if the fetch
-  fails, say so and skip rather than judging from memory.
-- If there are motion files, call `review-animations` with them. Otherwise skip and say so.
+- Read `.agents/skills/web-design-guidelines/SKILL.md` and follow it on the UI files. It fetches its
+  rule set at run time; if the fetch fails, say so and skip rather than judging from memory.
+- If there are motion files, read `.agents/skills/review-animations/SKILL.md` and the files it
+  references, and follow it on them. Otherwise skip and say so.
 
 ## 3. Report
 

@@ -1,44 +1,36 @@
 ---
 name: __PREFIX__-intent
-description: Start a change with a grilling interview and write the local (uncommitted) docs/changes/<YYMMDD_NN>-<slug>/intent.md from the template. Use when a request is new, vague, product-facing, or when the user says "의도 정리", "intent", "뭘 만들지 정리".
-disable-model-invocation: true
+description: Capture a new or vague request as docs/changes/<YYMMDD_NN>-<slug>/intent.md through an interview, then hand off to spec. Use when the user asks for a new feature or product change and no intent.md exists — "새 기능", "기획", "만들어줘", "의도 정리", "new feature", "build me", "intent".
 argument-hint: "[slug] — 없으면 인터뷰에서 정한다; 폴더 id(YYMMDD_NN) 는 자동 부여"
 ---
 
-Call the Skill tool with "grilling" first and run the interview to an empty frontier, with these
-overrides (the `question_gate` hook enforces them — a round that breaks them is refused):
+Read `.agents/skills/grilling/SKILL.md` and follow it to an empty frontier, with these overrides:
 
-- **Ask through `AskUserQuestion`, never as numbered text.** One round = one call, at most 4
-  questions, each with 3–4 options: the recommended one first with its label ending in `(추천)`, then
-  at least two real alternatives, so the user only has to click where they disagree. If no real
-  alternative exists it is a decision, not a question — write it down as the recommendation.
-- **Scope the frontier to this stage.** Each question's `header` is one of 문제 · 결과 · 가치 ·
-  제약 · 비범위 · 이름 (slug). Anything about *how* — design, data shape, sequencing, tests —
-  is not asked here: write it under "열린 질문" with your recommended answer and let
-  `/__PREFIX__-spec` ask it.
-- **Order by blocking power.** When the frontier is larger than a round, ask the questions whose
-  answers unblock the most others first; the rest wait for the next round.
+- **Questions**: ask through `AskUserQuestion`. One round = one call, at most 4 questions, each
+  with 3–4 options: the recommended one first with its label ending in `(추천)`, then real
+  alternatives, so the user only clicks where they disagree. A question with no real alternative
+  is a decision: write it down as the recommendation. Numbered text rounds are fine when the user
+  runs `/grilling` themselves.
+- **Frontier scope**: 문제 · 결과 · 가치 · 제약 · 비범위 · 이름 (slug). *How* questions (design,
+  data shape, sequencing, tests) go under "열린 질문" with your recommended answer;
+  `__PREFIX__-spec` asks them.
+- **Order by blocking power**: when the frontier exceeds a round, ask first what unblocks the most.
 
-Facts are yours to find (the repo, the docs under `docs/`); decisions are the user's. Do not
-propose a design yet; this stage captures the problem, the desired outcome, the value hypothesis,
-constraints, and open questions.
+Facts are yours to find (the repo, `docs/`); decisions are the user's.
 
 When the user confirms shared understanding:
 
 1. Resolve the folder name `<YYMMDD_NN>-<work-slug>`. Use `$0` as the work slug when given;
-   otherwise pick with the user a short kebab-case work slug that tells this change's purpose
-   apart — a different change gets a different name. The work slug is the one shared name (branch,
-   `Plan-Ref: <work-slug>`, PR); the date and sequence stay local. There is no external tracker — the folder is the change
-   identifier. Assign the id yourself unless the user passes an explicit one: `<YYMMDD>` is today's
-   date (2-digit year, month, day), and `<NN>` is that day's sequence starting at `00`: run
-   `ls docs/changes/`, count the folders whose name starts with today's `YYMMDD_` prefix, and
-   zero-pad that count to two digits (e.g. `260910_00-<work-slug>`, then `260910_01-...`).
-2. Copy `docs/changes/_templates/intent.md` to `docs/changes/<YYMMDD_NN>-<slug>/intent.md` and fill
-   every section in the requester's own words (__HUMAN_DOC_LANG__). Put each unresolved decision
-   under "열린 질문" with your recommended answer. Write the header status as `상태: draft`.
-3. Show the filled document in full in your reply and wait for the user's explicit confirmation.
-   Apply requested edits and show it again. A document nobody has read is not an agreed intent.
-   On confirmation set the header to `상태: agreed`.
-4. Do not commit it. The change folder is local-only (`.gitignore`; the fast guard refuses staged
-   history) — the intent reaches the team through the PR value comparison against the agreement later.
-5. Tell the user the next step is `/__PREFIX__-spec` in this or a fresh session on the same machine.
+   otherwise agree with the user on a short kebab-case slug that tells this change's purpose
+   apart. The work slug names the branch `feature/<work-slug>` and the PR. Assign the id yourself
+   unless the user passes one: `<YYMMDD>` is today's date, `<NN>` is that day's sequence from
+   `00` — count the folders in `ls docs/changes/` that start with today's `YYMMDD_` prefix and
+   zero-pad the count (`260910_00-<work-slug>`, then `260910_01-...`).
+2. Copy `docs/changes/_templates/intent.md` to `docs/changes/<YYMMDD_NN>-<work-slug>/intent.md`
+   and fill every section in the requester's own words (__HUMAN_DOC_LANG__), each unresolved
+   decision under "열린 질문" with your recommended answer, header `상태: draft`.
+3. Show the filled document in full and wait for the user's explicit confirmation; apply edits and
+   show it again. On confirmation set `상태: agreed`.
+4. Commit `intent.md` on `feature/<work-slug>` (create it with `git switch -c` when you are not on
+   it), message per `docs/standards/COMMIT_CONVENTION.md`.
+5. Invoke `Skill(__PREFIX__-spec)` with args `<YYMMDD_NN>-<work-slug>`.

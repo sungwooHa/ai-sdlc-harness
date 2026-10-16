@@ -1,6 +1,7 @@
 ---
 name: web-design-guidelines
 description: Review UI code for Web Interface Guidelines compliance. Use when asked to "review my UI", "check accessibility", "audit design", "review UX", or "check my site against best practices".
+disable-model-invocation: true
 metadata:
   source: https://github.com/vercel-labs/agent-skills/tree/063bee94c3f4/skills/web-design-guidelines
   commit: 063bee94c3f4df8453406c830b0a7df0f2860278

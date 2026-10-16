@@ -1,0 +1,29 @@
+# inactive example — copy to .github/workflows/claude-review.yml (GitHub Actions) to activate.
+# AI review of every PR against REVIEW.md. Needs an ANTHROPIC_API_KEY repository secret.
+name: claude-review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+            Follow REVIEW.md: run its passes in order, including the compliance pass, and use its
+            severities. Compare the diff with spec.md and plan.md of the change folder under
+            docs/changes/ when the PR has one. Post the findings as one PR comment.
+          claude_args: --allowedTools "Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*)"

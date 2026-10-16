@@ -1,0 +1,30 @@
+# inactive example — copy to .github/workflows/agent-evals.yml (GitHub Actions) to activate.
+# Runs the harness evals when harness config or instructions change. Needs a CLAUDE_CODE_OAUTH_TOKEN
+# repository secret (`claude setup-token`); the runner uses only the CLI's subscription login.
+name: agent-evals
+
+on:
+  pull_request:
+    paths:
+      - AGENTS.md
+      - CLAUDE.md
+      - "apps/*/AGENTS.md"
+      - ".agents/**"
+      - ".claude/**"
+      - "scripts/**"
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: pnpm evals:harness --runs 3
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

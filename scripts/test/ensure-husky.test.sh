@@ -73,4 +73,26 @@ printf '#!/usr/bin/env sh\necho "msg:$1"\n' > "$TMP/msg/.husky/commit-msg"
 check "commit-msg → shim 생성" "$(test -x "$TMP/msg/.husky/_/commit-msg" && echo yes || echo no)" "yes"
 check "commit-msg → shim 이 인자를 넘김" "$(cd "$TMP/msg" && sh .husky/_/commit-msg .git/COMMIT_EDITMSG)" "msg:.git/COMMIT_EDITMSG"
 
+# 9. 훅 파일을 지우면 shim 은 건너뛰고(exit 0, 출력 없음), 다음 실행이 stale shim 을 지운다
+rm "$TMP/msg/.husky/commit-msg"
+check "훅 삭제 → shim 이 조용히 exit 0" "$(cd "$TMP/msg" && sh .husky/_/commit-msg .git/COMMIT_EDITMSG 2>&1; echo "rc=$?")" "rc=0"
+(cd "$TMP/msg" && bash "$SCRIPT" --quiet)
+check "훅 삭제 → stale shim 삭제" "$(test -e "$TMP/msg/.husky/_/commit-msg" && echo yes || echo no)" "no"
+check "훅 삭제 → 남은 훅의 shim 유지" "$(cd "$TMP/msg" && sh .husky/_/pre-commit)" "hook-ran"
+
+# 10. 옛 형식 shim(존재 확인 없음)은 새 형식으로 바뀌고, husky 가 쓴 shim 은 건드리지 않는다
+mk "$TMP/old" yes
+printf '#!/usr/bin/env sh\necho post\n' > "$TMP/old/.husky/post-merge"
+mkdir -p "$TMP/old/.husky/_"
+git -C "$TMP/old" config core.hooksPath .husky/_
+printf '%s\n' '#!/usr/bin/env sh' '# shim written by scripts/harness/ensure-husky.sh (pnpm install replaces it)' \
+  'exec sh "$(dirname "$0")/../pre-commit" "$@"' > "$TMP/old/.husky/_/pre-commit"
+printf '%s\n' '#!/usr/bin/env sh' '. "$(dirname "$0")/h"' > "$TMP/old/.husky/_/post-merge"
+(cd "$TMP/old" && bash "$SCRIPT" --quiet)
+check "옛 shim → 존재 확인 추가" "$(grep -c 'exit 0' "$TMP/old/.husky/_/pre-commit")" "1"
+check "husky shim → 무변경" "$(cat "$TMP/old/.husky/_/post-merge")" "$(printf '%s\n' '#!/usr/bin/env sh' '. "$(dirname "$0")/h"')"
+rm "$TMP/old/.husky/post-merge"
+(cd "$TMP/old" && bash "$SCRIPT" --quiet)
+check "husky shim → 훅이 없어도 지우지 않음" "$(test -e "$TMP/old/.husky/_/post-merge" && echo yes || echo no)" "yes"
+
 [ $fail -eq 0 ] && echo "PASS: ensure-husky tests" || { echo "FAIL: ensure-husky tests"; exit 1; }

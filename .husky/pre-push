@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -e
+
+# Pre-push test gate: blocks a push while the project test command fails.
+# Emergency bypass (humans only): git push --no-verify.
+PM="__PACKAGE_MANAGER__"
+case "$PM" in __*) PM=pnpm ;; esac   # template not initialised yet
+cd "$(git rev-parse --show-toplevel)"
+# git exports these to hooks; tests that create their own temp repositories must not inherit them.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+"$PM" test

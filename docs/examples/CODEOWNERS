@@ -1,0 +1,11 @@
+# inactive example — copy to .github/CODEOWNERS, replace @org/tech-lead, and require code-owner review in branch protection to activate.
+# High-risk paths (definition: AGENTS.md) get a second approver. A change spanning several apps/* cannot be
+# expressed as a path; the reviewer applies that tier by hand.
+
+/packages/          @org/tech-lead
+**/openapi.*        @org/tech-lead
+**/*.proto          @org/tech-lead
+**/migrations/      @org/tech-lead
+**/auth/            @org/tech-lead
+**/permissions/     @org/tech-lead
+**/security/        @org/tech-lead

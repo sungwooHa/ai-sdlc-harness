@@ -15,6 +15,7 @@ description: >
   summaries, recipes).
 argument-hint: "[lite|full|ultra]"
 license: MIT
+disable-model-invocation: true
 metadata:
   source: https://github.com/DietrichGebert/ponytail/tree/e3ba2aa6f1e6/skills/ponytail
   commit: e3ba2aa6f1e6f0bc4d69eb09c9f0d0a93af56156

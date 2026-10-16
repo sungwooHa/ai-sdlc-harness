@@ -4,6 +4,20 @@
     "pr": ""
   },
   "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(__PACKAGE_MANAGER__ test)",
+      "Bash(__PACKAGE_MANAGER__ test *)",
+      "Bash(__PACKAGE_MANAGER__ test:harness)",
+      "Bash(__PACKAGE_MANAGER__ test:harness *)",
+      "Bash(__PACKAGE_MANAGER__ typecheck)",
+      "Bash(__PACKAGE_MANAGER__ typecheck *)",
+      "Bash(__PACKAGE_MANAGER__ check:harness)",
+      "Bash(__PACKAGE_MANAGER__ check:harness *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git switch *)"
+    ],
     "deny": [
       "Bash(git push)",
       "Bash(git push *)",
@@ -13,6 +27,7 @@
       "Bash(git commit -an*)",
       "Bash(git commit * -n)",
       "Bash(git commit * -an)",
+      "Bash(git commit * -n *)",
       "Bash(git -c *)",
       "Bash(git -C *)",
       "Bash(git --git-dir*)",
@@ -22,7 +37,8 @@
       "Bash(*=* git commit*)",
       "Bash(*=* git push*)",
       "Bash(env * git commit*)",
-      "Bash(env * git push*)"
+      "Bash(env * git push*)",
+      "Bash(*HARNESS_PLAN_APPROVED=*)"
     ]
   },
   "hooks": {
@@ -36,62 +52,23 @@
         ]
       }
     ],
-    "Stop": [
+    "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agreement-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\" hook",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agent-harness-fast-guard.py --repo-root \"$CLAUDE_PROJECT_DIR\" --quiet-unless-relevant"
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/question-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/pr-body-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/adr-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\" --hook",
-            "timeout": 30
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/plan-first.py prompt --repo-root \"$CLAUDE_PROJECT_DIR\""
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agreement-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\" hook",
-            "timeout": 30
-          }
-        ]
-      },
-      {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/protected-paths-guard.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/pr-body-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
           }
         ]
       },
@@ -105,41 +82,40 @@
         ]
       },
       {
-        "matcher": "AskUserQuestion|EnterPlanMode|ExitPlanMode|Skill",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/question-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/plan-first.py gate --repo-root \"$CLAUDE_PROJECT_DIR\""
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "ExitPlanMode",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/pr-body-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agreement-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\" hook",
-            "timeout": 30
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/plan-first.py mark --repo-root \"$CLAUDE_PROJECT_DIR\""
           }
         ]
       },
       {
+        "matcher": "EnterPlanMode",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/question-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/plan-first.py clear --repo-root \"$CLAUDE_PROJECT_DIR\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/format-on-edit.py --repo-root \"$CLAUDE_PROJECT_DIR\""
           }
         ]
       }

@@ -37,7 +37,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
         (root / ".agents").mkdir()
-        (root / ".agents/harness.yaml").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        (root / ".agents/harness.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
 
         cases = [
             # (tool, input, expected exit, label)

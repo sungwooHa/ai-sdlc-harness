@@ -1,0 +1,159 @@
+{
+  "version": 3,
+  "always_on_max_lines": 60,
+  "protected_paths": [
+    {
+      "id": "lockfiles",
+      "globs": [
+        "pnpm-lock.yaml"
+      ],
+      "reason": "Lockfiles are produced by the package manager.",
+      "instead": "Run __PACKAGE_MANAGER__ install."
+    }
+  ],
+  "secrets": {
+    "patterns": [
+      {
+        "id": "aws-access-key",
+        "regex": "\\bAKIA[0-9A-Z]{16}\\b"
+      },
+      {
+        "id": "private-key-block",
+        "regex": "-----BEGIN [A-Z ]*PRIVATE KEY-----"
+      },
+      {
+        "id": "github-token",
+        "regex": "\\bghp_[A-Za-z0-9]{36}\\b"
+      },
+      {
+        "id": "api-secret-key",
+        "regex": "\\bsk-[A-Za-z0-9_-]{20,}"
+      }
+    ]
+  },
+  "format_on_edit": {},
+  "plan_first": {
+    "exempt_roots": [
+      "docs/changes/"
+    ],
+    "env": "HARNESS_PLAN_APPROVED"
+  },
+  "skills": {
+    "root": ".agents/skills",
+    "claude_mirror": ".claude/skills",
+    "mirror_mode": "symlink",
+    "local_prefix": "local-",
+    "local_prefix_note": "Personal skills named `local-<name>`: the real directory lives under the claude_mirror root, `.agents/skills/local-<name>` is a relative symlink to it, both are excluded per clone through `.git/info/exclude` (never `.gitignore`), and the harness check skips them. Prefer user scope first; see docs/standards/AGENT_HARNESS.md \"Personal skills\".",
+    "vendored": [
+      {
+        "source": "github.com/mattpocock/skills",
+        "license": "MIT",
+        "skills": [
+          "grilling",
+          "to-spec",
+          "to-tickets",
+          "implement",
+          "tdd",
+          {
+            "name": "code-review",
+            "as": "review-since",
+            "reason": "Upstream name collides with the Claude Code built-in /code-review; this one is the two-axis (standards + spec) review the artifact chain uses."
+          },
+          "diagnosing-bugs",
+          "prototype",
+          "writing-for-agents",
+          "handoff"
+        ],
+        "update_command": "python3 scripts/harness/vendor-skills.py --source mattpocock/skills"
+      },
+      {
+        "source": "github.com/vercel-labs/agent-skills",
+        "license": "MIT",
+        "skills": [
+          "web-design-guidelines"
+        ],
+        "reason": "Web Interface Guidelines code review (accessibility, focus, forms, animation, typography, dark mode); fetches the rule set from vercel-labs/web-interface-guidelines at run time. Reached through __PREFIX__-ui-review.",
+        "update_command": "python3 scripts/harness/vendor-skills.py --source vercel-labs/agent-skills"
+      },
+      {
+        "source": "github.com/emilkowalski/skills",
+        "license": "MIT",
+        "skills": [
+          "review-animations",
+          "animation-vocabulary"
+        ],
+        "reason": "Interaction/motion audit for UI work. Reached through __PREFIX__-ui-review.",
+        "update_command": "python3 scripts/harness/vendor-skills.py --source emilkowalski/skills"
+      },
+      {
+        "source": "github.com/DietrichGebert/ponytail",
+        "license": "MIT",
+        "skills": [
+          "ponytail"
+        ],
+        "reason": "Prefer reuse, standard-library and native solutions within agreed scope; harness adapter preserves required artifacts and checks.",
+        "update_command": "python3 scripts/harness/vendor-skills.py --source DietrichGebert/ponytail --ref e3ba2aa6f1e6f0bc4d69eb09c9f0d0a93af56156"
+      }
+    ],
+    "adapters": {
+      "description": "Project skills that wrap vendored skills with this repo's change-folder convention. The adapter reads each mapped skill by path; vendor-skills.py stamps `disable-model-invocation: true` on every map target and drops its `user-invocable` line.",
+      "map": {
+        "__PREFIX__-intent": [
+          "grilling"
+        ],
+        "__PREFIX__-spec": [
+          "to-spec"
+        ],
+        "__PREFIX__-tickets": [
+          "to-tickets"
+        ],
+        "__PREFIX__-implement": [
+          "implement"
+        ],
+        "__PREFIX__-ui-review": [
+          "web-design-guidelines",
+          "review-animations"
+        ],
+        "__PREFIX__-ponytail": [
+          "ponytail"
+        ]
+      }
+    },
+    "disabled": []
+  },
+  "hook_intents": [
+    {
+      "id": "plan_first",
+      "event": "UserPromptSubmit|PreToolUse|PostToolUse",
+      "matcher": "Edit|Write|MultiEdit|NotebookEdit|ExitPlanMode|EnterPlanMode",
+      "script": "scripts/plan-first.py"
+    },
+    {
+      "id": "protected_paths",
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|MultiEdit|Bash",
+      "script": "scripts/protected-paths-guard.py"
+    },
+    {
+      "id": "format_on_edit",
+      "event": "PostToolUse",
+      "matcher": "Edit|Write|MultiEdit",
+      "script": "scripts/format-on-edit.py"
+    },
+    {
+      "id": "secret_scan",
+      "event": "pre-commit",
+      "script": "scripts/secret-scan.py"
+    },
+    {
+      "id": "pre_push_test",
+      "event": "pre-push",
+      "script": ".husky/pre-push"
+    },
+    {
+      "id": "husky_setup",
+      "event": "SessionStart",
+      "script": "scripts/harness/ensure-husky.sh"
+    }
+  ]
+}

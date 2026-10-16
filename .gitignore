@@ -9,14 +9,8 @@ build/
 # husky runtime shims (written by install / scripts/harness/ensure-husky.sh)
 .husky/_/
 
-# local agent runtime state (declared in .agents/harness.yaml local_artifacts)
+# local agent runtime state
 .claude/skills/.omc/
 .claude/worktrees/
 .codex/worktrees/
 .serena/
-
-# execution history is local-only (harness.yaml documentation_layout.local_only_roots):
-# the repo keeps rules, the PR carries the change's history
-docs/changes/*
-!docs/changes/README.md
-!docs/changes/_templates/
