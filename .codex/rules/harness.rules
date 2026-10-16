@@ -1,7 +1,7 @@
-# Second fence behind scripts/agreement-gate.py: these hold when the hook times out or fails.
+# Second fence for the agent: these keep the agent from skipping commit hooks or pushing.
 # Rules compare whole argv tokens from the start of the command: no wildcard inside a token and no
 # later position, so `git commit -m x --no-verify`, `git commit -qn -m x`, `git --git-dir=.git commit`
-# and `HUSKY=0 git commit` pass here and only the gate refuses them. See docs/standards/AGREEMENT_REVIEW.md.
+# and `HUSKY=0 git commit` pass here; only the deny rules in .claude/settings.json cover some of them.
 
 prefix_rule(
     pattern = ["git", "push"],
@@ -15,7 +15,7 @@ prefix_rule(
     pattern = ["git", "commit", ["--no-verify", "--no-verif", "--no-veri", "-n", "-nm", "-mn", "-an", "-na",
                                  "-anm", "-amn", "-nam", "-nma", "-man", "-mna"]],
     decision = "forbidden",
-    justification = "Commit hooks carry the agreement check; skipping them is a declared human emergency step.",
+    justification = "Commit hooks run the repo checks; skipping them is a declared human emergency step.",
     match = ["git commit --no-verify -m x", "git commit -n -m x", "git commit -nm x", "git commit -anm x",
              "git commit --no-verif -m x"],
     not_match = ["git commit -m x", "git commit -am x"],

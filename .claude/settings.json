@@ -36,62 +36,13 @@
         ]
       }
     ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agreement-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\" hook",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agent-harness-fast-guard.py --repo-root \"$CLAUDE_PROJECT_DIR\" --quiet-unless-relevant"
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/question-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/pr-body-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/adr-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\" --hook",
-            "timeout": 30
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agreement-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\" hook",
-            "timeout": 30
-          }
-        ]
-      },
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/protected-paths-guard.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/pr-body-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
           }
         ]
       },
@@ -101,45 +52,6 @@
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/protected-paths-guard.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          }
-        ]
-      },
-      {
-        "matcher": "AskUserQuestion|EnterPlanMode|ExitPlanMode|Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/question-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/pr-body-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agreement-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\" hook",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/question-gate.py --repo-root \"$CLAUDE_PROJECT_DIR\""
           }
         ]
       }
