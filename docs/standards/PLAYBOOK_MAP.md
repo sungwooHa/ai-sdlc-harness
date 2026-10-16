@@ -56,6 +56,13 @@
 ```bash
 # S1.1 · S2.1 · S3.1: 변경 폴더별 산출물 커밋 시각과 작성자(간격·순서·재작업을 읽는다)
 git log --reverse --date=iso --format='%ad %an %h' --name-only -- 'docs/changes/*/intent.md' 'docs/changes/*/spec.md' 'docs/changes/*/plan.md'
+# S3.1: 변경 폴더별 리드타임. 대화 = 폴더 첫 커밋→plan.md 첫 커밋, 구현 = plan.md→pr.md 첫 커밋.
+#       요청 입력·머지 시각은 git에 없어 빠진다. routine 변경은 폴더가 없어 세지 않는다.
+first() { git log --reverse --format=%at -- "$@" | head -1; }
+for d in docs/changes/[0-9]*/; do
+  s=$(first "$d"); p=$(first "${d}plan.md"); e=$(first "${d}pr.md")
+  [ -n "$p" ] && [ -n "$e" ] && echo "$d  대화 $(( (p - s) / 60 ))분 · 구현 $(( (e - p) / 60 ))분"
+done
 # S4.2: eval 통과율 추이
 tail -n 20 .claude/evals/results.jsonl
 # B5: 하네스 정합성
