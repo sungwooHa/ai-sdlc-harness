@@ -49,7 +49,7 @@
 - **S4.2**: 2026-10-16 측정(baseline / `--mutate`, 각 3회): 라우팅 PASS 3/3 / SURVIVED · plan-first PASS 3/3 / SURVIVED ·
   승인 뒤 테스트 PASS 3/3 / SURVIVED 1/3 · high-risk 코드 전 계획(질문 없이 답하게 다시 짬) PASS 3/3 / KILLED 3/3 ·
   사용자 절대경로 없음 PASS 3/3 / SURVIVED. SURVIVED case는 행동 회귀 테스트로 남기고, 잰 지시는 삭제 후보로
-  표시해 사람이 PR에서 정한다(U5 정책). `SURVIVED 1/3`은 변이 실행 3회 중 1회만 실패했다는 뜻이다.
+  표시해 사람이 PR에서 정한다(U5 정책). 이번 후보는 ADR-0000 D20에서 결정했다. `SURVIVED 1/3`은 변이 실행 3회 중 1회만 실패했다는 뜻이다.
 
 ## 측정 명령
 
