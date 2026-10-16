@@ -1,94 +1,60 @@
-# __PROJECT_NAME__ — Agent Operating Contract
+# __PROJECT_NAME__ — Agent Contract
 
 __APPS_OVERVIEW__
-
-Each app has its own `AGENTS.md` (loaded when you work under that app). Deep standards live under
-`docs/standards/`; open them only when the app file points there or the task needs the background.
-
-## Principles
-
-Four principles govern every harness rule below — full text and rationale in
-`docs/standards/HARNESS_PRINCIPLES.md`; nothing is added to the harness that fails all four:
-(1) rules in the repo, history on the PR; (2) enforce with the system, not with prose;
-(3) minimum cognitive load for humans; (4) facts are the agent's, decisions are the user's — take
-only the stages you need.
-
-## Workflow (artifact chain)
-
-Every non-trivial change works in a local, uncommitted folder `docs/changes/<YYMMDD_NN>-<slug>/`
-(`<YYMMDD_NN>` = start date + that day's sequence from `00`; `/__PREFIX__-intent` assigns it). The repo
-keeps rules only; the change's history goes to the PR (description from `_templates/pr.md`, attachments):
-
-| Stage | When | Do | Artifact |
-|---|---|---|---|
-| Intent | requirement is unclear or new | `/__PREFIX__-intent` (interviews you, looks up facts itself) | `intent.md` |
-| Spec | intent agreed | `/__PREFIX__-spec`; draft the applicable HTML views for human agreement | `spec.md`, draft `deliverables/` |
-| Plan / Agree | before nontrivial implementation | refine plan (or small-change spec) + HTML, present for approval, preserve agreed revision (see `AGREEMENT_REVIEW.md`) | `plan.md`, `agreements/<revision>/` |
-| Implement | presented plan/drafts approved and baseline preserved | `/__PREFIX__-implement` (TDD at agreed seams), narrow tests while iterating | code + commits |
-| Code review | after implementation, before value handoff | `/review-since <base>` in a fresh subagent, checked against the referenced agreement's spec/plan and `REVIEW.md`; UI diffs also `/__PREFIX__-ui-review` unless `plan.md` says `시각 변경 없음` | findings fixed |
-| PR value review | code review passed | compare agreed value with actual results; update working HTML, preserve the baseline, write short `pr.md` with unverified value and follow-up | result `deliverables/`, `pr.md` (local → PR) |
-
-Questions to the user in Intent, Spec, and plan mode go through `AskUserQuestion` only — at most 4
-per round, 3–4 options each with the recommended one first (`(추천)`), header limited to the stage's
-categories declared in `harness.yaml` `question_gate`; a hook refuses numbered text question rounds
-and non-compliant calls.
-The `/__PREFIX__-*` skills are user-invoked: when a request is vague or product-facing and no
-`docs/changes/<YYMMDD_NN>-<slug>/intent.md` exists, do not start coding — say what is unclear and
-ask the user to run `/__PREFIX__-intent`. Skip stages that add nothing: small changes may skip intent/plan and inapplicable HTML, but still need spec, scope and
-hook-owned agreement. Never skip Review for diffs that touch more than one app or any shared contract;
-CI warns when such a PR carries no `Plan-Ref` commit trailer.
-Before spec/plan agreement and PR delivery, read `docs/standards/AGREEMENT_REVIEW.md`.
-HTML is reviewed before implementation; the PR is the human value review.
-For artifact-chain changes, implementation handoff requires that `pr.md` passes the `pr_body_gate` hook, the deliverables required by
-`harness.yaml` `artifact_chain.deliverables.required_when` exist beside it, and every applicable Definition of
-Done criterion in the approved plan has a result in `progress.md` — unverified value stays explicit; it is not human acceptance. Never commit anything under a
-change folder (the fast guard refuses it; `local_only_roots`).
-
-Show evidence, not confidence: paste the test/typecheck command you ran and its result.
+Each app has its own `AGENTS.md`, loaded when you work under that app.
 
 ## Commands
+- Test: `__PACKAGE_MANAGER__ test` — whole suite, exits non-zero on failure; pre-push runs it too.
+- Typecheck: `__PACKAGE_MANAGER__ typecheck` — replace with this repo's typecheck command.
+- Harness: `__PACKAGE_MANAGER__ test:harness` after changing AGENTS.md, `.agents/`, `.claude/`, `.husky/`, `scripts/`.
 
-```bash
-__PACKAGE_MANAGER__ typecheck                  # replace with this repo's typecheck command
-__PACKAGE_MANAGER__ test                       # whole suite
-__PACKAGE_MANAGER__ test <one test file>       # narrow run while iterating
-__PACKAGE_MANAGER__ test:harness               # only when you changed AGENTS.md, .agents/, .claude/, .codex/, scripts/
-```
+## Verifying your work
+- Narrow → wide: one test file, its directory, then the whole suite and typecheck before you report
+  done. Paste each command with its output. A failing test means fix the code, not the test.
+- For a bug, write the failing test first. For UI, compare a screenshot with the agreed mock.
+  A red test you did not cause: compare with a clean checkout before touching it.
 
-Scope test runs to the change and widen by directory only when you know what is in it:
-one file → sibling directory → whole suite once before commit. A red test is not automatically
-yours: compare against a clean checkout before claiming or fixing it.
+## Workflow — the main session orchestrates
+- Main session: talks to the human, runs the dialogue skills, calls EnterPlanMode/ExitPlanMode,
+  decides with the human, synthesizes. Subagents execute: implementers (one per plan unit, parallel
+  only on disjoint files), `review-since`, `verifier`. They cannot ask the human: blocked → report.
+- Flow: `__PREFIX__-intent` → `__PREFIX__-spec` → EnterPlanMode → human approval →
+  `__PREFIX__-implement` (commits `plan.md`, runs implementers) → `review-since` in a fresh subagent
+  (+ `__PREFIX__-ui-review` for UI) → `pr.md` from `docs/changes/_templates/pr.md`. Artifacts live in
+  `docs/changes/<YYMMDD_NN>-<slug>/`, branch `feature/<slug>`. A typo-sized fix skips intent/spec.
+- Agent calls run in the background: wait for each completion notification and check the output
+  before accepting it. Call EnterPlanMode only after background implementers finish: it clears
+  the approval they edit under.
 
-## Hard rules
+## Enforced by the system
+- Plan-first (Claude Code hook): Edit/Write to a repo file outside `docs/changes/**` is refused
+  unless this session had a plan approved since its last EnterPlanMode — that is all it means, not
+  that this change's plan was approved. Refused → call EnterPlanMode; never retry through Bash.
+  Edit files with Edit/Write, never `sed -i`, redirects or scripts. Headless runs use
+  `HARNESS_PLAN_APPROVED=1`, set by a human only. Codex has no hook: show the plan, await approval.
+- Protected paths (`.agents/harness.json` `protected_paths`), format-on-edit slot (`format_on_edit`),
+  pre-commit secret scan of the staged diff, pre-push `__PACKAGE_MANAGER__ test`.
 
-<!-- project hard rules here — one line each, only rules an agent would otherwise break -->
-
-- No user-specific absolute paths (`/Users/<name>/...`) in docs, skills, or config; use `<repo-root>`.
-- Write agent-facing docs (skills, AGENTS.md, contracts) in English; human-facing docs in __HUMAN_DOC_LANG__.
-
-## Git
-
+## Guide — humans check it in PR review against `REVIEW.md`
+- High-risk = two or more `apps/*`, a shared contract (`packages/**`, `**/openapi.*`, `**/*.proto`,
+  `**/migrations/**`) or a security path (`**/auth/**`, `**/permissions/**`, `**/security/**`):
+  commit `intent.md`, `spec.md` and `plan.md` in the change folder; never skip review.
+- When the work departs from the plan, update `plan.md` in the same commit.
+- Commits follow `docs/standards/COMMIT_CONVENTION.md`; no `Co-Authored-By`. The human pushes.
+- Ask the human only for decisions (AskUserQuestion, ≤4 per round, recommended option first).
+- No user-specific absolute paths (`/Users/<name>/...`); use `<repo-root>`. Agent-facing docs in
+  English, human-facing docs in __HUMAN_DOC_LANG__.
+- `pr.md` is the value review: expected value vs. actual result; unverified value stays explicit.
 - Branches: `__DEFAULT_BRANCH__` (production), `__INTEGRATION_BRANCH__` (integration), `feature/*`.
   PRs target `__INTEGRATION_BRANCH__`.
-- Shared name: the work slug (change folder name without `YYMMDD_NN-`) names the branch
-  `feature/<work-slug>`, the `Plan-Ref: <work-slug>` trailer and the PR; the date stays local.
-  A plan split into parts uses only `feature/<work-slug>/<part>` branches, and every part's commits carry
-  the same `Plan-Ref: <work-slug>`, not a per-part value.
-- Commit messages: read `docs/standards/COMMIT_CONVENTION.md` before your first commit (a
-  commit-msg hook checks it).
-- Pre-commit (husky) runs the harness fast guard. the agreement gate requires scope, current verification and local PR value review; agent
-  `--no-verify` is blocked.
+
+## Things agents get wrong
+- Writing through Bash after a plan-first refusal; calling EnterPlanMode while implementers run.
+- Accepting a subagent's report unchecked; asking the human for facts the repo can answer.
+- Calling the vendored skills behind `__PREFIX__-*` adapters directly (`grilling`, `to-spec`, ...).
+<!-- Add a line when an agent makes the same mistake twice. -->
 
 ## Harness
-
-Skills live in `.agents/skills/` (single root; `.claude/skills` is a symlink mirror). Vendored
-workflow skills (`grilling`, `to-spec`, `to-tickets`, `implement`, `tdd`, `review-since`, ...) are
-reached through the project adapters `__PREFIX__-intent` / `__PREFIX__-spec` / `__PREFIX__-tickets` /
-`__PREFIX__-agreement` / `__PREFIX__-implement`, which supply the change-folder convention
-(`docs/agents/issue-tracker.md`: no external tracker, slug folders), the `docs/changes` paths, and
-__HUMAN_DOC_LANG__ output; do not call the vendored originals directly. Hooks are declared in
-`.agents/harness.yaml` and mirrored in `.claude/settings.json` / `.codex/hooks.json`. Change the
-harness only through `docs/standards/AGENT_HARNESS.md`, then run `__PACKAGE_MANAGER__ test:harness`.
-
-Ponytail is a code-simplification aid: use `__PREFIX__-ponytail` for project overrides. Its modes
-never waive agreed scope, required HTML/ADR/PR evidence, security, accessibility or verification.
+Yardstick: `docs/references/anthropic-ai-native-sdlc-playbook.pdf` via `docs/standards/PLAYBOOK_MAP.md`.
+Principles: `docs/standards/HARNESS_PRINCIPLES.md`; decisions: `docs/decisions/0000-harness-decisions.md`.
+Change it only through `docs/standards/AGENT_HARNESS.md`; edit skills in `.agents/skills/`.
