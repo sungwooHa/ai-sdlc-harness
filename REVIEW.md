@@ -1,27 +1,40 @@
 # Pull request review policy
 
 Applies to human reviewers, the `verifier` subagent, `/review-since <base>` (standards + spec),
-`/__PREFIX__-ui-review`, and Claude Code Review when enabled (blocker and major = Important,
-minor = Nit). Code review checks the implementation against the agreement; the human PR value
-review (`docs/standards/AGREEMENT_REVIEW.md` §4) is a separate, later step.
+`/__PREFIX__-ui-review`, and the AI review workflow once activated (`docs/examples/claude-review.yml`;
+blocker and major = Important, minor = Nit). Code review checks the diff against the change
+folder's spec.md and plan.md; the PR value review of `pr.md` is a separate, later human step.
 
 ## Passes, in order
 
 | Pass | Question | Source of truth |
 |---|---|---|
-| Agreement adherence | Does the diff do what the approved revision says, and change nothing outside its scope? | `docs/changes/<YYMMDD_NN>-<slug>/agreements/<revision>/` (spec.md, plan.md), `scope.json` |
+| Plan adherence | Does the diff do what spec.md and plan.md say, and change nothing outside plan.md `Files that change`? | `docs/changes/<YYMMDD_NN>-<slug>/` (spec.md, plan.md); for a routine change, the approved plan-mode plan |
 | Correctness | Bugs, unhandled states, race conditions, missing tests for stated edge cases | code + tests |
 | Contracts | Shared contracts (`packages/*`, API, schema) changed on both sides with compatibility notes? | the contract's owner docs |
-| Security & data | Secrets, auth boundaries, real personal data in code, fixtures or tests | `AGENTS.md` Hard rules |
+| Security & data | Secrets, auth boundaries, real personal data in code, fixtures or tests | `AGENTS.md` Guide; `.agents/harness.json` `secrets` |
+| Compliance | The guide rules below, which no hook enforces | this file |
 | Design system *(conditional)* | Only once the project records a design system: hardcoded tokens, bypassed inventory, exemptions without a reason | that decision |
-| UI quality *(conditional)* | Only for diffs under `__UI_SOURCE_GLOB__` unless the approved plan says `시각 변경 없음` | `/__PREFIX__-ui-review` |
+| UI quality *(conditional)* | Only for diffs under `__UI_SOURCE_GLOB__` unless plan.md says `시각 변경 없음` | `/__PREFIX__-ui-review` |
+
+**Compliance pass.** Check each item; the PR is the only place it is checked.
+
+- A high-risk change (definition: `AGENTS.md`) has intent.md, spec.md and plan.md committed in its
+  change folder and a second approver.
+- The diff matches plan.md `Files that change`, or the commit that departs from the plan also
+  updates plan.md.
+- No user-specific absolute paths (`/Users/<name>/...`, `/home/<name>/...`) in docs, skills or config.
+- No `Co-Authored-By` or other attribution trailers; first lines follow
+  `docs/standards/COMMIT_CONVENTION.md`.
+- A nontrivial change has `pr.md` with expected vs actual vs evidence and unverified value explicit.
+- A fix does not pass by weakening a test (deleted assertion, loosened expectation, added skip).
 
 ## Severity
 
 - **blocker**: wrong behaviour, contract break, security or data issue, scope or plan violated
-  silently. Cannot merge.
-- **major**: missing test for a stated edge case, undocumented contract change, rule violation
-  with a workaround. Fix before merge unless the author records why not.
+  silently, a weakened test, a high-risk change without a committed plan.md. Cannot merge.
+- **major**: missing test for a stated edge case, undocumented contract change, any other
+  compliance miss. Fix before merge unless the author records why not.
 - **minor**: clarity, naming, small duplication. Optional.
 
 Each finding names file:line, the defect in one sentence, and a concrete failure scenario. A
@@ -37,4 +50,5 @@ are not findings.
 ## Repeat findings
 
 When the same class of finding appears in three PRs, it becomes a rule: a line in the relevant
-`apps/<app>/AGENTS.md`, or a hook if it must never happen.
+`apps/<app>/AGENTS.md`, or a hook if it passes the binary criterion in
+`docs/standards/AGENT_HARNESS.md`.
