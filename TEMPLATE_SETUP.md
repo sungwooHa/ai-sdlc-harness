@@ -30,16 +30,19 @@ Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관
    스킬 디렉터리 `__PREFIX__-*` 와 `apps/__APP__` 도 함께 rename 되고 `.claude/skills` 심링크가 다시 걸린다.
    템플릿 자신의 변경 폴더(`docs/changes/` 아래 `README.md`·`_templates/` 외)와 `.claude/evals/results.jsonl` 은
    지우고, 하네스 결정 기록 `docs/decisions/0000-harness-decisions.md` 와 `docs/references/` 는 남긴다.
-   실행 후 `scripts/harness/init-template.sh` 는 지운다.
-3. 검증하고 첫 커밋을 만든다.
+   `scripts/harness/init-template.sh` 는 한 번만 쓰고 3단계에서 지운다.
+3. 검증하고, init 스크립트를 지우고, 초기화한 트리를 첫 커밋으로 남긴다.
 
    ```sh
    pnpm install          # husky 만 설치된다
    pnpm test:harness     # 하네스 계약 + 가드 회귀 테스트
+   git config user.name "…" && git config user.email "…"
+   rm scripts/harness/init-template.sh
+   git add -A && git commit -m "chore: init template"
    ```
 
-   deny 규칙이 `git -c` 를 막으므로, 에이전트 세션에서 커밋하기 전에 저장소 로컬 설정에 작성자를 넣어 둔다
-   (`git config user.name "…"`, `git config user.email "…"`).
+   deny 규칙이 `git -c` 를 막으므로, 작성자는 위처럼 저장소 로컬 설정에 넣어 둔다 — 에이전트 세션도 이 이름으로
+   커밋한다.
 
 그 다음 실제로 채워야 할 것: `AGENTS.md` 의 `## Commands`(test·typecheck 명령 하나씩)와
 `## Things agents get wrong`, `apps/<app>/AGENTS.md`, `.husky/pre-commit` 의 프로젝트 게이트,

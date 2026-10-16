@@ -11,8 +11,8 @@
 |---|---|---|---|---|---|---|---|
 | S1.1 | Plan | Capture as intent.md | p11–13 | 요청자의 말로 인터뷰해 템플릿대로 intent.md를 쓰고, 사람이 고친 뒤 변경 폴더에 커밋한다. | `.agents/skills/__PREFIX__-intent/`, `.agents/skills/grilling/`, `docs/changes/_templates/intent.md`, `docs/changes/README.md` | Met | 첫 대화→intent.md 커밋 시간 / 첫 spec.md 커밋 뒤 intent.md 수정 수 |
 | S2.1 | Design | Requirements and design | p15–17 | intent.md로 spec.md를 쓰며 우려를 표시하고, 사람이 검토해 intent.md 옆에 커밋한다. 빈 곳: 브랜드·보안·UX 정책 스킬, intent 수락이 spec을 띄우는 트리거. | `.agents/skills/__PREFIX__-spec/`, `.agents/skills/to-spec/`, `.agents/skills/prototype/`, `docs/changes/_templates/spec.md`, UI mock 권장(`README.md`) | Partial | intent.md→spec.md 커밋 간격 / 첫 plan.md 커밋 뒤 spec.md 커밋 수 |
-| S3.1 | Build | Plan mode | p19–21 | 승인된 계획 없이 편집하지 않는다(p20). plan.md는 바뀌는 파일·작업 순서·위험·증명을 담아 커밋하고, 구현이 벗어나면 같은 커밋에서 고친다. 마커 뜻은 "이 세션이 마지막 EnterPlanMode 이후 계획을 승인받았다"이지 "이 변경의 계획이 승인됐다"가 아니다. | `scripts/plan-first.py`, `.claude/settings.json`(PreToolUse·PostToolUse 배선), `.agents/harness.json` `plan_first`, `.agents/skills/__PREFIX__-implement/`, `.agents/skills/implement/`, `docs/changes/_templates/plan.md` | Met | 계획 승인→머지 시간, 첫 구현으로 머지된 비율 / 변경당 재작업 수, 머지 diff가 plan.md와 맞는 비율 |
-| S3.2 | Build | Auto mode | p21 | 계획 승인 뒤에는 편집마다 묻지 않고 구현한다. 빈 곳: auto-accept는 승인 때 사람이 고른다, worktree 병렬 안내 없음. | `.claude/settings.json` `defaultMode: acceptEdits`, 승인 안내(`README.md`) | Partial | 승인 뒤 편집 프롬프트 수(목표 0) / 머지 diff가 plan.md와 맞는 비율 |
+| S3.1 | Build | Plan mode | p19–21 | 승인된 계획 없이 편집하지 않는다(p20). plan.md는 바뀌는 파일·작업 순서·위험·증명을 담아 커밋하고, 구현이 벗어나면 같은 커밋에서 고친다. 마커 뜻은 "이 세션이 마지막으로 plan mode에 들어간 뒤(EnterPlanMode 호출, 또는 plan mode에서 프롬프트를 보냄) 계획을 승인받았다"이지 "이 변경의 계획이 승인됐다"가 아니다. | `scripts/plan-first.py`, `.claude/settings.json`(PreToolUse·PostToolUse·UserPromptSubmit 배선), `.agents/harness.json` `plan_first`, `.agents/skills/__PREFIX__-implement/`, `.agents/skills/implement/`, `docs/changes/_templates/plan.md` | Met | 계획 승인→머지 시간, 첫 구현으로 머지된 비율 / 변경당 재작업 수, 머지 diff가 plan.md와 맞는 비율 |
+| S3.2 | Build | Auto mode | p21 | 계획 승인 뒤에는 편집마다 묻지 않고 구현한다. 빈 곳: auto 선택지(`Yes, and use auto mode`, 옛 이름 `auto-accept edits`)는 승인 때 사람이 고른다, worktree 병렬 안내 없음. | `.claude/settings.json` `defaultMode: acceptEdits`, 승인 안내(`README.md`) | Partial | 승인 뒤 편집 프롬프트 수(목표 0) / 머지 diff가 plan.md와 맞는 비율 |
 | S3.3 | Build | Source of truth (sidebar) | p22 | 산출물마다 원본 시스템을 하나로 정한다. 여기서는 저장소가 원본이다. | `docs/agents/issue-tracker.md` | Met | 원본 선언 여부(문서 확인) / 외부 기록과 어긋난 사례 수 |
 | S3.4 | Build | CLAUDE.md | p23–24 | 새 합류자에게 필요한 명령·규칙·자주 틀리는 것만 한 쪽 이하로 루트에 커밋하고, 두 번 틀린 것은 고친다. | `AGENTS.md`(≤60줄, `always_on_max_lines`), `CLAUDE.md`(`@AGENTS.md`), `.agents/skills/writing-for-agents/` | Met | AGENTS.md가 막았어야 할 실수의 반복(`git log -p -- AGENTS.md`) / 새 팀원의 첫 머지 PR까지 시간 |
 | S3.5 | Build | Skills | p25–26 | 일관되게 적용할 지식은 스킬로 두고 트리거되는지 시험한다. 꼭 지킬 정책은 훅이나 리뷰가 받친다. 빈 곳: 소유자가 있는 정책 스킬(보안·API·브랜드)은 프로젝트 몫. | `.agents/skills/`(`.claude/skills` 미러), `scripts/harness/vendor-skills.py`, 라우팅 eval(`.claude/evals/cases.jsonl`) | Partial | 정책 변경 승인→스킬 머지 시간 / 정책을 인용한 PR 리뷰 지적 수 |
@@ -40,9 +40,16 @@
   Edit·Write·MultiEdit·NotebookEdit 도구뿐이다. Bash 쓰기(`sed -i`, 리다이렉트)와 MCP 편집 도구는 거치지 않으며,
   AGENTS.md 가이드와 PR 리뷰가 맡는다. plan.md와 diff의 일치도 훅 대신 PR 리뷰가 본다(p20 7단계는 "고려").
   high-risk 변경의 plan.md 커밋은 가이드다. `HARNESS_PLAN_APPROVED=1`(사람이 설정)은 headless용 통과다.
+  마커는 EnterPlanMode 호출 때, 그리고 plan mode에서 프롬프트가 들어올 때(UserPromptSubmit) 지워진다. 사람이
+  단축키(Shift+Tab)로 plan mode에 들어가면 도구 호출이 없지만, 새 계획을 요청하는 프롬프트에서 옛 승인이 지워진다.
 - **S3.6**: `format_on_edit`의 기본값은 `{}`(no-op)이고, 프로젝트가 포매터를 채워야 동작한다. 비밀 스캔과
-  pre-push는 로컬 git hook이라 사람은 건너뛸 수 있다.
+  pre-push는 로컬 git hook이라 사람은 건너뛸 수 있다. 보호 경로 훅은 Edit·Write·MultiEdit를 대상 경로로 막는다.
+  Bash 분기는 쓰기 표시(`>`, `sed`, `tee`, `mv` 등) 옆 경로를 보는 어림이라 강제로 치지 않는다(원칙 ②).
 - **S4.1**: UI 시각 확인(브라우저·스크린샷 도구)은 프로젝트가 붙인다(가이드). 테스트 파일을 잠그는 훅 대신 리뷰 거절(p32 대안)을 쓴다.
+- **S4.2**: 2026-10-16 측정(baseline / `--mutate`, 각 3회): 라우팅 PASS 3/3 / SURVIVED · plan-first PASS 3/3 / SURVIVED ·
+  승인 뒤 테스트 PASS 3/3 / SURVIVED 1/3 · high-risk 코드 전 계획(질문 없이 답하게 다시 짬) PASS 3/3 / KILLED 3/3 ·
+  사용자 절대경로 없음 PASS 3/3 / SURVIVED. SURVIVED case는 행동 회귀 테스트로 남기고, 잰 지시는 삭제 후보로
+  표시해 사람이 PR에서 정한다(U5 정책). `SURVIVED 1/3`은 변이 실행 3회 중 1회만 실패했다는 뜻이다.
 
 ## 측정 명령
 

@@ -45,18 +45,24 @@ The only system-enforced rules. `hook_intents` in `.agents/harness.json` declare
 | Intent | Event | Matcher | Script | Effect |
 |---|---|---|---|---|
 | `plan_first` | PreToolUse, PostToolUse | `Edit\|Write\|MultiEdit\|NotebookEdit`, `ExitPlanMode\|EnterPlanMode` | `scripts/plan-first.py` | Refuses an edit inside the repo outside `plan_first.exempt_roots` without a marker |
-| `protected_paths` | PreToolUse | `Edit\|Write\|MultiEdit\|Bash` | `scripts/protected-paths-guard.py` | Refuses edits to `protected_paths` |
+| `plan_first` | UserPromptSubmit | — | `scripts/plan-first.py` | Deletes the marker when a prompt is sent while the session is in plan mode |
+| `protected_paths` | PreToolUse | `Edit\|Write\|MultiEdit\|Bash` | `scripts/protected-paths-guard.py` | Refuses Edit/Write/MultiEdit to `protected_paths` by target path; the Bash check is best-effort |
 | `format_on_edit` | PostToolUse | `Edit\|Write\|MultiEdit` | `scripts/format-on-edit.py` | Runs the argv of the first matching `format_on_edit` glob; empty config is a no-op |
 | `secret_scan` | pre-commit | — | `scripts/secret-scan.py` | Refuses a commit whose staged added lines match `secrets.patterns` |
 | `pre_push_test` | pre-push | — | `.husky/pre-push` | Runs the project `test`; refuses the push on failure |
 | `husky_setup` | SessionStart | — | `scripts/harness/ensure-husky.sh` | Not a gate: writes missing `.husky/_` shims so git hooks run in fresh clones and worktrees |
 
 **Plan-first marker.** PostToolUse `ExitPlanMode` (fires only on approval) writes
-`<git-common-dir>/harness/plan-approved/<session_id>`; PostToolUse `EnterPlanMode` deletes it. The
-marker means "this session had a plan approved since its last EnterPlanMode", not "this change's
-plan was approved". Subagents send the parent's `session_id`, so an approved session's implementers
-pass. Paths outside the repo (plan files, scratchpad, memory) are never refused. Headless runs have
-no plan mode: a human sets `HARNESS_PLAN_APPROVED=1`. An unreadable payload is refused.
+`<git-common-dir>/harness/plan-approved/<session_id>`; PostToolUse `EnterPlanMode` deletes it, and
+so does UserPromptSubmit while the session is in plan mode (entering with Shift+Tab calls no tool).
+The marker means "this session had a plan approved since it last entered plan mode" (an
+EnterPlanMode call, or a prompt sent while in plan mode), not "this change's plan was approved".
+Subagents send the parent's `session_id`, so an approved session's implementers pass. "Inside the
+repo" is decided from the target's own git toplevel: every worktree of this repository (same git
+common dir, e.g. `.claude/worktrees/`) is gated like the main tree with its own `docs/changes/`
+exempt, and case-variant spellings of a repo path are gated too. Paths in no repository or another
+one (plan files, scratchpad, memory) are never refused. Headless runs have no plan mode: a human
+sets `HARNESS_PLAN_APPROVED=1`. An unreadable payload is refused.
 
 **Protected paths.** Edit/Write/MultiEdit are checked by target path; Bash by a path next to a write
 marker (`>`, `sed`, `tee`, `mv`, ...), a heuristic. To protect generated files, add an entry such as:
@@ -76,17 +82,21 @@ marker (`>`, `sed`, `tee`, `mv`, ...), a heuristic. To protect generated files, 
 
 Not enforced; guides and PR review (`REVIEW.md`) cover them.
 
-- **Bash writes.** `sed -i`, redirection or `python -c` change files without plan-first. Agents edit
-  files with Edit/Write.
-- **MCP edit tools.** Serena and similar MCP editors bypass the `Edit|Write` matchers, so neither
-  plan-first, protected paths nor the formatter sees them.
+- **Bash writes.** `sed -i`, redirection or `python -c` change files without plan-first, and
+  protected paths sees Bash only through its best-effort heuristic. Agents edit files with
+  Edit/Write.
+- **MCP edit tools.** Serena and similar MCP editors bypass the `Edit|Write|MultiEdit|NotebookEdit`
+  matchers, so neither plan-first, protected paths nor the formatter sees them.
+- **Nested repositories.** plan-first gates only paths whose git common dir is this repository's
+  (the checkout and its worktrees); an independent repository or submodule inside it is not gated.
 - **Hook skipping.** `--no-verify`/`-n` and `git -c core.hooksPath=` skip git hooks.
-  `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` refuse the agent's
-  known spellings by command text only; a human terminal skips anything. Secret scan and pre-push
-  run locally only — no CI runs until a `docs/examples/` file is activated.
-- **Worktrees outside the repo root.** Edits there look outside the repo to plan-first and pass.
+  `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` match command text,
+  so they stop only the hook-skipping spellings they list; another spelling passes, and a human
+  terminal skips anything. Secret scan and pre-push run locally only — no CI runs until a
+  `docs/examples/` file is activated.
 - **Approval variable.** A child `HARNESS_PLAN_APPROVED=1 claude -p …` skips plan-first;
-  `permissions.deny` refuses that text only.
+  `permissions.deny` refuses a command that assigns the variable, by its text only (a script file
+  that sets it passes).
 - **Codex.** No plan-first, protected paths or formatter: Codex follows `AGENTS.md`, skills and git
   hooks.
 

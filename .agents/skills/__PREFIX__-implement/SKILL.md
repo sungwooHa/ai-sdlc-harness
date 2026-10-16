@@ -8,8 +8,9 @@ You are the orchestrator: you keep the conversation with the user, the decisions
 acceptance of results; implementer subagents make the edits.
 
 **Plan-first**: repo edits outside `docs/changes/` are refused until a plan is approved in this
-session. The marker means "this session had a plan approved since its last `EnterPlanMode`", not
-"this change's plan is approved", and subagents share it. Edit files with Edit/Write, never
+session. The marker means "this session had a plan approved since it last entered plan mode" (an
+`EnterPlanMode` call, or a prompt sent while in plan mode), not "this change's plan is approved",
+and subagents share it. Edit files with Edit/Write, never
 through Bash. With no approved plan yet, call `EnterPlanMode`.
 
 ## 1. Save the plan (first step after approval)

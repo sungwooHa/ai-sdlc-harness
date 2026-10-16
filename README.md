@@ -13,6 +13,8 @@ sh scripts/harness/init-template.sh --project-name <name> --prefix <prefix> --ap
 pnpm install                                            # husky가 커밋·푸시 훅을 켠다
 pnpm test:harness
 git config user.name "…" && git config user.email "…"   # 에이전트가 이 이름으로 커밋한다
+rm scripts/harness/init-template.sh                     # init은 한 번만 쓴다
+git add -A && git commit -m "chore: init template"      # 초기화한 트리를 첫 커밋으로 남긴다
 ```
 
 인자와 플레이스홀더 표는 [TEMPLATE_SETUP.md](./TEMPLATE_SETUP.md)에 있다. 그다음 `AGENTS.md`의
@@ -20,6 +22,8 @@ git config user.name "…" && git config user.email "…"   # 에이전트가 �
 
 세션은 `claude`로 연다. 편집 자동 수락(`acceptEdits`) 모드로 열리지만, 이 세션에서 계획을 승인하기
 전에는 plan-first 훅이 저장소 파일 편집을 막는다(`docs/changes/` 아래는 예외).
+계획 승인 화면에서는 auto 선택지 `Yes, and use auto mode`(옛 버전 이름은 `auto-accept edits`)를 고른다.
+`Yes, manually approve edits`를 고르면 구현 중 편집마다 다시 묻는다.
 
 ### 사람 행동 세는 법
 
@@ -32,10 +36,11 @@ git config user.name "…" && git config user.email "…"   # 에이전트가 �
 | # | 사람이 하는 것 | 읽을 것 | 그다음 에이전트 |
 |---|---|---|---|
 | 1 | 입력: `README의 "설치히기"를 "설치하기"로 고쳐줘` | — | plan mode로 들어가 몇 줄짜리 계획을 보인다 |
-| 2 | 승인: 계획 승인 화면에서 auto-accept edits 선택 | 계획(무엇을 고치고 어떻게 확인하나) | `feature/<slug>` 브랜치에서 고치고, 확인하고, 커밋한다 |
+| 2 | 승인: 계획 승인 화면에서 auto 선택지(`Yes, and use auto mode`) 선택 | 계획(무엇을 고치고 어떻게 확인하나) | `feature/<slug>` 브랜치에서 고치고, 확인하고, 커밋한다 |
 
-intent·spec은 건너뛴다. `git add`·`git commit`·`git switch`는 허용 목록에 있어 묻지 않는다.
-푸시와 PR은 사람이 한다(에이전트의 `git push`는 막혀 있다).
+intent·spec은 건너뛴다. 승인 뒤 커밋까지 에이전트가 하므로 `커밋해줘`를 따로 입력하지 않는다.
+`git add`·`git commit`·`git switch`는 허용 목록에 있어 묻지 않는다. 푸시와 PR은 사람이 한다(에이전트의
+`git push`는 막혀 있다).
 
 ### 예 2. 기능 하나(UI 포함) — 사람 행동 6회
 
@@ -46,7 +51,7 @@ intent·spec은 건너뛴다. `git add`·`git commit`·`git switch`는 허용 �
 | 3 | 확인: `좋아` 또는 고칠 점 | `intent.md` 전문 | intent를 커밋하고, `__PREFIX__-spec`이 intent에 남은 열린 질문을 묻는다 |
 | 4 | 답: spec 질문 라운드(intent의 추천 답이 첫 선택지) | 질문과 선택지 | `spec.md`와 UI mock 또는 스크린샷을 만든다 |
 | 5 | 확인: `좋아` 또는 고칠 점 | `spec.md` 전문, mock | spec을 커밋하고, plan mode에서 계획(바뀌는 파일·작업 순서·위험·증명·가치)을 보인다 |
-| 6 | 승인: auto-accept edits 선택 | 계획 | 아래처럼 사람 입력 없이 구현한다 |
+| 6 | 승인: auto 선택지(`Yes, and use auto mode`) 선택 | 계획 | 아래처럼 사람 입력 없이 구현한다 |
 
 6번 뒤 에이전트가 하는 일:
 
@@ -75,7 +80,8 @@ high-risk 변경이다(정의는 `AGENTS.md`의 Guide 절: `apps/*` 둘 이상, 
 
 - 승인은 세션마다다. 세션을 새로 열거나 `/clear` 하면 계획을 다시 승인한다.
 - 계획을 바꾸려면 에이전트에게 다시 계획하라고 말한다. 새 계획은 새 승인을 받는다. 구현 서브에이전트가
-  도는 동안에는 끝나기를 기다린다.
+  도는 동안에는 끝나기를 기다린다. plan mode에 들어가면(Shift+Tab으로 들어가 프롬프트를 보내도) 승인이
+  지워진다.
 - 승인 화면에서 컨텍스트를 비우는 선택지는 피한다. 세션이 바뀌면 승인이 이어지지 않을 수 있다.
 - `claude -p`처럼 plan mode가 없는 실행에서는 사람이 `HARNESS_PLAN_APPROVED=1`을 켠다.
 
@@ -100,9 +106,10 @@ high-risk 변경이다(정의는 `AGENTS.md`의 Guide 절: `apps/*` 둘 이상, 
 `pr.md` 가치 리뷰 — 는 가이드다. 에이전트는 `AGENTS.md`와 스킬로 알고, 사람은 PR에서 `REVIEW.md`로 확인한다.
 에이전트의 `git push`·`--no-verify`는 `.claude/settings.json` deny가 막는다.
 
-빈틈도 있다. plan-first는 Edit/Write 도구만 보므로 Bash로 쓴 파일은 막지 못한다. 비밀 스캔과 pre-push는
-로컬에서만 돈다. CI는 없다 — `docs/examples/`는 켜기 전까지 아무것도 돌리지 않는다. Codex 세션에서는 git 훅만
-돈다.
+빈틈도 있다. plan-first는 Edit/Write 도구만 보므로 Bash로 쓴 파일은 막지 못한다. 보호 경로는 Edit/Write를
+경로로 막고, Bash 명령은 쓰기 표시 옆 경로를 어림으로 볼 뿐이다. deny 목록은 훅을 건너뛰는 커밋의 알려진 철자만
+막는다. 비밀 스캔과 pre-push는 로컬에서만 돈다. CI는 없다 — `docs/examples/`는 켜기 전까지 아무것도
+돌리지 않는다. Codex 세션에서는 git 훅만 돈다.
 
 ## 하네스 바꾸는 법
 

@@ -21,15 +21,15 @@ Each app has its own `AGENTS.md`, loaded when you work under that app.
 - Flow: `__PREFIX__-intent` → `__PREFIX__-spec` → EnterPlanMode → human approval →
   `__PREFIX__-implement` (commits `plan.md`, runs implementers) → `review-since` in a fresh subagent
   (+ `__PREFIX__-ui-review` for UI) → `pr.md` from `docs/changes/_templates/pr.md`. Artifacts live in
-  `docs/changes/<YYMMDD_NN>-<slug>/`, branch `feature/<slug>`. A typo-sized fix skips intent/spec.
-- Agent calls run in the background: wait for each completion notification and check the output
-  before accepting it. Call EnterPlanMode only after background implementers finish: it clears
-  the approval they edit under.
+  `docs/changes/<YYMMDD_NN>-<slug>/`, branch `feature/<slug>`. A typo-sized fix skips intent/spec;
+  after approval it still works on `feature/<slug>`, verifies and commits.
+- Agent calls run in the background: wait for each completion notification, check the output, then
+  accept it. Call EnterPlanMode only after background implementers finish: it clears their approval.
 
 ## Enforced by the system
 - Plan-first (Claude Code hook): Edit/Write to a repo file outside `docs/changes/**` is refused
-  unless this session had a plan approved since its last EnterPlanMode — that is all it means, not
-  that this change's plan was approved. Refused → call EnterPlanMode; never retry through Bash.
+  unless this session had a plan approved since it last entered plan mode — that is all it means,
+  not that this change's plan was approved. Refused → call EnterPlanMode; never retry through Bash.
   Edit files with Edit/Write, never `sed -i`, redirects or scripts. Headless runs use
   `HARNESS_PLAN_APPROVED=1`, set by a human only. Codex has no hook: show the plan, await approval.
 - Protected paths (`.agents/harness.json` `protected_paths`), format-on-edit slot (`format_on_edit`),
@@ -38,7 +38,7 @@ Each app has its own `AGENTS.md`, loaded when you work under that app.
 ## Guide — humans check it in PR review against `REVIEW.md`
 - High-risk = two or more `apps/*`, a shared contract (`packages/**`, `**/openapi.*`, `**/*.proto`,
   `**/migrations/**`) or a security path (`**/auth/**`, `**/permissions/**`, `**/security/**`):
-  commit `intent.md`, `spec.md` and `plan.md` in the change folder; never skip review.
+  commit `intent.md`, `spec.md`, `plan.md` to the change folder before any code edit; never skip review.
 - When the work departs from the plan, update `plan.md` in the same commit.
 - Commits follow `docs/standards/COMMIT_CONVENTION.md`; no `Co-Authored-By`. The human pushes.
 - Ask the human only for decisions (AskUserQuestion, ≤4 per round, recommended option first).
