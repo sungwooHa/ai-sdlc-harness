@@ -2,7 +2,7 @@
 """PreToolUse hook: block agent edits to generated or protected files.
 
 Reads the Claude Code hook payload from stdin and exits 2 (block) when the
-target matches a protected pattern declared in `.agents/harness.yaml`
+target matches a protected pattern declared in `.agents/harness.json`
 `protected_paths`.
 
 Two tool shapes are covered:
@@ -36,7 +36,7 @@ WRITE_MARKERS = {
 
 
 def load_patterns(repo: Path) -> list[dict]:
-    manifest = repo / ".agents" / "harness.yaml"
+    manifest = repo / ".agents" / "harness.json"
     try:
         data = json.loads(manifest.read_text(encoding="utf-8"))
     except Exception:

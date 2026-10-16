@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Unit tests for scripts/harness/vendor-skills.py::stamp_frontmatter.
 
-A vendored skill reached through a project adapter must stay callable by the Skill tool:
-an upstream `disable-model-invocation: true` is rewritten to `user-invocable: false` for
-adapter targets only, and skills without the flag are left untouched.
+A vendored skill reached through a project adapter is stamped `disable-model-invocation: true`
+and loses any `user-invocable` line; non-adapter targets are left untouched.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ UPSTREAM = (
     "---\n"
     "name: to-spec\n"
     "description: \"Turn the conversation into a spec.\"\n"
-    "disable-model-invocation: true\n"
+    "user-invocable: false\n"
     "metadata:\n"
     "  author: upstream\n"
     "  version: 1\n"
@@ -49,22 +48,20 @@ def main() -> int:
 
     out = stamp(UPSTREAM, "x/y", "0123456789abcdef", "skills/to-spec", "to-spec", adapter_target=True)
     lines = frontmatter_lines(out)
-    assert "user-invocable: false" in lines, lines
-    assert not any(l.startswith("disable-model-invocation:") for l in lines), lines
-    assert lines.count("user-invocable: false") == 1, lines
+    assert lines.count("disable-model-invocation: true") == 1, lines
+    assert not any(l.startswith("user-invocable:") for l in lines), lines
     assert "  author: upstream" not in lines, "upstream metadata block must be dropped"
     assert "metadata:" in lines and any(l.startswith("  source:") for l in lines), lines
     assert out.endswith("---\n\nBody.\n"), "body must be preserved"
 
     out = stamp(UPSTREAM, "x/y", "0123456789abcdef", "skills/to-spec", "to-spec", adapter_target=False)
     lines = frontmatter_lines(out)
-    assert "disable-model-invocation: true" in lines, "non-adapter targets keep the upstream flag"
-    assert "user-invocable: false" not in lines, lines
+    assert "user-invocable: false" in lines, "non-adapter targets keep upstream lines"
+    assert "disable-model-invocation: true" not in lines, lines
 
     out = stamp(NO_FLAG, "x/y", "0123456789abcdef", "skills/grilling", "grilling", adapter_target=True)
     lines = frontmatter_lines(out)
-    assert "user-invocable: false" not in lines, "no flag upstream: nothing is added"
-    assert "disable-model-invocation: true" not in lines, lines
+    assert lines.count("disable-model-invocation: true") == 1, "flag is added when upstream has none"
 
     out = stamp(NO_FLAG, "x/y", "0123456789abcdef", "skills/code-review", "review-since", adapter_target=False)
     assert "name: review-since" in frontmatter_lines(out), "`as` rename must still apply"
