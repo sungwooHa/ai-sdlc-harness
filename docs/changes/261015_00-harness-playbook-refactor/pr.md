@@ -30,6 +30,7 @@ pnpm -s test:harness            → 10 suites PASS (init한 복사본에서 전�
 pnpm -s check:harness           → PASS: agent harness check
 evals --runs 3 (4b34a46)        → 5/5 cases PASS 3/3
 evals --mutate --runs 3         → high-risk KILLED 3/3; 4 cases SURVIVED (삭제 후보)
+D20 뒤 재실행 (0a6c698)          → plan-first PASS 3/3, 절대경로 PASS 3/3
 샌드박스 ⓐ–ⓖ (CLI 2.1.301)       → 설계대로; Shift+Tab 빈틈은 확인 후 닫음(0546254)
 REFS git grep / 비테스트 스크립트 한글 → 0 / 0
 ```
