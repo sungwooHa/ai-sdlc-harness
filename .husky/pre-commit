@@ -3,6 +3,11 @@ set -e
 
 # Each line is one gate. Escape hatch for every gate: git commit --no-verify (emergencies only).
 
+# Secret scan: blocks a commit whose staged diff adds a line matching .agents/harness.json
+# secrets.patterns (cloud keys, private key blocks, tokens). Emergency bypass (humans only):
+# git commit --no-verify. Fix a false positive in the pattern, not by bypassing.
+python3 "$(git rev-parse --show-toplevel)/scripts/secret-scan.py" --staged
+
 # Add project gates below, one per line, each with a comment saying what it blocks and how to
 # turn it off. Declare it in .agents/harness.json hook_intents so the harness check
 # fails when it is removed from here. Example:
