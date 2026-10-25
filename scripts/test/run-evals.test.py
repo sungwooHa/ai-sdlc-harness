@@ -15,6 +15,7 @@ side by side: KILLED, SURVIVED (kept, its instruction marked a removal candidate
 run without an answer or a bad declaration. Each case appends one JSON line to the results file. `--jobs N`
 runs copies side by side in case order. The real checkout and the temp directory are left as found.
 The model child receives EOF even when the scripted caller supplies nonempty standard input.
+Normal and nonzero model completion stops owned children while an independent process survives.
 """
 
 from __future__ import annotations
@@ -22,9 +23,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -33,7 +36,7 @@ RUNNER = REPO / "scripts/harness/run-evals.py"
 # Logs its argv, environment and what the copy looks like (one line per call), then prints stream-json events
 # for the prompt and writes what the events say it wrote. The user path is split so no scanner reads it.
 FAKE_CLAUDE = """#!/usr/bin/env python3
-import json, os, subprocess, sys, time
+import json, os, signal, subprocess, sys, time
 from pathlib import Path
 state = Path(os.environ["FAKE_CLAUDE_STATE"])
 prompt = sys.argv[sys.argv.index("-p") + 1]
@@ -45,6 +48,29 @@ git_files = [dot_git] if dot_git.is_file() else [p for p in dot_git.rglob("*") i
 runner_test = Path("scripts/test/run-evals.test.py")  # test:harness names it: must run, skip, leak nothing
 stub = subprocess.run([sys.executable, str(runner_test)], capture_output=True, text=True) if runner_test.is_file() else None
 stdin = sys.stdin.read() if os.environ.get("FAKE_READ_STDIN") else None
+if os.environ.get("FAKE_CHILD_MARKER"):
+    marker = Path(os.environ["FAKE_CHILD_MARKER"])
+    child_code = '''import json, os, signal, sys, time
+from pathlib import Path
+marker = Path(sys.argv[1])
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+pending = marker.with_suffix('.pending')
+pending.write_text(json.dumps({'pid': os.getpid(), 'pgid': os.getpgrp()}))
+pending.replace(marker.with_suffix('.ready'))
+deadline = time.monotonic() + 20
+while not marker.with_suffix('.release').exists() and time.monotonic() < deadline:
+    time.sleep(0.01)
+if marker.with_suffix('.release').exists():
+    marker.write_text('child write after evaluation returned')
+'''
+    child_streams = {} if os.environ.get("FAKE_CHILD_KEEP_PIPES") else {
+        "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    subprocess.Popen([sys.executable, "-c", child_code, str(marker)], stdin=subprocess.DEVNULL, **child_streams)
+    deadline = time.monotonic() + 3
+    while not marker.with_suffix('.ready').exists():
+        if time.monotonic() > deadline:
+            sys.exit('finite child did not start')
+        time.sleep(0.01)
 with (state / "calls.jsonl").open("a", encoding="utf-8") as log:
     log.write(json.dumps({
         "argv": sys.argv[1:], "prompt": prompt, "cwd": os.getcwd(),
@@ -118,6 +144,9 @@ elif prompt.startswith("meet-"):
     if partner.exists():
         tool("Skill", skill=intent)
 emit({"type": "result", "subtype": "success", "is_error": False, "result": "done with " + prompt})
+if os.environ.get("FAKE_STDERR"):
+    print(os.environ["FAKE_STDERR"], file=sys.stderr)
+sys.exit(int(os.environ.get("FAKE_EXIT_CODE", "0")))
 """
 
 # Fails on FAKE_INIT_FAIL; otherwise renames the prefixed skill and fills one placeholder, as the real one does.
@@ -224,10 +253,11 @@ def main() -> int:
                "FAKE_ROOT": str(repo.resolve()), "HARNESS_PLAN_APPROVED": "1"}
         results = state / "results.jsonl"
 
-        def run(*args: str, caller_stdin: str | None = None, **extra: str) -> subprocess.CompletedProcess[str]:
+        def run(*args: str, caller_stdin: str | None = None, test_timeout: float | None = None,
+                **extra: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run([sys.executable, "scripts/harness/run-evals.py", *args], cwd=repo,
                                   env={**env, **extra}, input=caller_stdin,
-                                  capture_output=True, text=True, errors="replace")
+                                  capture_output=True, text=True, errors="replace", timeout=test_timeout)
 
         def line(result: subprocess.CompletedProcess[str], case: str) -> str:
             return next((l for l in result.stdout.splitlines() if l.startswith(case + " ")), "")
@@ -271,6 +301,54 @@ def main() -> int:
                      caller_stdin="SCRIPTED_CALLER_STDIN_NOT_A_PROMPT\n", FAKE_READ_STDIN="1")
         assert result.returncode == 0 and "PASS 1/1" in line(result, "route"), f"{result.stdout}{result.stderr}"
         assert calls()[-1]["stdin"] == "", f"the model child must receive EOF, not caller stdin: {calls()[-1]['stdin']!r}"
+
+        # The CLI can close its pipes and exit while one of its children is still working.
+        # It must not write after the evaluation returns, for either success or nonzero exit.
+        independent = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"],
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, start_new_session=True)
+        cleanup_observations = []
+        try:
+            for exit_code, keep_pipes in ((0, ""), (7, ""), (0, "1"), (7, "1")):
+                marker = state / f"child-{exit_code}-{bool(keep_pipes)}.late"
+                try:
+                    try:
+                        result = run("--only", "route", "--results", str(state / f"{marker.stem}-results.jsonl"),
+                                     test_timeout=5, FAKE_CHILD_MARKER=str(marker), FAKE_EXIT_CODE=str(exit_code),
+                                     FAKE_CHILD_KEEP_PIPES=keep_pipes)
+                    except subprocess.TimeoutExpired:
+                        cleanup_observations.append({"cli_exit": exit_code, "keep_pipes": bool(keep_pipes),
+                                                     "timed_out": True, "independent_alive": independent.poll() is None})
+                        continue
+                    expected = "PASS 1/1" if exit_code == 0 else "FAIL 0/1"
+                    assert result.returncode == (0 if exit_code == 0 else 1) and expected in line(result, "route"), \
+                        f"original exit and trace grading must stay: {result.stdout}{result.stderr}"
+                    if exit_code:
+                        assert "claude exited 7" in result.stdout, result.stdout
+                    marker.with_suffix('.release').touch()  # Only permit the child write after return.
+                    time.sleep(0.3)
+                    cleanup_observations.append({"cli_exit": exit_code, "late_write": marker.exists(),
+                                                 "keep_pipes": bool(keep_pipes), "timed_out": False,
+                                                 "independent_alive": independent.poll() is None})
+                finally:
+                    ready = marker.with_suffix('.ready')
+                    if ready.exists():
+                        child = json.loads(ready.read_text())
+                        try:
+                            if os.getpgid(child['pid']) == child['pgid']:
+                                os.kill(child['pid'], signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+        finally:
+            independent.kill()
+            independent.wait(timeout=3)
+        assert all(not row['timed_out'] and not row['late_write'] and row['independent_alive']
+                   for row in cleanup_observations), \
+            f"only owned children must stop before evaluation completion: {cleanup_observations}"
+        result = run("--only", "route", "--results", str(state / "stderr-results.jsonl"),
+                     FAKE_STDERR="Failed to authenticate. stderr 경계")
+        assert result.returncode == 2 and "/login" in result.stdout and "stderr 경계" in result.stdout, \
+            f"stderr text must still reach authentication handling: {result.stdout}{result.stderr}"
         for flag in ("--login", "--api"):
             result = run("--only", "route", flag)
             assert result.returncode == 2 and "unrecognized arguments" in result.stderr, \
@@ -366,7 +444,7 @@ def main() -> int:
 
     print("PASS: run-evals runner (stream-json trace judging, git-status judging, excluded and initialized copies, "
           "case env and plan-approval drop, subscription login only, critical WARN, --mutate side by side with "
-          "removal candidates, results JSONL, --jobs, caller stdin isolation)")
+          "removal candidates, results JSONL, --jobs, caller stdin isolation, owned child cleanup)")
     return 0
 
 

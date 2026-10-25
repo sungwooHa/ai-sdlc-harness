@@ -42,6 +42,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -291,12 +292,27 @@ def describe(calls: list[tuple[str, dict]], final: str, output: str, copy: Path)
 def run_case(sha: str, case: dict, model: str, max_turns: int, mutate: bool) -> Run:
     copy = make_copy(sha, case, mutate)
     try:
-        res = subprocess.run(
-            ["claude", "-p", case["prompt"], "--model", model, "--max-turns", str(max_turns),
-             "--permission-mode", "auto", "--output-format", "stream-json", "--verbose",
-             "--setting-sources", SETTING_SOURCES, "--no-session-persistence"],
-            cwd=copy, stdin=subprocess.DEVNULL, capture_output=True, text=True, env=child_env(case),
-        )
+        # Files preserve output without waiting for EOF from a descendant's inherited pipe.
+        with tempfile.TemporaryFile(mode="w+t") as stdout_file, tempfile.TemporaryFile(mode="w+t") as stderr_file:
+            process = subprocess.Popen(
+                ["claude", "-p", case["prompt"], "--model", model, "--max-turns", str(max_turns),
+                 "--permission-mode", "auto", "--output-format", "stream-json", "--verbose",
+                 "--setting-sources", SETTING_SOURCES, "--no-session-persistence"],
+                cwd=copy, stdin=subprocess.DEVNULL, stdout=stdout_file, stderr=stderr_file,
+                text=True, env=child_env(case), start_new_session=True,
+            )
+            try:
+                process.wait()
+            finally:
+                # CLI completion does not prove that its directly owned children have exited.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            res = subprocess.CompletedProcess(process.args, process.returncode, stdout_file.read(), stderr_file.read())
         output = res.stdout + res.stderr
         if "Failed to authenticate" in output:
             raise AuthFailure(output.strip().splitlines()[-1][:300] if output.strip() else "authentication failed")
