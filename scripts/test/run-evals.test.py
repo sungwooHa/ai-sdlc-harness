@@ -14,6 +14,7 @@ written files, unknown checks. Critical cases WARN at 2/3, others FAIL. `--mutat
 side by side: KILLED, SURVIVED (kept, its instruction marked a removal candidate in the results), ERROR for a
 run without an answer or a bad declaration. Each case appends one JSON line to the results file. `--jobs N`
 runs copies side by side in case order. The real checkout and the temp directory are left as found.
+The model child receives EOF even when the scripted caller supplies nonempty standard input.
 """
 
 from __future__ import annotations
@@ -43,9 +44,11 @@ dot_git = Path(".git")  # a worktree's .git is a file naming the real checkout
 git_files = [dot_git] if dot_git.is_file() else [p for p in dot_git.rglob("*") if p.is_file()]
 runner_test = Path("scripts/test/run-evals.test.py")  # test:harness names it: must run, skip, leak nothing
 stub = subprocess.run([sys.executable, str(runner_test)], capture_output=True, text=True) if runner_test.is_file() else None
+stdin = sys.stdin.read() if os.environ.get("FAKE_READ_STDIN") else None
 with (state / "calls.jsonl").open("a", encoding="utf-8") as log:
     log.write(json.dumps({
         "argv": sys.argv[1:], "prompt": prompt, "cwd": os.getcwd(),
+        "stdin": stdin,
         "env": sorted(k for k in os.environ if k.startswith(("ANTHROPIC_", "CLAUDE_CODE_"))),
         "approved": os.environ.get("HARNESS_PLAN_APPROVED"),
         "hooks": sorted(h["command"] for gs in settings.get("hooks", {}).values() for g in gs for h in g["hooks"]),
@@ -221,9 +224,10 @@ def main() -> int:
                "FAKE_ROOT": str(repo.resolve()), "HARNESS_PLAN_APPROVED": "1"}
         results = state / "results.jsonl"
 
-        def run(*args: str, **extra: str) -> subprocess.CompletedProcess[str]:
+        def run(*args: str, caller_stdin: str | None = None, **extra: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run([sys.executable, "scripts/harness/run-evals.py", *args], cwd=repo,
-                                  env={**env, **extra}, capture_output=True, text=True, errors="replace")
+                                  env={**env, **extra}, input=caller_stdin,
+                                  capture_output=True, text=True, errors="replace")
 
         def line(result: subprocess.CompletedProcess[str], case: str) -> str:
             return next((l for l in result.stdout.splitlines() if l.startswith(case + " ")), "")
@@ -261,6 +265,12 @@ def main() -> int:
             and record["model"] == "sonnet" and record["model_ids"] == ["fake-model-1"] and record["cli"] == "0.0.1" \
             and record["setting_sources"] == "project,local" and record["user_memory_isolated"] == "unverified" \
             and "mutated" not in record, f"one result line per case: {record}"
+
+        # A scripted caller's stdin (for example a heredoc) must never reach the model process.
+        result = run("--only", "route", "--results", str(state / "stdin-results.jsonl"),
+                     caller_stdin="SCRIPTED_CALLER_STDIN_NOT_A_PROMPT\n", FAKE_READ_STDIN="1")
+        assert result.returncode == 0 and "PASS 1/1" in line(result, "route"), f"{result.stdout}{result.stderr}"
+        assert calls()[-1]["stdin"] == "", f"the model child must receive EOF, not caller stdin: {calls()[-1]['stdin']!r}"
         for flag in ("--login", "--api"):
             result = run("--only", "route", flag)
             assert result.returncode == 2 and "unrecognized arguments" in result.stderr, \
@@ -356,7 +366,7 @@ def main() -> int:
 
     print("PASS: run-evals runner (stream-json trace judging, git-status judging, excluded and initialized copies, "
           "case env and plan-approval drop, subscription login only, critical WARN, --mutate side by side with "
-          "removal candidates, results JSONL, --jobs)")
+          "removal candidates, results JSONL, --jobs, caller stdin isolation)")
     return 0
 
 

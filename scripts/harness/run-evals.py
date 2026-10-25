@@ -295,7 +295,7 @@ def run_case(sha: str, case: dict, model: str, max_turns: int, mutate: bool) -> 
             ["claude", "-p", case["prompt"], "--model", model, "--max-turns", str(max_turns),
              "--permission-mode", "auto", "--output-format", "stream-json", "--verbose",
              "--setting-sources", SETTING_SOURCES, "--no-session-persistence"],
-            cwd=copy, capture_output=True, text=True, env=child_env(case),
+            cwd=copy, stdin=subprocess.DEVNULL, capture_output=True, text=True, env=child_env(case),
         )
         output = res.stdout + res.stderr
         if "Failed to authenticate" in output:
