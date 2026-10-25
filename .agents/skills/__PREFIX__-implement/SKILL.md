@@ -1,6 +1,6 @@
 ---
 name: __PREFIX__-implement
-description: Implement an approved plan under docs/changes/<YYMMDD_NN>-<slug>/ by orchestrating implementer subagents per work unit, then review and write pr.md. Use right after the user approves a plan, or when the user says "구현해", "플랜대로 만들어", "이 티켓 해", "implement".
+description: Implement user-requested repository changes through the approved-plan workflow, using implementer subagents, review and pr.md. Use for implementation, fix or refactoring requests, or executing an approved plan. Exclude explanation, design-comparison and review-only requests.
 argument-hint: "[폴더명] [티켓 제목] — 예 260910_00-<slug>; 생략하면 방금 승인된 plan 의 폴더를 쓴다"
 ---
 

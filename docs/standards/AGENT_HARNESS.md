@@ -5,6 +5,32 @@ How the harness is built and how to change it. Read it before you touch `AGENTS.
 `HARNESS_PRINCIPLES.md`, the playbook mapping in `PLAYBOOK_MAP.md`, the decisions and their
 reasons in `docs/decisions/0000-harness-decisions.md`.
 
+## Requested outcomes
+
+Choose the requested result before starting the implementation flow. The routes below are
+guidance for selecting work and recognizing its finish, not a new permission or execution gate.
+Use the request and existing decisions; do not select a writing route merely because a read-only
+question mentions a bug, feature or plan.
+
+| Requested result | Work and finish |
+|---|---|
+| Investigation or explanation | Answer from the relevant evidence, separating observed facts, inference and missing evidence. Finish with the answer; do not edit the repository. |
+| Design or comparison | Compare relevant alternatives and tradeoffs, recommend a direction and identify unresolved outcome decisions. Do not implement unless the user requested implementation. |
+| Review | Fix the review scope and baseline, inspect the relevant change and report concrete findings and unverified areas. Do not apply fixes unless requested. |
+| Bug fix | Reproduce the reported symptom on an appropriate surface, confirm the cause, make the smallest justified fix and recheck the original symptom and affected regressions. Report an unavailable repro as unverified. |
+| Feature implementation | Derive observable acceptance criteria, implement the requested behavior and verify its completion and applicable failure or recovery paths. Account for each criterion. |
+| Refactoring | Identify the external behavior and contracts to preserve, change the structure and verify that the affected behavior is preserved. |
+
+Combine routes when the requested result needs them. "Compare and propose" ends with a proposal;
+"compare and then implement" includes implementation, subject to the existing writing workflow.
+Do not turn every route transition into an interview or a new approval request. Ask for missing
+outcome decisions that cannot be established from evidence; reuse decisions already given.
+
+Writing routes still follow the existing plan-first, approval, artifact, branch and review rules.
+A requested document edit is writing work too. Selecting a route neither grants permission nor
+satisfies, resets or replaces the plan-first approval marker. Use the existing project skills
+only for the work they serve; no new skill chain or document is required by this routing guide.
+
 ## Changing the harness
 
 1. Name the `PLAYBOOK_MAP.md` row the change moves (row ID, status before → after). An element with

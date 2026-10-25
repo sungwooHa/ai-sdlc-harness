@@ -15,6 +15,7 @@ Each app has its own `AGENTS.md`, loaded when you work under that app.
   A red test you did not cause: compare with a clean checkout before touching it.
 
 ## Workflow — the main session orchestrates
+- Route the requested outcome via `docs/standards/AGENT_HARNESS.md#requested-outcomes` first; the flow below applies to authorized repository edits.
 - Main session: talks to the human, runs the dialogue skills, calls EnterPlanMode/ExitPlanMode,
   decides with the human, synthesizes. Subagents execute: implementers (one per plan unit, parallel
   only on disjoint files), `review-since`, `verifier`. They cannot ask the human: blocked → report.
