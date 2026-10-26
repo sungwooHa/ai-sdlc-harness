@@ -15,12 +15,12 @@ Each app has its own `AGENTS.md`, loaded when you work under that app.
   A red test you did not cause: compare with a clean checkout before touching it.
 
 ## Workflow — the main session orchestrates
-- Route the requested outcome via `docs/standards/AGENT_HARNESS.md#requested-outcomes` first; the flow below applies to authorized repository edits.
+- Route the requested outcome via `docs/standards/AGENT_HARNESS.md#requested-outcomes`; for implementation/fixes/refactoring, read `.agents/skills/__PREFIX__-implement/SKILL.md` before edits/assignment. Existing approval rules apply.
 - Main session: talks to the human, runs the dialogue skills, calls EnterPlanMode/ExitPlanMode,
   decides with the human, synthesizes. Subagents execute: implementers (one per plan unit, parallel
   only on disjoint files), `review-since`, `verifier`. They cannot ask the human: blocked → report.
-- Flow: `__PREFIX__-intent` → `__PREFIX__-spec` → EnterPlanMode → human approval →
-  `__PREFIX__-implement` (commits `plan.md`, runs implementers) → `review-since` in a fresh subagent
+- Flow: select Bug fix/Feature/Refactoring via `__PREFIX__-implement`; prepare required intent/spec → plan mode → human approval →
+  implementation (commits `plan.md`, runs implementers with the selected route) → `review-since` in a fresh subagent
   (+ `__PREFIX__-ui-review` and agent-browser acceptance for web effects) → `pr.md` from `docs/changes/_templates/pr.md`. Artifacts live in
   `docs/changes/<YYMMDD_NN>-<slug>/`, branch `feature/<slug>`. A typo-sized fix skips intent/spec;
   after approval it still works on `feature/<slug>`, verifies and commits.

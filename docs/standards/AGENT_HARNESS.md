@@ -17,9 +17,9 @@ question mentions a bug, feature or plan.
 | Investigation or explanation | Answer from the relevant evidence, separating observed facts, inference and missing evidence. Finish with the answer; do not edit the repository. |
 | Design or comparison | Compare relevant alternatives and tradeoffs, recommend a direction and identify unresolved outcome decisions. Do not implement unless the user requested implementation. |
 | Review | Fix the review scope and baseline, inspect the relevant change and report concrete findings and unverified areas. Do not apply fixes unless requested. |
-| Bug fix | Reproduce the reported symptom on an appropriate surface, confirm the cause, make the smallest justified fix and recheck the original symptom and affected regressions. Report an unavailable repro as unverified. |
-| Feature implementation | Derive observable acceptance criteria, implement the requested behavior and verify its completion and applicable failure or recovery paths. Account for each criterion. |
-| Refactoring | Identify the external behavior and contracts to preserve, change the structure and verify that the affected behavior is preserved. |
+| Bug fix | Select the implementation skill's [Bug fix route](execution/task-routes.md#bug-fix); accept the original repro and affected regression evidence. |
+| Feature implementation | Select its [Feature route](execution/task-routes.md#feature); account for every observable criterion and applicable recovery path. |
+| Refactoring | Select its [Refactoring route](execution/task-routes.md#refactoring); accept the preserved behavior baseline and final equivalence evidence. |
 
 Combine routes when the requested result needs them. "Compare and propose" ends with a proposal;
 "compare and then implement" includes implementation, subject to the existing writing workflow.
@@ -30,6 +30,13 @@ Writing routes still follow the existing plan-first, approval, artifact, branch 
 A requested document edit is writing work too. Selecting a route neither grants permission nor
 satisfies, resets or replaces the plan-first approval marker. Use the existing project skills
 only for the work they serve; no new skill chain or document is required by this routing guide.
+
+The implementation skill reads [task execution routes](execution/task-routes.md) before making
+or assigning edits. Carry the selected route and its repro/criteria/baseline into implementer
+and reviewer prompts. Failed evidence returns to that route before delivery. Project approval,
+artifacts and delegation remain unchanged; upstream TDD seam guidance reuses approved boundaries
+instead of introducing another user confirmation. These are execution instructions, not a hook
+that proves the model followed them; verify actual tool events and resulting artifacts.
 
 ## Web verification branch
 

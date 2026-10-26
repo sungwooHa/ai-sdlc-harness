@@ -13,6 +13,14 @@ session. The marker means "this session had a plan approved since it last entere
 and subagents share it. Edit files with Edit/Write, never
 through Bash. With no approved plan yet, call `EnterPlanMode`.
 
+## 0. Select the execution route
+
+Read `docs/standards/execution/task-routes.md` and select Bug fix, Feature or Refactoring from
+the requested result. Establish its repro/cause, acceptance criteria or preserved-behavior
+baseline before implementation. Read-only preparation can inform the approved plan; it does
+not grant write approval. Keep this route and its evidence in subsequent handoffs. This selects
+work inside the existing approval workflow, without creating an additional skill/artifact chain.
+
 ## 1. Save the plan (first step after approval)
 
 1. Resolve the change folder: `$0`, else the folder the approved plan names; ask when unclear.
@@ -29,14 +37,19 @@ through Bash. With no approved plan yet, call `EnterPlanMode`.
 - Unless the user turned it off, invoke `Skill(__PREFIX__-ponytail)` to look for a simpler design
   within the plan.
 - Spawn one implementer subagent per plan work unit (or the `$1` ticket); run units in parallel
-  only when their file lists are disjoint. Each prompt names the folder, the unit, its files and
-  its Proof commands, and tells the subagent to:
+  only when their files/state are independent and shared dependencies are ready. For a feature,
+  verify the first vertical slice before dependent fan-out. Each prompt names the folder, unit,
+  files, selected task route, repro/criteria/baseline and Proof commands/surface, and tells it to:
   - read `.agents/skills/implement/SKILL.md` and `.agents/skills/tdd/SKILL.md` and follow them,
     test-first at the plan's seams, skipping their review and commit steps (you run those);
+  - apply the selected task route over upstream workflow preferences. Reuse the approved plan's
+    boundaries; choose ordinary test details locally rather than requiring a new user confirmation
+    for each seam. Stop for a material missing decision or scope change, not a routine test choice;
   - climb the test ladder: one test file → its directory → the whole suite once at the end;
   - leave the git index to you, and stop and report when blocked: subagents cannot ask the user.
 - Agent calls run in the background: wait for each completion notification. Verify each output
-  before accepting it — read the diff against the unit's files, re-run its tests — then stage that
+  before accepting it — read the diff, execute its route's repro/criteria/equivalence evidence and
+  appropriate checks against the unit's files — then stage that
   unit's paths and commit per `docs/standards/COMMIT_CONVENTION.md`.
 - When reality departs from the plan, fix `plan.md` in the same commit as the code (and tick the
   finished `## 티켓` row there). Decisions the plan does not cover go to the user.
@@ -50,6 +63,8 @@ Run `/review-since <branch-base>` in a fresh subagent against `spec.md` and `pla
 changes, invoke `Skill(__PREFIX__-ui-review)` for its scope and code/design passes. A declaration
 of no visual change does not exclude changed behavior. Fix blockers and majors as `REVIEW.md`
 defines them through implementer subagents, then re-verify.
+Give the reviewer the selected route and its original repro, feature criteria or preserved baseline.
+Return failed evidence to its owning route before proceeding; a green build alone does not close it.
 
 ## 4. Browser acceptance for web outcomes
 

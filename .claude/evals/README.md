@@ -71,6 +71,31 @@ subscription. The runner aborts on the first authentication failure instead of b
 
 ## Maintenance
 
+### Task-route and orchestration checks
+
+For changes to the implementation procedure, supplement discovery cases with ordinary native
+work under the project's own policy. Use a private source copy, an organic bug/feature/refactor
+request and an external rubric/holdout. Keep expected answers, model/variant labels and grading
+files outside the worker's workspace. Preserve normal auth/settings/hooks/tools and record any
+task-scoped command grants. A runner that removes Agent/browser capabilities cannot establish
+orchestration or interactive acceptance.
+Preserve any parent-session context needed by native delegation. For example, the observed Codex
+CLI's `--ephemeral` lane could not fork its missing parent rollout, while ordinary persistence
+returned a child review. Check that capability before an orchestration run and distinguish a
+failed spawn from a completed review; do not change the user's global configuration to get green.
+
+Inspect actual tool events: procedure/reference reads, pre-edit repro/criteria/baseline, edits,
+verification commands and real delegation. Independently execute the retained artifact and
+check scope/policy integrity. Final wording, a terminal success or a passing build is not enough.
+Preserve negative/permission-limited runs; after a repair, use fresh copies and record all changed
+instructions and protocol settings rather than reporting only green retries.
+
+An unapproved native session may correctly stop at the plan-first boundary. Record that as
+preapproval behavior, separately from postapproval implementation. Do not create a trust or
+approval marker for a normal native session. Use the repository's existing approved workflow
+when available, and report unavailable write/browser execution explicitly. See
+`docs/standards/execution/task-routes.md` and `docs/standards/qc/web-acceptance.md` for acceptance.
+
 `scripts/test/run-evals.test.py` (in `test:harness`, no model use) drives the runner with a fake `claude`
 that prints stream-json, and checks that every real case uses known checks and that each declared
 `measures` text occurs exactly once. Rewording a measured instruction therefore fails `test:harness` until

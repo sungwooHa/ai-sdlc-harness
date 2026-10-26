@@ -7,6 +7,7 @@
 
 - `.agents/harness.json`, `AGENTS.md`, `docs/standards/AGENT_HARNESS.md` — 기존 진입점에서 작업 유형별 경로를 선택하고 참조한다.
 - `.agents/skills/__PREFIX__-implement/SKILL.md`, `docs/standards/execution/task-routes.md` — 유형별 선행 증거·구현자 인계·실패 반환·완료 근거를 연결한다.
+- `.claude/evals/README.md` — 일반 native 실행과 제한된 driver의 검증 경계, 실제 trace·독립 산출물 검사 방식을 연결한다.
 - `docs/changes/_templates/plan.md` — 시각 변화가 없는 보이는 동작도 검수 경계에 포함한다.
 - `docs/standards/PLAYBOOK_MAP.md`, `docs/decisions/0000-harness-decisions.md` — 변경의 근거와 검증 한계를 기록한다.
 - `docs/changes/261026_00-task-execution-routes/plan.md`, `pr.md` — 승인된 범위와 결과를 기록한다.
