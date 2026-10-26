@@ -21,6 +21,8 @@ through Bash. With no approved plan yet, call `EnterPlanMode`.
    `~/.claude/plans/` — as `docs/changes/<YYMMDD_NN>-<slug>/plan.md` and commit it on
    `feature/<work-slug>` before any code edit.
 3. Read `spec.md`, `plan.md` and each affected app's `AGENTS.md`.
+   For user-visible changes, read `__PREFIX__-ui-review` section 1 before editing to scope the
+   journey and rendered reference; web work also prepares `docs/standards/qc/web-acceptance.md`.
 
 ## 2. Implement through subagents
 
@@ -44,11 +46,25 @@ through Bash. With no approved plan yet, call `EnterPlanMode`.
 ## 3. Review
 
 Run `/review-since <branch-base>` in a fresh subagent against `spec.md` and `plan.md`, with
-`REVIEW.md` as the standards source. For UI changes also invoke `Skill(__PREFIX__-ui-review)`
-unless `plan.md` says `시각 변경 없음`. Fix blockers and majors as `REVIEW.md` defines them through
-implementer subagents, then re-verify.
+`REVIEW.md` as the standards source. For user-visible effects, including helper/API/validation
+changes, invoke `Skill(__PREFIX__-ui-review)` for its scope and code/design passes. A declaration
+of no visual change does not exclude changed behavior. Fix blockers and majors as `REVIEW.md`
+defines them through implementer subagents, then re-verify.
 
-## 4. pr.md
+## 4. Browser acceptance for web outcomes
+
+Execute `docs/standards/qc/web-acceptance.md` as a distinct step after code checks/review. Assign
+the outcome, acceptance criteria, final build/URL and authorized test context to a browser-capable
+verifier. If it cannot operate the browser, you perform the browser step; a file/shell-only code
+reviewer cannot replace it. Reuse UI-review evidence only when it executed the required paths on
+this final candidate. Native-only work uses the project's device/emulator procedure; internal-only
+changes skip this branch.
+
+Return browser failures to implementer subagents, then rerun affected journeys/environments.
+Required checks that cannot run stay unverified. Proceed to the report with their exact scope
+and blocker, without calling the web outcome complete; resolving available setup remains yours.
+
+## 5. pr.md
 
 Write `docs/changes/<YYMMDD_NN>-<slug>/pr.md` from `docs/changes/_templates/pr.md`: compare the
 plan's `## Value` with observed results, paste the commands you ran and their output, and keep

@@ -96,7 +96,7 @@
       }
     ],
     "adapters": {
-      "description": "Project skills that wrap vendored skills with this repo's change-folder convention. The adapter reads each mapped skill by path; vendor-skills.py stamps `disable-model-invocation: true` on every map target and drops its `user-invocable` line.",
+      "description": "Project skills that wrap vendored skills with this repo's change-folder convention. The adapter reads each mapped skill by path; vendor-skills.py stamps `disable-model-invocation: true` on every map target and drops its `user-invocable` line. The UI adapter routes visible web behavior to docs/standards/qc/web-acceptance.md, including changes outside UI file globs.",
       "map": {
         "__PREFIX__-intent": [
           "grilling"

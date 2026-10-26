@@ -31,6 +31,17 @@ A requested document edit is writing work too. Selecting a route neither grants 
 satisfies, resets or replaces the plan-first approval marker. Use the existing project skills
 only for the work they serve; no new skill chain or document is required by this routing guide.
 
+## Web verification branch
+
+User-visible web changes, including helper/API/state effects outside UI file globs, enter
+[web acceptance](qc/web-acceptance.md) after implementation and code checks. The implementation
+skill assigns an agent with browser tools or the main agent executes the step. It operates the
+actual journey through completion, fresh persistence read and applicable recovery in three
+viewports. Failures return to implementation and affected paths rerun on the final candidate.
+Missing required execution stays unverified in `pr.md` and delivery. Native-only and internal-only
+work keep their applicable checks. This is a shared Claude/Codex execution guide, not a new hook
+or proof that a browser ran; preserve all existing approval, data and runtime boundaries.
+
 ## Changing the harness
 
 1. Name the `PLAYBOOK_MAP.md` row the change moves (row ID, status before → after). An element with

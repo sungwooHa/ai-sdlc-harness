@@ -15,7 +15,8 @@ folder's spec.md and plan.md; the PR value review of `pr.md` is a separate, late
 | Security & data | Secrets, auth boundaries, real personal data in code, fixtures or tests | `AGENTS.md` Guide; `.agents/harness.json` `secrets` |
 | Compliance | The guide rules below, which no hook enforces | this file |
 | Design system *(conditional)* | Only once the project records a design system: hardcoded tokens, bypassed inventory, exemptions without a reason | that decision |
-| UI quality *(conditional)* | Only for diffs under `__UI_SOURCE_GLOB__` unless plan.md says `시각 변경 없음` | `/__PREFIX__-ui-review` |
+| UI quality *(conditional)* | User-visible effects, including behavior in helpers/API/state outside `__UI_SOURCE_GLOB__` | `/__PREFIX__-ui-review` |
+| Web acceptance *(conditional)* | Were affected journeys executed through completion, fresh read and recovery on the final candidate, with required viewports/input paths? | `docs/standards/qc/web-acceptance.md`; actual browser evidence |
 
 **Compliance pass.** Check each item; the PR is the only place it is checked.
 

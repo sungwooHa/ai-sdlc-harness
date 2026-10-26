@@ -11,7 +11,7 @@ Each app has its own `AGENTS.md`, loaded when you work under that app.
 ## Verifying your work
 - Narrow → wide: one test file, its directory, then the whole suite and typecheck before you report
   done. Paste each command with its output. A failing test means fix the code, not the test.
-- For a bug, write the failing test first. For UI, compare a screenshot with the agreed mock.
+- For a bug, write the failing test first. For web outcomes, execute `docs/standards/qc/web-acceptance.md`; compare UI with the agreed reference.
   A red test you did not cause: compare with a clean checkout before touching it.
 
 ## Workflow — the main session orchestrates
@@ -21,7 +21,7 @@ Each app has its own `AGENTS.md`, loaded when you work under that app.
   only on disjoint files), `review-since`, `verifier`. They cannot ask the human: blocked → report.
 - Flow: `__PREFIX__-intent` → `__PREFIX__-spec` → EnterPlanMode → human approval →
   `__PREFIX__-implement` (commits `plan.md`, runs implementers) → `review-since` in a fresh subagent
-  (+ `__PREFIX__-ui-review` for UI) → `pr.md` from `docs/changes/_templates/pr.md`. Artifacts live in
+  (+ `__PREFIX__-ui-review` and agent-browser acceptance for web effects) → `pr.md` from `docs/changes/_templates/pr.md`. Artifacts live in
   `docs/changes/<YYMMDD_NN>-<slug>/`, branch `feature/<slug>`. A typo-sized fix skips intent/spec;
   after approval it still works on `feature/<slug>`, verifies and commits.
 - Agent calls run in the background: wait for each completion notification, check the output, then

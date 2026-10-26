@@ -23,6 +23,9 @@ Do, in order:
 3. Spec: check the diff against spec.md's user stories and decisions; flag stories the diff
    misses or contradicts.
 4. The remaining `REVIEW.md` passes (conditional ones only when they apply).
+   For web acceptance, inspect the browser executor's raw evidence against
+   `docs/standards/qc/web-acceptance.md`. Your file/shell tools do not establish browser interaction;
+   return missing evidence as unverified to the main agent, which owns browser execution.
 5. Report findings ranked blocker → major → minor as `REVIEW.md` defines them, each with file:line,
    a one-sentence defect, and a concrete failure scenario; questions follow the findings. If
    nothing blocks, say so in one line first.

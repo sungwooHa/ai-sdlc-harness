@@ -54,7 +54,7 @@
 - **S3.6**: `format_on_edit`의 기본값은 `{}`(no-op)이고, 프로젝트가 포매터를 채워야 동작한다. 비밀 스캔과
   pre-push는 로컬 git hook이라 사람은 건너뛸 수 있다. 보호 경로 훅은 Edit·Write·MultiEdit를 대상 경로로 막는다.
   Bash 분기는 쓰기 표시(`>`, `sed`, `tee`, `mv` 등) 옆 경로를 보는 어림이라 강제로 치지 않는다(원칙 ②).
-- **S4.1**: UI 시각 확인(브라우저·스크린샷 도구)은 프로젝트가 붙인다(가이드). 테스트 파일을 잠그는 훅 대신 리뷰 거절(p32 대안)을 쓴다.
+- **S4.1**: 웹은 `docs/standards/qc/web-acceptance.md`의 에이전트 브라우저 실행→실패 반환→재검증을 구현·UI 스킬과 `REVIEW.md`에서 호출한다(가이드). 실제 브라우저·테스트 backend 도구와 네이티브 검증은 프로젝트가 제공한다. 상태는 `Met → Met`이며 실행 효과·결함 재발 감소는 미측정이다. 테스트 파일을 잠그는 훅 대신 리뷰 거절(p32 대안)을 쓴다.
 - **S4.2**: 2026-10-16 측정(baseline / `--mutate`, 각 3회): 라우팅 PASS 3/3 / SURVIVED · plan-first PASS 3/3 / SURVIVED ·
   승인 뒤 테스트 PASS 3/3 / SURVIVED 1/3 · high-risk 코드 전 계획(질문 없이 답하게 다시 짬) PASS 3/3 / KILLED 3/3 ·
   사용자 절대경로 없음 PASS 3/3 / SURVIVED. SURVIVED case는 행동 회귀 테스트로 남기고, 잰 지시는 삭제 후보로
