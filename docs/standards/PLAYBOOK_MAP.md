@@ -34,7 +34,7 @@
 | B3 | 공통 | 결정 기록(ADR) | — | 하네스 결정은 ADR-0000 한 곳, 사용자 결정은 0001부터. 이유: playbook에 결정 기록 play가 없다, "왜"를 다시 조사하지 않게. | `docs/decisions/0000-harness-decisions.md`, `docs/decisions/README.md`, `docs/decisions/_template.md`, `.agents/skills/__PREFIX__-adr/` | Beyond | 하네스 PR 중 ADR-0000을 고친 비율 |
 | B4 | Build | 커밋 메시지 형식 | — | 커밋 형식 가이드. 이유: playbook은 커밋 형식을 정하지 않는다. | `docs/standards/COMMIT_CONVENTION.md`, `.agents/skills/git-commit/` | Beyond | 형식 관련 PR 리뷰 지적 수 |
 | B5 | 공통 | 하네스 자기 검사·기준 문서 | — | 훅 배선·스킬 미러·역할 중복/누락·등록명·adapter 참조/순환·양호스트 호출 metadata·AGENTS.md 길이·이 표의 요소 대응·스크립트 한글을 검사한다. 이유: 하네스 자신의 정합성(원칙 ⓪). | `scripts/check-agent-harness.py`, `.agents/harness.json`, `docs/standards/HARNESS_PRINCIPLES.md`, `docs/standards/PLAYBOOK_MAP.md`, `docs/standards/AGENT_HARNESS.md` | Beyond | `pnpm check:harness` 0 errors |
-| B6 | 공통 | 템플릿 도구 | — | init과 잣대 원본. 이유: GitHub 템플릿 운영용. | `scripts/harness/init-template.sh`, `TEMPLATE_SETUP.md`, `docs/references/anthropic-ai-native-sdlc-playbook.pdf` | Beyond | `bash scripts/test/init-template.test.sh` 통과 |
+| B6 | 공통 | 잣대 원본 | — | 하네스를 판단하는 기준 문서. | `docs/references/anthropic-ai-native-sdlc-playbook.pdf` | Beyond | PDF가 `docs/references/`에 있다(문서 확인) |
 | B7 | 공통 | 그 밖의 vendored 스킬 | — | 필요할 때 부르는 보조 도구. 이유: play에 직접 대응하지 않는다(ponytail은 p29의 code simplifier 예와 가깝지만 서브에이전트가 아닌 스킬). | `.agents/skills/ponytail/`, `.agents/skills/__PREFIX__-ponytail/`, `.agents/skills/draw-diagram/`, `.agents/skills/animation-vocabulary/` | Beyond | 호출 수(세션 trace), 안 쓰이면 뺀다 |
 
 ## 적용과 증거
