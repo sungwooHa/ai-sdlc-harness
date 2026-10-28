@@ -76,10 +76,42 @@ def main() -> int:
     assert "disable-model-invocation: true" in frontmatter_lines(explicit)
     assert explicit.endswith("---\n\nBody.\n")
 
-    host = ('interface:\n  display_name: "Preserved"\n'
-            'dependencies:\n  tools:\n    - type: "mcp"\n      value: "example"\n'
-            'policy:\n  allow_implicit_invocation: true # upstream choice\n'
-            '  future_setting: "preserved"\n')
+    for key, value, duplicate in (("name", "to-spec", "other"),
+                                  ("user-invocable", "false", "true"),
+                                  ("disable-model-invocation", "true", "false")):
+        bad = f"---\nname: to-spec\n{key}: {value}\n{key} : {duplicate}\n---\nBody.\n"
+        if key == "name":
+            bad = bad.replace("name: to-spec\n", "", 1)
+        try:
+            stamp(bad, "x/y", "0123456789abcdef", "skills/to-spec", "to-spec", adapter_target=True)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"duplicate upstream managed key accepted: {key}")
+        bad = f"---\nname: to-spec\n{key}: {value}\n\n# comment\n  continued\n---\nBody.\n"
+        if key == "name":
+            bad = bad.replace("name: to-spec\n", "", 1)
+        try:
+            stamp(bad, "x/y", "0123456789abcdef", "skills/to-spec", "to-spec", adapter_target=True)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"upstream scalar continuation left behind: {key}")
+
+    multiline = UPSTREAM.replace('description: "Turn the conversation into a spec."',
+                                 'description: |\n  Opaque multiline\n  description.')
+    multiline = multiline.replace("name: to-spec", "name : to-spec").replace("user-invocable: false", "user-invocable : true")
+    out = stamp(multiline, "x/y", "0123456789abcdef", "skills/to-spec", "local-spec", adapter_target=True)
+    assert "description: |\n  Opaque multiline\n  description.\n" in out
+    assert "name: local-spec" in frontmatter_lines(out)
+    assert "user-invocable : true" not in out
+    assert frontmatter_lines(out).count("user-invocable: false") == 1
+    assert out.endswith("---\n\nBody.\n")
+
+    host = ('interface:\n  display_name: "Preserved"\n  description: |\n    Multiline interface\n    description.\n'
+            'dependencies:\n  tools:\n    - type: "mcp"\n      value: "example"\n      description: |\n        Multiline dependency.\n'
+            'policy: # preserved\n  allow_implicit_invocation: true # upstream choice\n'
+            '  future_setting: "preserved"\n  future_notes: |\n    Opaque multiline\n    allow_implicit_invocation: text\n')
     expected = host.replace("true # upstream choice", "false # upstream choice")
     assert vendor.stamp_codex_policy(host, False) == expected
     assert vendor.stamp_codex_policy(expected, False) == expected, "overlay must be idempotent"
@@ -87,6 +119,10 @@ def main() -> int:
         'interface:\n  display_name: "Kept"\npolicy:\n')
     for bad in ("policy: {allow_implicit_invocation: true}\n",
                 "policy:\n  allow_implicit_invocation: 'false'\n",
+                "policy:\n  allow_implicit_invocation: false#comment\n",
+                "policy:\n  allow_implicit_invocation: false\n    continued\n",
+                "policy:\n  allow_implicit_invocation: false\n\n  # comment\n    continued\n",
+                "policy:#comment\n  allow_implicit_invocation: false\n",
                 "policy:\n  allow_implicit_invocation: true\n  allow_implicit_invocation: false\n",
                 "policy:\n  allow_implicit_invocation: true\npolicy:\n"):
         try:

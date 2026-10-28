@@ -55,7 +55,20 @@ def stamp_frontmatter(
         # author/version); otherwise the orphaned children fold into the preceding key.
         lines: list[str] = []
         in_metadata = False
+        managed = set()
+        scalar = None
         for l in head.splitlines():
+            key = re.match(r"^(name|user-invocable|disable-model-invocation)[ \t]*:", l)
+            if l.strip() and not l.lstrip().startswith("#"):
+                if scalar and l.startswith((" ", "\t")):
+                    raise ValueError(f"{scalar} must be a single-line frontmatter scalar")
+                scalar = key.group(1) if key else None
+            if re.match(r"^['\"](name|user-invocable|disable-model-invocation)['\"][ \t]*:", l):
+                raise ValueError("managed frontmatter keys must be unquoted")
+            if key:
+                if key.group(1) in managed:
+                    raise ValueError(f"duplicate managed frontmatter key: {key.group(1)}")
+                managed.add(key.group(1))
             if l.startswith("metadata:"):
                 in_metadata = True
                 continue
@@ -65,10 +78,10 @@ def stamp_frontmatter(
             lines.append(l)
         # A skill vendored under a different local name (`as`) must carry that name in its
         # frontmatter, otherwise the host registers it under the upstream name and collides.
-        lines = [f"name: {local_name}" if l.startswith("name:") else l for l in lines]
+        lines = [f"name: {local_name}" if re.match(r"^name[ \t]*:", l) else l for l in lines]
         # Host invocation metadata is a local overlay; upstream bodies stay untouched.
         if role:
-            lines = [l for l in lines if not l.startswith(("user-invocable:", "disable-model-invocation:"))]
+            lines = [l for l in lines if not re.match(r"^(user-invocable|disable-model-invocation)[ \t]*:", l)]
             lines.extend(flags)
         return "---\n" + "\n".join(lines) + "\n" + stamp + "---" + rest
     return "---\n" + f"name: {local_name}\n" + "".join(f"{flag}\n" for flag in flags) + stamp + "---\n\n" + text
@@ -85,24 +98,33 @@ def stamp_codex_policy(text: str, allow_implicit: bool) -> str:
     starts = [i for i, line in enumerate(lines) if re.match(r"^(?:policy|['\"]policy['\"])\s*:", line)]
     if not starts:
         return text + ("" if not text or text.endswith("\n") else "\n") + f"policy:\n  allow_implicit_invocation: {value}\n"
-    if len(starts) != 1 or not re.fullmatch(r"policy:\s*(?:#.*)?\n?", lines[starts[0]]):
+    if len(starts) != 1 or not re.fullmatch(r"policy:(?:[ \t]+(?:#.*)?)?\n?", lines[starts[0]]):
         raise ValueError("Codex policy requires exactly one unquoted block-style mapping")
     start = starts[0]
     end = start + 1
     while end < len(lines) and (not lines[end].strip() or lines[end].startswith((" ", "\t", "#"))):
         end += 1
     flags = []
+    scalar = False
     for index in range(start + 1, end):
         line = lines[index]
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        if line.startswith("\t") or re.match(r"\s*(?:['\"]allow_implicit_invocation['\"]\s*:|<<|\{|\[|[&*!])", line):
+        if scalar and line.startswith(("   ", "\t")):
+            raise ValueError("Codex invocation policy must be a single-line boolean")
+        scalar = False
+        if line.startswith("\t"):
             raise ValueError("unsupported managed Codex policy syntax")
-        if re.match(r"\s*allow_implicit_invocation\s*:", line):
-            match = re.fullmatch(r"(  allow_implicit_invocation: +)(true|false)([ \t]*(?:#.*)?)(\n?)", line)
+        if not line.startswith("  ") or line.startswith("   "):
+            continue  # unrelated policy fields and their nested/multiline values stay opaque
+        if re.match(r"  (?:['\"]allow_implicit_invocation['\"]\s*:|<<|\{|\[|[&*!])", line):
+            raise ValueError("unsupported managed Codex policy syntax")
+        if re.match(r"  allow_implicit_invocation\s*:", line):
+            match = re.fullmatch(r"(  allow_implicit_invocation: +)(true|false)((?:[ \t]+(?:#.*)?)?)(\n?)", line)
             if not match:
                 raise ValueError("Codex invocation policy must be a two-space literal boolean")
             flags.append((index, match))
+            scalar = True
     if len(flags) > 1:
         raise ValueError("duplicate Codex allow_implicit_invocation")
     if flags:

@@ -147,6 +147,14 @@ MUTATIONS = [
      lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "true"))),
     ("Codex quoted boolean", "codex_policy",
      lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "'false'"))),
+    ("Codex hash without whitespace is not a comment", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "false#comment"))),
+    ("Codex folded scalar is not a boolean", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "false\n    continued"))),
+    ("Codex comments do not end a scalar continuation", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "false\n\n  # comment\n    continued"))),
+    ("Codex policy header needs a real comment boundary", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("policy:", "policy:#comment"))),
     ("Codex duplicate policy", "codex_policy",
      lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY + "policy:\n  allow_implicit_invocation: false\n")),
     ("Codex flow policy", "codex_policy",
@@ -163,6 +171,18 @@ MUTATIONS = [
      lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("name: grilling", "name: x-intent"))),
     ("duplicate managed frontmatter key", "skill_metadata",
      lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("name: grilling", "name: grilling\nname: other"))),
+    ("spaced duplicate registration name", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("name: grilling", "name: grilling\nname : other"))),
+    ("spaced duplicate Claude menu flag", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("user-invocable: false", "user-invocable: false\nuser-invocable : true"))),
+    ("spaced duplicate Claude invocation flag", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("disable-model-invocation: true", "disable-model-invocation: true\ndisable-model-invocation : false"))),
+    ("registration name cannot continue onto another line", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("name: grilling", "name: grilling\n  continued"))),
+    ("Claude menu flag must not be a folded scalar", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("user-invocable: false", "user-invocable: false\n  continued"))),
+    ("Claude invocation flag must not be a folded scalar", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("disable-model-invocation: true", "disable-model-invocation: true\n\n# comment\n  continued"))),
     ("unmapped internal must also disable Claude invocation", "skill_policy", unmapped_internal),
     ("missing role configuration", "skill_roles", lambda r: change_skills(r, "invocation", None)),
     ("adapter cycle", {"adapter_target", "skill_roles", "skill_cycle"},
@@ -189,8 +209,11 @@ def main() -> int:
             failures.append(f"passing fixture: exit {code}\n{out}")
         standalone(root)
         write(root, ".agents/skills/grilling/agents/openai.yaml",
-              "# policy: ignored comment\n" + POLICY.replace("false", "false # kept") +
-              "  future_setting: {opaque: true}\ndependencies:\n  tools:\n    - type: mcp\n")
+              "# policy: ignored comment\n" + POLICY.replace("false", "false # kept").replace("policy:", "policy: # kept") +
+              "  future_setting: {opaque: true}\n  future_notes: |\n    opaque multiline\n    allow_implicit_invocation: text\n"
+              "dependencies:\n  tools:\n    - type: mcp\n      description: |\n        multiline dependency\n")
+        write(root, ".agents/skills/grilling/SKILL.md",
+              GRILLING.replace("name: grilling", "name : grilling\ndescription: |\n  opaque multiline\n  content"))
         code, out, codes = run(root)
         if code != 0:
             failures.append(f"standalone alias and opaque metadata must remain valid: exit {code}\n{out}")

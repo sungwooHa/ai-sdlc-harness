@@ -35,14 +35,21 @@ def managed_frontmatter(text: str) -> dict:
     if not front:
         raise ValueError("missing SKILL.md frontmatter")
     fields: dict = {}
+    scalar = None
     for line in front.group(1).splitlines():
-        match = re.match(r"^(name|user-invocable|disable-model-invocation):\s*(.*?)\s*$", line)
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if scalar and line.startswith((" ", "\t")):
+            raise ValueError(f"{scalar} must be a single-line scalar")
+        scalar = None
+        match = re.match(r"^(name|user-invocable|disable-model-invocation)[ \t]*:[ \t]*(.*?)[ \t]*$", line)
         quoted = re.match(r"^['\"](name|user-invocable|disable-model-invocation)['\"]\s*:", line)
         if quoted:
             raise ValueError("managed frontmatter keys must be unquoted")
         if not match:
             continue
         key, value = match.groups()
+        scalar = key
         if key in fields:
             raise ValueError(f"duplicate managed key: {key}")
         value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
@@ -71,23 +78,34 @@ def implicit_policy(text: str) -> bool:
     if len(starts) != 1:
         raise ValueError("exactly one Codex policy block is required")
     start = starts[0]
-    if not re.fullmatch(r"policy:\s*(?:#.*)?", lines[start]):
+    if not re.fullmatch(r"policy:(?:[ \t]+(?:#.*)?)?", lines[start]):
         raise ValueError("use an unquoted block-style policy mapping")
     end = start + 1
     while end < len(lines) and (not lines[end].strip() or lines[end].startswith((" ", "\t", "#"))):
         end += 1
     flags = []
+    scalar = False
     for line in lines[start + 1:end]:
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        if line.startswith("\t") or re.match(r"\s*['\"]allow_implicit_invocation['\"]\s*:", line):
+        if scalar and line.startswith(("   ", "\t")):
+            raise ValueError("allow_implicit_invocation must be a single-line boolean")
+        scalar = False
+        # Only immediate policy children belong to this managed subset. Nested values of
+        # unrelated fields may contain arbitrary multiline text or dependency metadata.
+        if line.startswith("\t"):
             raise ValueError("managed policy uses two spaces and an unquoted key")
-        if re.match(r"\s*allow_implicit_invocation\s*:", line):
-            match = re.fullmatch(r"  allow_implicit_invocation: +(true|false)\s*(?:#.*)?", line)
+        if not line.startswith("  ") or line.startswith("   "):
+            continue
+        if re.match(r"  ['\"]allow_implicit_invocation['\"]\s*:", line):
+            raise ValueError("managed policy uses two spaces and an unquoted key")
+        if re.match(r"  allow_implicit_invocation\s*:", line):
+            match = re.fullmatch(r"  allow_implicit_invocation: +(true|false)(?:[ \t]+(?:#.*)?)?", line)
             if not match:
                 raise ValueError("allow_implicit_invocation must be a block-style literal boolean")
             flags.append(match.group(1) == "true")
-        elif re.match(r"\s*(?:<<|\{|\[|[&*!])", line):
+            scalar = True
+        elif re.match(r"  (?:<<|\{|\[|[&*!])", line):
             raise ValueError("flow or merged policy metadata is unsupported")
     if len(flags) != 1:
         raise ValueError("exactly one allow_implicit_invocation boolean is required")
