@@ -93,10 +93,12 @@ evidence with postapproval implementation. Keep any missing execution explicit.
 | `.claude/agents/` | Subagents (`verifier`) |
 | `.claude/settings.json`, `.husky/*` | Hook wiring and `permissions` |
 | `.codex/config.toml`, `.codex/rules/harness.rules` | Codex configuration and command rules; this template installs no Codex session hooks |
-| `.claude/evals/`, `scripts/harness/run-evals.py` | Behavioural evals (model quota; not in `test:harness`) |
+| `.claude/evals/cases.jsonl`, `scripts/harness/run-evals.py` | Five Claude instruction smokes (model quota; not in `test:harness`) |
+| `.claude/evals/work/`, `scripts/harness/work-evals.py` | Three work-task fixtures and external grading; prepare/inspect/grade support normal-host manual execution |
+| `.github/workflows/harness.yml` | Deterministic PR/manual CI, including fresh-init; no model execution |
 | `docs/changes/` | One committed folder per change; see its README |
 | `docs/decisions/` | ADRs; `0000` is the harness record |
-| `docs/examples/` | Inactive CI and CODEOWNERS examples |
+| `docs/examples/` | Inactive model-eval CI, AI PR review and CODEOWNERS examples |
 | `REVIEW.md` | Review passes and severities |
 
 ## Hooks
@@ -154,8 +156,8 @@ Not enforced; guides and PR review (`REVIEW.md`) cover them.
 - **Hook skipping.** `--no-verify`/`-n` and `git -c core.hooksPath=` skip git hooks.
   `.claude/settings.json` `permissions.deny` and `.codex/rules/harness.rules` match command text,
   so they stop only the hook-skipping spellings they list; another spelling passes, and a human
-  terminal skips anything. Secret scan and pre-push run locally only — no CI runs until a
-  `docs/examples/` file is activated.
+  terminal skips anything. Secret scan and pre-push run locally. Deterministic CI tests their
+  implementation; it does not replay the live staged-diff scan or enforce server branch protection.
 - **Approval variable.** A child `HARNESS_PLAN_APPROVED=1 claude -p …` skips plan-first;
   `permissions.deny` refuses a command that assigns the variable, by its text only (a script file
   that sets it passes).
@@ -189,7 +191,8 @@ hosts' metadata. It accepts the managed policy as a block mapping with literal b
 ambiguous syntax is an error, not a guessed value. It is not a general YAML or semantic verifier.
 Host discovery and useful task execution still require native observation.
 
-For visible behavior, the UI adapter reads its user-journey reference before implementation and
+For visible behavior, the UI adapter reads
+`.agents/skills/__PREFIX__-ui-review/references/user-journey-review.md` before implementation and
 delivery. It selects applicable input, finish and recovery boundaries; web execution remains
 owned by `qc/web-acceptance.md`. Domain rules and routine controls stay with the project.
 
@@ -205,8 +208,39 @@ in `.git/info/exclude` (never `.gitignore`), recreated in each worktree:
 /.agents/skills/local-*
 ```
 
-## CI examples
+## Work-task evidence
+
+Use the [eval protocol](../../.claude/evals/README.md#reusable-real-work-trials) for the three
+synthetic tasks in `.claude/evals/work/`. `work-evals.py prepare` exports a committed candidate
+to an independent repository outside the source. `--ref` selects the harness and `--task-ref`
+selects the fixed task assets, defaulting to the same revision. Keep both source state and the
+private rubric/grader intact through inspection and grading. The worker receives its ordinary
+request and fixture; the manifest records excluded evaluation files and explicit SKIP test stubs.
+
+Run the task in the normal Claude or Codex host with actual authorization and capabilities.
+The helper does not launch a model, start a server or manufacture approval. Retain raw tool
+events and the exit code, then use `inspect` for source/scope integrity and native completion,
+and `grade` for the frozen external behavioral checks. Receipts preserve earlier failures.
+Native completion and behavioral PASS are separate from task acceptance: successful checks
+leave `NEEDS_REVIEW`, with browser/delegation/review evidence still requiring independent
+inspection. A supplied trace alone does not establish its attribution to the worker.
+
+For web cases, execute the required controls, fresh persistence reads and recovery in all three
+viewports under [web acceptance](qc/web-acceptance.md); do not substitute module/HTTP checks.
+Report native preapproval stops separately from approved implementation. These three assets
+and the existing five smokes do not establish the playbook's 20–50 real-work coverage or an
+improvement effect. Record observed final-candidate results and gaps in the active change record.
+
+## Deterministic CI and inactive examples
+
+`.github/workflows/harness.yml` is configured for `pull_request` and `workflow_dispatch` with
+Linux/Python 3.9 and macOS/Python 3.12, Node 22 and pnpm 9. It installs the locked dependencies,
+runs `test:harness` (including fresh-init and work-helper regressions), and checks that tracked
+files remain unchanged. It uses read-only repository access and no model credentials or calls.
+The GitHub-hosted execution is not yet verified; local suite results do not establish remote CI
+success or a required branch-protection check.
 
 `docs/examples/` holds inactive files: `claude-review.yml` (AI PR review with `REVIEW.md`),
 `agent-evals.yml` (evals on harness-config changes) and `CODEOWNERS` (second approver for high-risk
-paths). Activating one is a harness change: move its `PLAYBOOK_MAP.md` row.
+paths). These model/review examples are separate from deterministic CI. Activating one is a
+harness change: update its `PLAYBOOK_MAP.md` row with the actual scope and evidence.

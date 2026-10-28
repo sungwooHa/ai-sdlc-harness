@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "field-repair",
+      "prompt": "직원 추가에서 전화번호와 계좌를 입력하거나 은행을 직접 입력하면 값이 이상해져. 기존 화면과 계약을 확인해서 입력 흐름을 고쳐줘. 저장된 번호와 기본 설정은 보존하고, 근거 없는 경고도 정리해줘.",
+      "fixture": "staff",
+      "allowed_paths": ["apps/app/fields.mjs", "apps/app/app.mjs", "apps/app/index.html", "apps/app/*.test.mjs", "docs/changes/**"],
+      "requires_browser": true
+    },
+    {
+      "id": "batch-finish",
+      "prompt": "직원을 연속으로 작성하다가 그만 입력하고 지금까지 작성한 사람들만 등록하고 싶어. 지금은 다음 입력 화면에서 마무리가 안 돼. 중간에 끊기거나 등록 응답이 안 오는 경우도 기존 저장 계약에 맞게 이어갈 수 있도록 고쳐줘.",
+      "fixture": "staff",
+      "allowed_paths": ["apps/app/state.mjs", "apps/app/app.mjs", "apps/app/index.html", "apps/app/*.test.mjs", "docs/changes/**"],
+      "requires_browser": true
+    },
+    {
+      "id": "behavior-refactor",
+      "prompt": "apps/app의 입력 정규화 CLI에 생성·수정 분기 코드가 반복돼 있어. 기존 입력과 출력, 오류 형식을 유지하면서 중복을 정리해줘. 호출하는 쪽은 바꾸지 않고 동작이 유지되는지도 확인해줘.",
+      "fixture": "normalizer",
+      "allowed_paths": ["apps/app/normalizer.mjs", "apps/app/*.test.mjs", "docs/changes/**"],
+      "requires_browser": false
+    }
+  ]
+}

@@ -78,6 +78,70 @@ These fake-CLI tests establish runner behavior, not an OS sandbox or real authen
 
 ## Maintenance
 
+### Reusable real-work trials
+
+`scripts/harness/work-evals.py` prepares and inspects independent workspaces; it does not
+launch a model, change host settings, grant approval or start a server. The existing
+`run-evals.py` remains the Claude-only instruction smoke runner. The work catalog in
+[work/cases.json](work/cases.json) supplies ordinary requests for field repair, batch
+completion/recovery and behavior-preserving refactoring. These are synthetic regression
+tasks derived from actual failures, not evidence about every product using the template.
+
+Commit the candidate and task assets first. Choose a fresh output directory outside the
+source repository; keep the source unchanged through inspection and grading, including
+operator edits. Preparation exports the selected commit, never dirty/untracked source files.
+It records the original HEAD, index, config and Git-listed working files, initializes an
+independent repository with normal Husky hooks, and overlays only the selected app fixture.
+The grader, rubric, labels and receipts remain outside the worker. Historical change folders
+and `.claude/evals/**` are excluded; the three harness tests that disclose evaluation fixtures
+are replaced with explicit SKIP stubs so the worker's harness command remains runnable.
+These exclusions are recorded and do not count as executing the skipped regressions.
+
+```sh
+python3 scripts/harness/work-evals.py prepare --case field-repair --ref HEAD --output <outside-repo>/trial-a
+# Open the returned worker directory in the normal Claude or Codex host.
+# Give it prompt.txt, actual authorization and relevant project context, not the private rubric.
+# Retain its real raw trace and exit code outside the worker.
+python3 scripts/harness/work-evals.py inspect --trial <outside-repo>/trial-a --host codex --trace <raw-trace.jsonl> --exit-code 0
+python3 scripts/harness/work-evals.py grade --trial <outside-repo>/trial-a
+```
+
+For a control commit that predates these task assets, add `--task-ref <fixed-task-commit>`.
+`--ref` selects the harness instructions; `--task-ref` selects the fixture, catalog, rubric and
+external grader, defaulting to `--ref`. Use the same task commit for control and candidate.
+Both revisions and asset hashes are retained. The grader is verified against that task commit,
+never the mutable working copy or the worker's preferred expected answer.
+
+Use a separate prepared directory for each host, variant or retry. Preserve failed runs;
+receipts append rather than replace an earlier verdict. `inspect` checks full file content,
+including committed worker edits, against allowed app/change-record paths. It records native
+completion separately from correctness; absent/malformed traces or a missing exit code are
+unverified, and native errors/nonzero exits fail. Trace attribution and actual delegation
+still need independent inspection; a supplied trace filename is not proof it belongs to the worker.
+
+`grade` verifies the frozen external grader against its committed source and executes its
+behavioral checks on the final worker. Changed source, harness policy or oracle prevents grading.
+The fixed grader executes candidate code under the operator's normal permissions; private
+directories and post-run checks are not an OS sandbox. It stops its own process group after
+completion or timeout; deliberately detached descendants are outside that cleanup boundary.
+The tool never loads an arbitrary grader command from a worker-controlled file.
+
+Exit codes are 0 for preparation, 1 for a failed integrity/native/behavioral check, 2 for an
+invalid setup or receipt, and 3 for `NEEDS_REVIEW`. Even a behavioral PASS leaves browser and
+independent-review results unverified. For web cases, run the critical journeys through actual
+controls in all three viewports, freshly read the SQLite-backed results, and exercise lost
+response/retry and partial-entry recovery under [web acceptance](../../docs/standards/qc/web-acceptance.md).
+Keep the task-owned database and runtime evidence outside the worker, record the build/data
+boundary, and stop the server after verification. A module test or HTTP request cannot substitute
+for the UI actions. A reviewer inspects the private rubric, real tool events and final artifacts;
+the helper never certifies that review or browser execution from a JSON assertion.
+
+For Claude, use the native interactive approval path when postapproval work is required and
+retain that session for continuation. A print-only denial or preapproval stop is separate evidence;
+do not create trust/approval markers or set the human-only approval variable. For Codex, retain
+parent-session persistence when testing native delegation. Neither host needs a synthetic
+model identity, replacement authentication or reduced tool set for this protocol.
+
 ### End-to-end stage handoffs
 
 For changes to intent/spec/plan/implementation, use

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>직원 관리</title>
+  <style>
+    :root { --primary: #6247ff; --surface: #f4f4f7; --text: #171923; --muted: #626775; --danger: #d82b47; --border: #e8e8ee; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--text); background: white; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 24px 20px; }
+    h1 { font-size: 26px; margin: 12px 0 26px; }
+    h2 { font-size: 18px; margin: 24px 0 12px; }
+    p { margin: 12px 0; }
+    label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+    input, select, button { font: inherit; }
+    input, select { min-width: 0; width: 100%; padding: 15px 12px; border: 1px solid transparent; border-radius: 14px; background: var(--surface); color: var(--text); }
+    input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
+    button { min-height: 46px; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--surface); color: var(--text); cursor: pointer; }
+    button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    button:disabled { opacity: .5; cursor: default; }
+    .primary { background: var(--primary); color: white; font-weight: 700; }
+    .row { display: flex; gap: 10px; align-items: center; }
+    .phone { display: grid; grid-template-columns: 86px 1fr 1fr; gap: 12px; }
+    .field { margin-bottom: 18px; }
+    .top { display: flex; justify-content: space-between; align-items: center; }
+    .quiet { color: var(--muted); font-size: 14px; }
+    .plain { padding: 6px 10px; background: transparent; }
+    .footer { display: flex; gap: 12px; position: sticky; bottom: 0; margin: 24px -20px -24px; padding: 16px 20px max(16px, env(safe-area-inset-bottom)); background: white; border-top: 1px solid var(--border); }
+    .footer > button { flex: 1; }
+    .error { color: var(--danger); background: #fff0f3; padding: 12px; border-radius: 12px; }
+    .notice { background: var(--surface); color: var(--muted); padding: 12px; border-radius: 12px; }
+    .saved { border-bottom: 1px solid var(--border); padding: 14px 0; }
+    .saved strong { display: block; }
+    .empty { padding: 36px 0; color: var(--muted); text-align: center; }
+    details { margin: 24px 0; }
+    summary { cursor: pointer; margin-bottom: 16px; font-weight: 600; }
+    .wide { width: 100%; }
+    @media (max-width: 360px) { main { padding: 20px 14px; } .phone { gap: 8px; grid-template-columns: 76px 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <main id="app"></main>
+  <script type="module" src="/app.mjs"></script>
+</body>
+</html>
