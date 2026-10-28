@@ -229,6 +229,12 @@ pstack의 Bug fix/Feature/Refactoring과 Eval playbook을 참고하되 기존 �
 
 ## 결과와 감수한 비용
 
+2026-10-29 실제 과제의 환류: 필수 브랜치 생성이 거절된 뒤 종속 구현을 계속한 Codex 실행을
+보존하고 implement adapter의 사전조건 성공 확인을 명확히 했다. 정상 검사에서 생긴 ignored
+bytecode의 false FAIL도 수정했다. 제외는 Git-ignored 생성물에 한정하며 tracked·unignored·
+정책 파일은 계속 검사한다. 기존 receipt를 새 판정 기준으로 고쳐 쓰지 않는다. 실제 결과와
+남은 호스트 검증은 `docs/changes/261029_01-harness-learning-loop/pr.md`에 기록한다.
+
 얻는 것: 사람의 주의가 게이트(계획 승인, PR 머지)에 모인다(p9). 요청·승인·산출이 git에 남는다.
 초기 정리의 코드 줄 수 목표는 당시 범위의 기록이다. 이후 검진 확장은 재현된 실패와 회귀 증거로
 정당화하며, 코드 양이나 문서 분량 자체를 품질·생산성 효과로 보고하지 않는다.

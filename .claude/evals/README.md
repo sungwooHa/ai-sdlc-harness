@@ -118,6 +118,10 @@ including committed worker edits, against allowed app/change-record paths. It re
 completion separately from correctness; absent/malformed traces or a missing exit code are
 unverified, and native errors/nonzero exits fail. Trace attribution and actual delegation
 still need independent inspection; a supplied trace filename is not proof it belongs to the worker.
+Inventory excludes only untracked, Git-ignored dependency trees (`node_modules`) and Python
+bytecode (`.pyc`/`.pyo`). Tracked and unignored files, policy files and active Git hook shims
+remain checked. Freeze the helper as well as the source during a run. After changing its
+inventory rules, use a new `prepare`; never rewrite existing receipts to fit the new rules.
 
 `grade` verifies the frozen external grader against its committed source and executes its
 behavioral checks on the final worker. Changed source, harness policy or oracle prevents grading.

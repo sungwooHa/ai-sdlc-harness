@@ -112,24 +112,64 @@ def source_snapshot(root):
     return {"head": git(root, "rev-parse", "HEAD"), "metadata": metadata, "files": files}
 
 
+def ignored_paths(root, names):
+    if not names:
+        return set()
+    result = subprocess.run(["git", "check-ignore", "--no-index", "-z", "--stdin"],
+                            cwd=root, env=clean_env(), capture_output=True, timeout=30,
+                            input=("\0".join(names) + "\0").encode("utf-8", errors="surrogateescape"))
+    if result.returncode not in (0, 1):
+        raise TrialError("git check-ignore failed; inspect the operation separately")
+    return set(result.stdout.decode("utf-8", errors="surrogateescape").split("\0")) - {""}
+
+
+def generated_tree(name):
+    return "node_modules" in PurePosixPath(name).parts
+
+
 def inventory(root):
+    tracked = set(command(["git", "ls-files", "--cached", "-z"], root)
+                  .decode("utf-8", errors="surrogateescape").split("\0")) - {""}
     result, size = {}, 0
+
+    def record(key):
+        nonlocal size
+        path = root / key
+        result[key] = entry(path)
+        if result[key]["type"] == "file":
+            size += path.stat().st_size
+        if len(result) > MAX_FILES or size > MAX_BYTES:
+            raise TrialError("worker inventory exceeds its size limit")
+
     for directory, folders, files in os.walk(root, followlinks=False):
         base = Path(directory)
+        in_generated_tree = generated_tree(base.relative_to(root).as_posix())
         if base == root:
             folders[:] = [name for name in folders if name != ".git"]
+        generated = []
         for name in list(folders):
-            if (base / name).is_symlink():
+            path = base / name
+            key = path.relative_to(root).as_posix()
+            if path.is_symlink():
                 files.append(name)
                 folders.remove(name)
+            elif generated_tree(key):
+                generated.append(key)
         for name in files:
             path = base / name
             key = path.relative_to(root).as_posix()
-            result[key] = entry(path)
-            if result[key]["type"] == "file":
-                size += path.stat().st_size
-            if len(result) > MAX_FILES or size > MAX_BYTES:
-                raise TrialError("worker inventory exceeds its size limit")
+            if (in_generated_tree or path.suffix in (".pyc", ".pyo")) and not path.is_symlink():
+                generated.append(key)
+        ignored = ignored_paths(root, generated)
+        # Prune ignored dependencies without hiding their tracked files or active hooks.
+        folders[:] = [name for name in folders
+                      if (base / name).relative_to(root).as_posix() not in ignored]
+        for name in files:
+            key = (base / name).relative_to(root).as_posix()
+            if key not in ignored:
+                record(key)
+    for key in tracked - result.keys():
+        record(key)
     return result
 
 
@@ -295,6 +335,9 @@ def prepare(root, case_id, ref, output, task_ref=None):
         for key, value in (("user.name", "Work trial"), ("user.email", "trial@example.invalid"),
                            ("commit.gpgsign", "false"), ("core.hooksPath", ".husky/_")):
             git(worker, "config", key, value)
+        # Preserve exported ignored files, including paths renamed by initialization,
+        # before installing generated runtime files that must remain untracked.
+        git(worker, "add", "--force", "--all")
         bootstrap = worker / "scripts/harness/ensure-husky.sh"
         if not bootstrap.is_file():
             raise TrialError("selected source lacks the normal Husky bootstrap")

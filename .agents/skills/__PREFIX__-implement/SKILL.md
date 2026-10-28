@@ -37,7 +37,11 @@ high-risk work also commits intent/spec before code edits as `AGENTS.md` require
 2. Work on `feature/<work-slug>` for every class of change. For standard/high-risk work, save
    the approved plan from conversation or the host's approved plan file as
    `docs/changes/<YYMMDD_NN>-<slug>/plan.md` and commit it on `feature/<work-slug>` before code
-   edits. Preserve the plan's criterion-to-proof mapping and actual approval source.
+   edits. Confirm the required branch and any required plan commit succeeded before assigning
+   implementation or editing code. A failed required prerequisite blocks its dependent work;
+   continue only independent authorized preparation. Recording the failure for a later handoff
+   does not fulfill the prerequisite. Preserve the plan's criterion-to-proof mapping and actual
+   approval source.
 3. For visible behavior, apply `__PREFIX__-ui-review` before editing to scope the journey and
    agreed design reference. Prepare `docs/standards/qc/web-acceptance.md` for web work.
    Internal-only changes retain their ordinary verification.
@@ -107,4 +111,6 @@ Promote a durable rule to its owning standard/AGENTS.md or state `지식 승격 
 `pr.md`, show it in full, and report status, deviations and evidence gaps.
 
 For every task, clean up task-owned runtimes under the project's lifecycle policy. Pushing,
-opening a PR, merging and deployment retain their existing authorization rules.
+opening a PR, merging and deployment retain their existing authorization rules. If a handoff
+is needed, save it only within the task's authorized artifact paths; temporary output is not
+an exception to the task's file scope.
