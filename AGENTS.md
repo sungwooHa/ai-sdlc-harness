@@ -52,7 +52,7 @@ Each app has its own `AGENTS.md`, loaded when you work under that app.
 - Calling EnterPlanMode while implementers run.
 - Accepting a subagent's report unchecked; asking the human for facts the repo can answer.
 - Calling the vendored skills behind `__PREFIX__-*` adapters directly (`grilling`, `to-spec`, ...).
-<!-- Add a line when an agent makes the same mistake twice. -->
+- Repeated mistakes: apply the feedback procedure in `REVIEW.md#repeat-findings`.
 
 ## Harness
 Yardstick: `docs/references/anthropic-ai-native-sdlc-playbook.pdf` via `docs/standards/PLAYBOOK_MAP.md`.

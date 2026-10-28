@@ -51,6 +51,13 @@ are not findings.
 
 ## Repeat findings
 
-When the same class of finding appears in three PRs, it becomes a rule: a line in the relevant
-`apps/<app>/AGENTS.md`, or a hook if it passes the binary criterion in
-`docs/standards/AGENT_HARNESS.md`.
+On the second confirmed occurrence of the same agent mistake, trace the shared cause and update
+the owning instruction or skill; use a hook only if it meets the binary criterion in
+`docs/standards/AGENT_HARNESS.md`. Count distinct occurrences, not duplicate review comments.
+Keep the original failure and expected outcome with the change's evidence. A product defect gets
+a focused product regression; a missed or conflicting instruction also gets a realistic harness
+evaluation when it can distinguish the failure. Verify the affected outcome after the correction.
+
+Keep domain policy in the project. Promote a reusable workflow correction to the common template
+with its originating case, applicable boundary and verification; retain project approval and guard
+policies. A new rule, a structural check or one successful task does not establish reduced recurrence.
