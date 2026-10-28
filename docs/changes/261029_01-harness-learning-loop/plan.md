@@ -48,3 +48,19 @@
 V1: 이미 겪은 실패와 스킬 충돌을 새 프로젝트에서 재사용 가능한 검진으로 만든다.
 V2: 규칙이 있다는 사실과 실제 과제를 해결했다는 증거를 분리해 개선 판단의 신뢰도를 높인다.
 재질문·재작업 감소의 일반 효과는 충분한 대조 실행 전까지 미검증이다.
+
+## 실행 세부화
+
+- A2/A3는 기존 adapter 역할만 선언하고 standalone의 자동 선택 기본값을 유지한다. 내부 스킬의
+  metadata overlay를 vendor 갱신에도 재적용하며 본문·기존 interface/dependencies는 보존한다.
+- A4는 모델 실행기를 추가하지 않고 `scripts/harness/work-evals.py prepare|inspect|grade`로 분리한다.
+  모델·승인·위임·브라우저는 정상 호스트가 수행한다. 준비/종료/자동 계약 판정은 의미·브라우저 성공이 아니다.
+- 과제 3개(field-repair, batch-finish, behavior-refactor)의 catalog/fixture/grader는
+  `.claude/evals/work/`에 둔다. 준비본에는 fixture만 `apps/app/`에 넣고 외부 grader/rubric과
+  정답을 드러내는 평가 자체 테스트는 제외한다. 제외된 테스트는 명시적인 SKIP로 기록한다.
+- 준비 도구는 지정 커밋을 독립 repo로 export하고 원본 HEAD/index/config/작업 bytes, 작업본
+  baseline/수정 범위와 실행 증거를 기록한다. 외부 출력 위치·Git 환경 격리·실패 보존을 회귀검증한다.
+- 웹 fixture는 Python 표준 라이브러리 HTTP/SQLite의 합성 backend와 기존 테마를 제공한다.
+  같은 요청 재시도·결과 조회·저장 후 응답 유실을 실제 컨트롤과 fresh read로 검증한다.
+- Claude의 실제 승인 세션이 없는 headless 실행은 승인 전 검사로 남긴다. 프롬프트·환경 변수·
+  마커 생성으로 승인 후 성공을 만들지 않으며 필요한 개입은 준비된 과제와 함께 설명한다.

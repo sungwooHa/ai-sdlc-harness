@@ -9,15 +9,17 @@ reports in the severities `REVIEW.md` defines.
 
 ## 1. Scope the diff
 
-1. Before implementation, identify the user outcome, normal entry, observable finish and relevant
-   recovery paths. Inspect the existing rendered product and agreed design reference. For web,
-   prepare `docs/standards/qc/web-acceptance.md`. A new screen has no fabricated before image.
+1. Before implementation and again before delivery, read
+   [user journey review](references/user-journey-review.md). Select the affected finish, input and
+   recovery cases from the existing product contract. For web, prepare
+   `docs/standards/qc/web-acceptance.md`. A new screen has no fabricated before image.
 2. Prefer the task-owned diff/baseline when concurrent changes exist; otherwise resolve the base
    (`$0`, else `git merge-base HEAD origin/__INTEGRATION_BRANCH__`). Start at `__UI_SOURCE_GLOB__`
    and follow helpers/API/state changes with visible effects. Stop only when the scope has no
    visible effect; a missing UI-path diff or `시각 변경 없음` alone is insufficient.
-3. Review rendering/behavior against the existing project contract. Include markup, styles and
-   relevant state/validation; apply motion criteria only to changed motion. Keep unrelated logic out.
+3. Review rendering/behavior against the existing project contract and the selected journey cases.
+   Include markup, styles and relevant state/validation; apply motion criteria only to changed
+   motion. Internal-only work uses ordinary code review; it does not need journey cases.
 
 ## 2. Code pass (in this session, one after another)
 
@@ -42,6 +44,6 @@ Native-only changes use the project's device/emulator procedure and report unava
 - Output in __HUMAN_DOC_LANG__: findings ranked blocker → major → minor with the pass that found
   them, then questions, then 미검증 잔여 (skipped passes, with the reason).
 
-Report browser failures before visual findings, and missing execution as unverified. Keep code,
+Report failures to finish, preserve values or recover before visual findings, and missing execution as unverified. Keep code,
 rendered interaction, connected E2E and input-device coverage separate; screenshots alone do
 not complete the journey. Apply any project visual-review procedure alongside this contract.

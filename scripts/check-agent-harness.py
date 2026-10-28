@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Agent harness structural check; text output, exit 1 on any error. Six checks, one method each:
+"""Agent harness structural check; text output, exit 1 on any error:
 hook_intents <-> .claude/settings.json / .husky wiring and scripts; .claude/skills symlink mirror;
 adapter-map targets carry `disable-model-invocation: true`; AGENTS.md <= always_on_max_lines; every
-harness element is named in docs/standards/PLAYBOOK_MAP.md; no Hangul in non-test scripts.
+harness element is named in docs/standards/PLAYBOOK_MAP.md; no Hangul in non-test scripts;
+managed invocation roles, references and Claude/Codex metadata agree.
+Metadata checks are structural, not proof of host discovery or semantic skill quality.
 Files come from `git ls-files` (tracked + untracked-not-ignored): ignored .husky/_ shims never count.
 """
 
@@ -25,6 +27,71 @@ HANGUL = re.compile("[" + chr(0xAC00) + "-" + chr(0xD7A3) + "]")  # escaped so t
 
 def tokens(text: str | None) -> set[str]:
     return {t for t in (text or "").split("|") if t}
+
+
+def managed_frontmatter(text: str) -> dict:
+    """Read only registration/invocation scalars; other upstream YAML is opaque."""
+    front = re.match(r"---\n(.*?)\n---(?:\n|$)", text, re.S)
+    if not front:
+        raise ValueError("missing SKILL.md frontmatter")
+    fields: dict = {}
+    for line in front.group(1).splitlines():
+        match = re.match(r"^(name|user-invocable|disable-model-invocation):\s*(.*?)\s*$", line)
+        quoted = re.match(r"^['\"](name|user-invocable|disable-model-invocation)['\"]\s*:", line)
+        if quoted:
+            raise ValueError("managed frontmatter keys must be unquoted")
+        if not match:
+            continue
+        key, value = match.groups()
+        if key in fields:
+            raise ValueError(f"duplicate managed key: {key}")
+        value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
+        if key != "name":
+            if value not in ("true", "false"):
+                raise ValueError(f"{key} must be a literal boolean")
+            fields[key] = value == "true"
+        else:
+            if value.startswith('"'):
+                value = json.loads(value)
+            elif value.startswith("'") and value.endswith("'"):
+                value = value[1:-1].replace("''", "'")
+            if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+                raise ValueError("name must be a plain or quoted skill registration name")
+            fields[key] = value
+    if "name" not in fields:
+        raise ValueError("missing skill registration name")
+    return fields
+
+
+def implicit_policy(text: str) -> bool:
+    """Read the managed block-style policy only; preserve other host metadata."""
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines)
+              if re.match(r"^(?:policy|['\"]policy['\"])\s*:", line)]
+    if len(starts) != 1:
+        raise ValueError("exactly one Codex policy block is required")
+    start = starts[0]
+    if not re.fullmatch(r"policy:\s*(?:#.*)?", lines[start]):
+        raise ValueError("use an unquoted block-style policy mapping")
+    end = start + 1
+    while end < len(lines) and (not lines[end].strip() or lines[end].startswith((" ", "\t", "#"))):
+        end += 1
+    flags = []
+    for line in lines[start + 1:end]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line.startswith("\t") or re.match(r"\s*['\"]allow_implicit_invocation['\"]\s*:", line):
+            raise ValueError("managed policy uses two spaces and an unquoted key")
+        if re.match(r"\s*allow_implicit_invocation\s*:", line):
+            match = re.fullmatch(r"  allow_implicit_invocation: +(true|false)\s*(?:#.*)?", line)
+            if not match:
+                raise ValueError("allow_implicit_invocation must be a block-style literal boolean")
+            flags.append(match.group(1) == "true")
+        elif re.match(r"\s*(?:<<|\{|\[|[&*!])", line):
+            raise ValueError("flow or merged policy metadata is unsupported")
+    if len(flags) != 1:
+        raise ValueError("exactly one allow_implicit_invocation boolean is required")
+    return flags[0]
 
 
 class Check:
@@ -61,6 +128,7 @@ class Check:
         self.check_hooks(intents)
         self.check_mirror(skills.get("claude_mirror", ".claude/skills"))
         self.check_adapters(skills.get("adapters", {}).get("map", {}))
+        self.check_invocation(skills)
         self.check_always_on(cfg.get("always_on_max_lines", 60))
         self.check_playbook_map(intents)
         self.check_hangul()
@@ -104,13 +172,119 @@ class Check:
                 self.error("skill_mirror", f"{mirror}/{name}", f"must be a symlink to {self.skill_root}/{name}/")
 
     def check_adapters(self, adapter_map: dict[str, list[str]]) -> None:
+        if not isinstance(adapter_map, dict):
+            self.error("adapter_target", CONFIG, "skills.adapters.map must be an object")
+            return
         for adapter, targets in sorted(adapter_map.items()):
+            if not isinstance(targets, list) or any(not isinstance(t, str) for t in targets):
+                self.error("adapter_target", CONFIG, f"{adapter} targets must be a list of skill names")
+                continue
             for target in targets:
                 rel = f"{self.skill_root}/{target}/SKILL.md"
                 front = re.match(r"---\n(.*?)\n---", self.text(rel), re.S) if rel in self.files else None
                 if not (front and re.search(r"^disable-model-invocation:\s*true\s*$", front.group(1), re.M)):
                     self.error("adapter_target", rel, f"mapped by {adapter}: must exist with "
                                "`disable-model-invocation: true` in its frontmatter (the adapter reads it by path)")
+
+    def check_invocation(self, skills: dict) -> None:
+        metadata = {}
+        registrations = {}
+        for name in self.skills:
+            rel = f"{self.skill_root}/{name}/SKILL.md"
+            try:
+                fields = managed_frontmatter(self.text(rel))
+            except (ValueError, OSError) as exc:
+                self.error("skill_metadata", rel, str(exc))
+                continue
+            metadata[name] = fields
+            registered = fields["name"]
+            if registered in registrations:
+                self.error("skill_name", rel, f"registration {registered} also belongs to {registrations[registered]}")
+            registrations[registered] = name
+
+        invocation = skills.get("invocation")
+        if not isinstance(invocation, dict):
+            self.error("skill_roles", CONFIG, "skills.invocation must declare managed roles")
+            return
+        roles = {}
+        before = len(self.errors)
+        for role in ("entrypoints", "internal", "explicit_only"):
+            values = invocation.get(role)
+            if not isinstance(values, list) or any(not isinstance(n, str) or not n for n in values):
+                self.error("skill_roles", CONFIG, f"invocation.{role} must be a list of skill names")
+                roles[role] = set()
+                continue
+            roles[role] = set(values)
+            if len(values) != len(roles[role]):
+                self.error("skill_roles", CONFIG, f"duplicate name in invocation.{role}")
+            for name in roles[role] - set(self.skills):
+                self.error("skill_roles", CONFIG, f"{role} references missing skill {name}")
+        public, internal, explicit = (roles[r] for r in ("entrypoints", "internal", "explicit_only"))
+        if (public & internal) or (public & explicit) or (internal & explicit):
+            self.error("skill_roles", CONFIG, "managed invocation roles must be disjoint")
+        adapters = skills.get("adapters", {}).get("map", {})
+        if not isinstance(adapters, dict):
+            return
+        graph = {}
+        for source, targets in adapters.items():
+            if not isinstance(targets, list) or any(not isinstance(t, str) for t in targets):
+                continue
+            graph[source] = targets
+            if source not in public or not set(targets) <= internal:
+                self.error("skill_roles", CONFIG, f"adapter {source} must connect an entrypoint to internal roles")
+            if len(targets) != len(set(targets)):
+                self.error("skill_roles", CONFIG, f"duplicate adapter target for {source}")
+        visiting, visited = set(), set()
+        def visit(node: str) -> None:
+            if node in visiting:
+                self.error("skill_cycle", CONFIG, f"adapter reference cycle at {node}")
+                return
+            if node in visited:
+                return
+            visiting.add(node)
+            for target in graph.get(node, []):
+                visit(target)
+            visiting.remove(node)
+            visited.add(node)
+        for name in graph:
+            visit(name)
+        if len(self.errors) != before:
+            return
+        adapter_targets = {target for targets in graph.values() for target in targets}
+        for name in sorted(public | internal | explicit):
+            fields = metadata.get(name)
+            if fields is None:
+                continue
+            rel = f"{self.skill_root}/{name}/SKILL.md"
+            if name in public and fields["name"] != name:
+                self.error("skill_name", rel, "project entrypoint registration must match its directory")
+            if name in internal and fields.get("user-invocable") is not False:
+                self.error("skill_policy", rel, "internal references must be hidden from the Claude menu")
+            if name in internal - adapter_targets and fields.get("disable-model-invocation") is not True:
+                self.error("skill_policy", rel, "internal references must disable model invocation")
+            if name in public | explicit and fields.get("user-invocable") is False:
+                self.error("skill_policy", rel, "public skills must remain visible in the Claude menu")
+            if name in explicit and fields.get("disable-model-invocation") is not True:
+                self.error("skill_policy", rel, "explicit-only skills must disable model invocation")
+            if name in public and fields.get("disable-model-invocation") is True:
+                self.error("skill_policy", rel, "automatic entrypoints must allow model invocation")
+            policy_rel = f"{self.skill_root}/{name}/agents/openai.yaml"
+            try:
+                if implicit_policy(self.text(policy_rel)) != (name in public):
+                    raise ValueError(f"allow_implicit_invocation must be {str(name in public).lower()} for this role")
+            except (ValueError, OSError) as exc:
+                self.error("codex_policy", policy_rel, str(exc))
+        for name in sorted(public):
+            rel = f"{self.skill_root}/{name}/SKILL.md"
+            if name not in metadata:
+                continue
+            refs = set(re.findall(re.escape(self.skill_root) + r"/([A-Za-z0-9_-]+)/SKILL\.md", self.text(rel)))
+            for target in refs:
+                if f"{self.skill_root}/{target}/SKILL.md" not in self.files:
+                    self.error("skill_reference", rel, f"missing referenced skill {target}")
+            for target in graph.get(name, []):
+                if target not in refs:
+                    self.error("skill_reference", rel, f"adapter must read {self.skill_root}/{target}/SKILL.md")
 
     def check_always_on(self, limit: int) -> None:
         if "AGENTS.md" in self.files and (lines := len(self.text("AGENTS.md").splitlines())) > limit:

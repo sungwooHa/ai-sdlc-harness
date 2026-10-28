@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """Unit tests for scripts/harness/vendor-skills.py::stamp_frontmatter.
 
-A vendored skill reached through a project adapter is stamped `disable-model-invocation: true`
-and loses any `user-invocable` line; non-adapter targets are left untouched.
+A vendored skill's managed role survives updates without changing its body or unrelated
+host metadata. Standalone skills keep upstream invocation settings.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import base64
+import contextlib
+import io
+import json
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "harness" / "vendor-skills.py"
@@ -49,7 +54,7 @@ def main() -> int:
     out = stamp(UPSTREAM, "x/y", "0123456789abcdef", "skills/to-spec", "to-spec", adapter_target=True)
     lines = frontmatter_lines(out)
     assert lines.count("disable-model-invocation: true") == 1, lines
-    assert not any(l.startswith("user-invocable:") for l in lines), lines
+    assert lines.count("user-invocable: false") == 1, lines
     assert "  author: upstream" not in lines, "upstream metadata block must be dropped"
     assert "metadata:" in lines and any(l.startswith("  source:") for l in lines), lines
     assert out.endswith("---\n\nBody.\n"), "body must be preserved"
@@ -66,7 +71,65 @@ def main() -> int:
     out = stamp(NO_FLAG, "x/y", "0123456789abcdef", "skills/code-review", "review-since", adapter_target=False)
     assert "name: review-since" in frontmatter_lines(out), "`as` rename must still apply"
 
-    print("PASS: vendor-skills stamp_frontmatter tests")
+    explicit = stamp(UPSTREAM, "x/y", "0123456789abcdef", "skills/handoff", "handoff", invocation_role="explicit_only")
+    assert "user-invocable: true" in frontmatter_lines(explicit)
+    assert "disable-model-invocation: true" in frontmatter_lines(explicit)
+    assert explicit.endswith("---\n\nBody.\n")
+
+    host = ('interface:\n  display_name: "Preserved"\n'
+            'dependencies:\n  tools:\n    - type: "mcp"\n      value: "example"\n'
+            'policy:\n  allow_implicit_invocation: true # upstream choice\n'
+            '  future_setting: "preserved"\n')
+    expected = host.replace("true # upstream choice", "false # upstream choice")
+    assert vendor.stamp_codex_policy(host, False) == expected
+    assert vendor.stamp_codex_policy(expected, False) == expected, "overlay must be idempotent"
+    assert vendor.stamp_codex_policy('interface:\n  display_name: "Kept"\n', False).startswith(
+        'interface:\n  display_name: "Kept"\npolicy:\n')
+    for bad in ("policy: {allow_implicit_invocation: true}\n",
+                "policy:\n  allow_implicit_invocation: 'false'\n",
+                "policy:\n  allow_implicit_invocation: true\n  allow_implicit_invocation: false\n",
+                "policy:\n  allow_implicit_invocation: true\npolicy:\n"):
+        try:
+            vendor.stamp_codex_policy(bad, False)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"ambiguous policy accepted: {bad!r}")
+
+    # Exercise the public updater path with an upstream payload. No network or real checkout writes.
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        (root / ".agents").mkdir()
+        (root / ".claude/skills").mkdir(parents=True)
+        manifest = {"skills": {"vendored": [{"source": "github.com/x/y", "skills": ["grilling"]}],
+                              "adapters": {"map": {"demo-intent": ["grilling"]}},
+                              "invocation": {"internal": ["grilling"], "explicit_only": [], "entrypoints": ["demo-intent"]}}}
+        (root / ".agents/harness.json").write_text(json.dumps(manifest))
+        payload = {"skill": NO_FLAG, "host": host}
+        def fake_api(path):
+            if "/commits/" in path:
+                return {"sha": "0123456789abcdef"}
+            if "/git/trees/" in path:
+                return {"tree": [{"type": "blob", "path": "skills/grilling/SKILL.md", "sha": "skill"},
+                                 {"type": "blob", "path": "skills/grilling/agents/openai.yaml", "sha": "host"}]}
+            return {"content": base64.b64encode(payload[path.rsplit("/", 1)[1]].encode()).decode()}
+        old_args = sys.argv
+        try:
+            vendor.ROOT, vendor.SKILL_ROOT, vendor.CLAUDE_ROOT = root, root / ".agents/skills", root / ".claude/skills"
+            vendor.gh_json = fake_api
+            sys.argv = ["vendor-skills.py", "--source", "x/y"]
+            for _ in range(2):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    assert vendor.main() == 0
+                skill = (vendor.SKILL_ROOT / "grilling/SKILL.md").read_text()
+                assert "user-invocable: false" in frontmatter_lines(skill)
+                assert skill.endswith("---\n\nBody.\n")
+                assert (vendor.SKILL_ROOT / "grilling/agents/openai.yaml").read_text() == expected
+                assert (vendor.CLAUDE_ROOT / "grilling").resolve() == (vendor.SKILL_ROOT / "grilling").resolve()
+        finally:
+            sys.argv = old_args
+
+    print("PASS: vendor-skills metadata and updater tests")
     return 0
 
 

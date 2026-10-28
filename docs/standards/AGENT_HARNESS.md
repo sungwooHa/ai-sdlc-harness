@@ -179,6 +179,20 @@ adapters (`__PREFIX__-intent`, `-spec`, `-tickets`, `-implement`) are model-invo
 target carries `disable-model-invocation: true`, stamped by `vendor-skills.py` on import and checked
 by `check:harness`, so an adapter reads the target's `SKILL.md` by path instead of calling it.
 
+`skills.invocation` declares managed entrypoints, internal references and existing explicit-only
+skills. Internal references are hidden from Claude's menu and have Codex
+`policy.allow_implicit_invocation: false`; project entrypoints keep automatic discovery.
+Undeclared standalone skills retain their current policy. These settings control discovery,
+not authorization. Vendor updates reapply the local metadata overlay while preserving bodies.
+The doctor checks role conflicts, registration collisions, adapter references/cycles and both
+hosts' metadata. It accepts the managed policy as a block mapping with literal booleans;
+ambiguous syntax is an error, not a guessed value. It is not a general YAML or semantic verifier.
+Host discovery and useful task execution still require native observation.
+
+For visible behavior, the UI adapter reads its user-journey reference before implementation and
+delivery. It selects applicable input, finish and recovery boundaries; web execution remains
+owned by `qc/web-acceptance.md`. Domain rules and routine controls stay with the project.
+
 **Personal skills.** Keep a skill that is yours out of shared files. Prefer user scope (Claude Code
 reads `~/.claude/skills/`, Codex `~/.agents/skills/`; keep the real directory in one and symlink
 the other); never reuse a team skill's name. A skill that only makes sense in this repo is named
