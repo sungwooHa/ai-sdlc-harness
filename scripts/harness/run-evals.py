@@ -29,9 +29,11 @@ test:harness names it), initialized with INIT_ARGS when the init script is still
 there (a failing init is an ERROR), in a new git repository: no remote and no path back to this checkout,
 which is never changed. Every hook stays. The child runs with `--setting-sources project,local`; whether
 that keeps the user's own memory file out is unverified and recorded so in each result line.
+Git routing overrides reach neither source/copy Git nor the child, including overrides in a case's `env`.
 HARNESS_PLAN_APPROVED reaches the child only when the case's `env` sets it (headless runs have no plan mode
 tools, so a post-approval case sets it). The child runs on the CLI's subscription login only: variables
-that would route it elsewhere are dropped, also from a case's `env`. An authentication failure aborts.
+that would route it elsewhere are dropped, also from a case's `env`. A native authentication failure aborts
+queued model calls; successful error quotations do not. Failed or missing native completion cannot pass.
 """
 
 from __future__ import annotations
@@ -49,6 +51,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Event
 from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -89,6 +92,7 @@ class Run(NamedTuple):
     exit_code: int
     models: set[str]
     cli: str
+    terminal_success: bool = True
 
 
 class AuthFailure(RuntimeError):
@@ -104,7 +108,8 @@ class InitFailure(RuntimeError):
 
 
 def sh(cmd: list[str], cwd: Path, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check, env=env)
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check,
+                          env=copy_env() if env is None else env)
 
 
 def copy_env() -> dict[str, str]:
@@ -116,7 +121,7 @@ def copy_env() -> dict[str, str]:
 def child_env(case: dict) -> dict[str, str]:
     env = {key: value for key, value in copy_env().items() if key != PLAN_APPROVED_ENV}
     env.update(case.get("env", {}))
-    return {key: value for key, value in env.items() if key not in OFF_LOGIN_ENV}
+    return {key: value for key, value in env.items() if key not in OFF_LOGIN_ENV and not key.startswith("GIT_")}
 
 
 def is_json(text: str) -> bool:
@@ -175,7 +180,8 @@ def make_copy(sha: str, case: dict, mutate: bool) -> Path:
     """HEAD's tracked files minus EXCLUDE, initialized, in a new repository: nothing leads back to this checkout."""
     copy = Path(tempfile.mkdtemp(prefix="harness-eval-"))
     try:
-        archive = subprocess.Popen(["git", "archive", "--format=tar", sha], cwd=ROOT, stdout=subprocess.PIPE)
+        archive = subprocess.Popen(["git", "archive", "--format=tar", sha], cwd=ROOT,
+                                   stdout=subprocess.PIPE, env=copy_env())
         subprocess.run(["tar", "-x", "-C", str(copy)], stdin=archive.stdout, check=True, capture_output=True)
         archive.stdout.close()
         if archive.wait():
@@ -224,6 +230,43 @@ def parse_trace(stdout: str) -> tuple[list[tuple[str, dict]], str, set[str], str
         elif event.get("type") == "result":
             final = str(event.get("result", ""))
     return calls, final, models - {""}, cli
+
+
+def native_result(stdout: str, stderr: str, returncode: int) -> tuple[list[str], bool]:
+    """Validate native completion and classify auth only from host failure channels.
+
+    Read/tool payloads and successful final text can quote errors without failing the host.
+    """
+    terminals, failures = [], []
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("type")
+        if kind == "result":
+            terminals.append(event)
+            if event.get("is_error") or event.get("subtype") != "success":
+                failures.append(event)
+        elif kind == "error" or (kind == "assistant" and event.get("error")):
+            failures.append(event)
+    auth = re.compile(r"Failed to authenticate|authentication_error|authentication_failed|"
+                      r"invalid_api_key|not logged in|401 Unauthorized", re.I)
+    for event in failures:
+        if auth.search(json.dumps(event, ensure_ascii=False)):
+            detail = event.get("result") or event.get("message") or event.get("error") or event
+            raise AuthFailure(str(detail)[:300])
+    if returncode and auth.search(stderr):
+        detail = next(line for line in reversed(stderr.splitlines()) if auth.search(line))
+        raise AuthFailure(detail[:300])
+    problems = []
+    if len(terminals) != 1:
+        problems.append(f"native trace has {len(terminals)} terminal results, expected 1")
+    if failures:
+        problems.append("native trace reports an unsuccessful host result")
+    return problems, not problems
 
 
 def written(calls: list[tuple[str, dict]], copy: Path) -> list[str]:
@@ -314,16 +357,15 @@ def run_case(sha: str, case: dict, model: str, max_turns: int, mutate: bool) -> 
             stderr_file.seek(0)
             res = subprocess.CompletedProcess(process.args, process.returncode, stdout_file.read(), stderr_file.read())
         output = res.stdout + res.stderr
-        if "Failed to authenticate" in output:
-            raise AuthFailure(output.strip().splitlines()[-1][:300] if output.strip() else "authentication failed")
+        trace_problems, terminal_success = native_result(res.stdout, res.stderr, res.returncode)
         calls, final, models, cli = parse_trace(res.stdout)
-        problems = judge(case.get("expect", {}), calls, changed_paths(copy), copy)
+        problems = trace_problems + judge(case.get("expect", {}), calls, changed_paths(copy), copy)
         if res.returncode != 0:
             problems.insert(0, f"claude exited {res.returncode}")
         words = describe(calls, final, output, copy)
     finally:
         shutil.rmtree(copy, ignore_errors=True)
-    return Run(not problems, problems, words, res.returncode, models, cli)
+    return Run(not problems, problems, words, res.returncode, models, cli, terminal_success)
 
 
 def collect(futures: list) -> tuple[list[Run], str]:
@@ -347,7 +389,7 @@ def baseline_verdict(runs: list[Run], n: int, critical: bool) -> tuple[str, bool
 
 
 def mutated_verdict(runs: list[Run], n: int) -> tuple[str, bool]:
-    crashed = sum(run.exit_code != 0 for run in runs)
+    crashed = sum(run.exit_code != 0 or not run.terminal_success for run in runs)
     if crashed:  # no answer (a usage limit, a crash) proves nothing either way
         return f"ERROR {crashed}/{n} runs got no answer", False
     killed = sum(not run.ok for run in runs)
@@ -376,8 +418,20 @@ def main() -> int:
     n, failures = args.runs, 0
     print(f"{'case':<32} {'baseline':<14} mutated" if args.mutate else f"{'case':<32} result", flush=True)
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        authentication_failed = Event()
+
+        def execute(case: dict, mutate: bool) -> Run:
+            if authentication_failed.is_set():
+                raise AuthFailure("remaining model calls cancelled after an authentication failure")
+            try:
+                return run_case(sha, case, args.model, args.max_turns, mutate)
+            except AuthFailure:
+                # Set this in the worker before it can pick up another queued model call.
+                authentication_failed.set()
+                raise
+
         def submit(case: dict, mutate: bool) -> list:
-            return [pool.submit(run_case, sha, case, args.model, args.max_turns, mutate) for _ in range(n)]
+            return [pool.submit(execute, case, mutate) for _ in range(n)]
         planned = [(case, submit(case, False), submit(case, True) if args.mutate and case.get("measures") else [])
                    for case in cases]
         try:
@@ -408,7 +462,7 @@ def main() -> int:
                             mutated, mut_ok = mutated_verdict(mut, n)
                             base += mut
                             for i, run in enumerate(mut, 1):
-                                if run.exit_code != 0:
+                                if run.exit_code != 0 or not run.terminal_success:
                                     notes += [f"mutated run {i}: {p}" for p in run.problems + [run.words]]
                                 elif run.ok:
                                     notes.append(f"mutated run {i}: passed without the measured instruction\n{run.words}")

@@ -96,7 +96,7 @@
       }
     ],
     "adapters": {
-      "description": "Project skills that wrap vendored skills with this repo's change-folder convention. The adapter reads each mapped skill by path; vendor-skills.py stamps `disable-model-invocation: true` on every map target and drops its `user-invocable` line. The implement adapter selects docs/standards/execution/task-routes.md before assigning work. The UI adapter routes visible web behavior to docs/standards/qc/web-acceptance.md, including changes outside UI file globs.",
+      "description": "Project skills apply docs/standards/execution/stage-handoffs.md for outcome decisions, observable criteria, executable plans and accepted evidence. The adapters read each mapped vendored skill by path; vendor-skills.py stamps disable-model-invocation on map targets. The implement adapter selects docs/standards/execution/task-routes.md before assigning work. Visible web effects enter docs/standards/qc/web-acceptance.md, including helpers outside UI file globs. Artifact, approval and hook policies remain in force.",
       "map": {
         "__PREFIX__-intent": [
           "grilling"

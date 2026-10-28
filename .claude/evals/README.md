@@ -69,7 +69,49 @@ account or credential (a Console login, a key helper, an active credentials prof
 remove the key helper setting, turn the profile off (`ant auth logout`), then `/login` with your
 subscription. The runner aborts on the first authentication failure instead of burning every case.
 
+The runner distinguishes successful content from native failure channels. Quoted error names in
+a successful response or tool result are task content, not authentication failure. A native
+terminal error, missing terminal success or nonzero CLI result cannot pass by merely attempting
+a matching tool call. Git routing variables are removed from copy preparation, execution and
+case-provided environment overlays; integrity tests verify source HEAD, index, config and bytes.
+These fake-CLI tests establish runner behavior, not an OS sandbox or real authentication.
+
 ## Maintenance
+
+### End-to-end stage handoffs
+
+For changes to intent/spec/plan/implementation, use
+`docs/standards/execution/stage-handoffs.md` and observe the connected process, not four isolated
+documents. Freeze the final instruction hashes, task, authorized settings and external rubric
+before native calls. Use one realistic request with meaningful finish/interruption/recovery
+criteria; keep grader, expected solution and model/variant labels outside each worker's context.
+
+1. Intent captures the actual decisions and unresolved material choices. Give a later worker
+   the resulting record and relevant repository context, not a reconstruction of hidden dialogue.
+2. Specification preserves those decisions as observable acceptance criteria. An independent
+   reader checks for lost constraints and missing finish/error cases before planning.
+3. Planning maps each criterion to a feasible change and proof. Check backend/account/browser,
+   delegation and cleanup capabilities before promising those checks.
+4. After actual approval, implementation and fresh review consume the same criteria and proof
+   context. Independently execute the final artifact. Web work follows browser acceptance.
+5. Challenge a missing outcome, a missing behavior case, infeasible proof setup and an observed
+   implementation failure. Check that each returns to its owning stage without reopening
+   settled decisions. Preserve failed/denied attempts and inspect actual returned tool results.
+
+Judge decision continuity, independently understandable behavior, feasible proof, correct
+handoffs/returns and reporting accuracy separately. Use pass/fail/unverified per criterion.
+Grading an attempted tool call or a named skill is not evidence of successful execution.
+Record preapproval stops separately when native human approval cannot be supplied; do not set
+the human-only environment variable or fabricate trust/markers to complete this lane.
+
+This is a native verification protocol, not another automatic runner or enforced gate. The
+bundled runner remains Claude-only. Codex and cross-stage execution need their normal host
+tools and separately retained evidence. A few tasks are smoke coverage, not a productivity estimate.
+An improvement comparison additionally needs the same task/settings/permissions on control and
+candidate, sanitized outputs and a judge blind to model/variant. Inspect all artifacts yourself
+against that verdict. Natural project test/eval files can disclose context; report that limit
+rather than calling an ordinary source-copy trial perfectly blinded.
+The design references [pstack's Eval playbook](https://github.com/cursor/plugins/blob/main/pstack/skills/poteto-mode/playbooks/eval.md).
 
 ### Task-route and orchestration checks
 

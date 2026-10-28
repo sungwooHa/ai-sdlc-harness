@@ -7,6 +7,7 @@
 
 - .agents/harness.json (설명), AGENTS.md, CLAUDE.md, REVIEW.md — 공통 단계/호스트 진입 안내
 - .agents/skills/__PREFIX__-{intent,spec,tickets,implement}/SKILL.md — 책임·호출·인계·재질문 경계
+- .agents/skills/__PREFIX__-ponytail/SKILL.md, .claude/agents/verifier.md — 기존 routine 산출물 예외를 하위 소비자에도 적용
 - docs/standards/execution/stage-handoffs.md, docs/standards/execution/task-routes.md — 단계 계약과 실패 반환
 - docs/changes/_templates/{intent,spec,plan,pr}.md, docs/changes/README.md — 인수 기준과 증거 연결
 - scripts/harness/run-evals.py, scripts/test/run-evals.test.py — 공통 실행기 오류/환경 격리 및 실질 회귀

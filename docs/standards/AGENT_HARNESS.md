@@ -21,6 +21,11 @@ question mentions a bug, feature or plan.
 | Feature implementation | Select its [Feature route](execution/task-routes.md#feature); account for every observable criterion and applicable recovery path. |
 | Refactoring | Select its [Refactoring route](execution/task-routes.md#refactoring); accept the preserved behavior baseline and final equivalence evidence. |
 
+Read [stage handoffs](execution/stage-handoffs.md) when preparing intent/spec/plan or implementing.
+It assigns outcome decisions to intent, observable behavior to spec, executable work/proof to
+plan and final evidence to implementation. Carry settled decisions and criterion references
+forward; preserve existing artifacts and approval instead of creating another gate.
+
 Combine routes when the requested result needs them. "Compare and propose" ends with a proposal;
 "compare and then implement" includes implementation, subject to the existing writing workflow.
 Do not turn every route transition into an interview or a new approval request. Ask for missing
@@ -49,6 +54,19 @@ Missing required execution stays unverified in `pr.md` and delivery. Native-only
 work keep their applicable checks. This is a shared Claude/Codex execution guide, not a new hook
 or proof that a browser ran; preserve all existing approval, data and runtime boundaries.
 
+## Cross-host execution
+
+The stage and task contracts define shared responsibilities. Use the host's actual question,
+planning and delegation tools or ordinary dialogue and file reads. A Claude-only tool name is
+not a dependency for Codex. If a skill is not discoverable, read its canonical file directly.
+The main agent owns material questions, approval scope and acceptance; delegate only to
+available capabilities and accept actual returned status/results.
+
+This template installs Claude session hooks and common Git hooks. It does not install
+corresponding Codex session hooks: describe that repository wiring, not a product-wide claim
+that Codex has no hooks. Never manufacture trust or approval markers to join preapproval
+evidence with postapproval implementation. Keep any missing execution explicit.
+
 ## Changing the harness
 
 1. Name the `PLAYBOOK_MAP.md` row the change moves (row ID, status before → after). An element with
@@ -74,7 +92,7 @@ or proof that a browser ran; preserve all existing approval, data and runtime bo
 | `.agents/skills/`, `.claude/skills/` | Skill root and its symlink mirror |
 | `.claude/agents/` | Subagents (`verifier`) |
 | `.claude/settings.json`, `.husky/*` | Hook wiring and `permissions` |
-| `.codex/config.toml`, `.codex/rules/harness.rules` | Codex: no hooks; rules forbid push, hook-skipping commits and `git -c`/`-C` |
+| `.codex/config.toml`, `.codex/rules/harness.rules` | Codex configuration and command rules; this template installs no Codex session hooks |
 | `.claude/evals/`, `scripts/harness/run-evals.py` | Behavioural evals (model quota; not in `test:harness`) |
 | `docs/changes/` | One committed folder per change; see its README |
 | `docs/decisions/` | ADRs; `0000` is the harness record |
@@ -141,8 +159,8 @@ Not enforced; guides and PR review (`REVIEW.md`) cover them.
 - **Approval variable.** A child `HARNESS_PLAN_APPROVED=1 claude -p …` skips plan-first;
   `permissions.deny` refuses a command that assigns the variable, by its text only (a script file
   that sets it passes).
-- **Codex.** No plan-first, protected paths or formatter: Codex follows `AGENTS.md`, skills and git
-  hooks.
+- **Codex wiring.** This template installs no Codex plan-first, protected-path or formatter
+  session hooks. Codex follows `AGENTS.md`, skills and the configured Git hooks.
 
 ## Skills
 

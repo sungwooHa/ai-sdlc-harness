@@ -1,136 +1,141 @@
-# __PROJECT_NAME__
+# AI SDLC Harness
 
-코딩 에이전트(Claude Code · Codex)가 Anthropic "AI-Native SDLC Playbook" 방식으로 일하게 만드는 개발 하네스다.
-사람은 요청하고, 결정하고, 계획을 승인하고, PR을 본다. 사실 조사·구현·테스트·리뷰는 에이전트가 한다.
-이 저장소는 GitHub 템플릿이다. 프로젝트 고유 값은 `__UPPER_SNAKE__` 플레이스홀더로 비어 있다.
+Claude Code와 Codex로 여러 프로젝트를 개발하면서 개선하는 재사용 GitHub 템플릿입니다.
+사람은 목표·정책·위험을 결정하고 계획과 PR을 검토합니다. 에이전트는 저장소 사실 조사,
+구현 방법 선택, 구현·테스트·리뷰와 실제 동작 검증을 맡습니다.
 
-## 처음 시작하기
+그릴링에서 정한 결과가 스펙의 인수 기준, 계획의 실행 방법, 구현의 증거로 이어지도록 합니다.
+프로젝트의 도메인 규칙은 각 저장소에 두고, 여러 프로젝트에서 유효한 개선을 이 템플릿으로 환류합니다.
+Anthropic AI-Native SDLC Playbook을 기준으로 삼고 pstack의 작업 분기·실제 작업 평가 방식을 참고합니다.
+일반적인 생산성 개선이나 두 호스트의 동일한 실행 보장을 입증한 상태는 아닙니다.
 
-### 설치 (한 번)
+## 시작하기
+
+GitHub의 **Use this template**으로 새 저장소를 만들고 클론합니다.
+Git, Python 3.9 이상, Node.js 22.12 이상, pnpm 9가 필요합니다.
+Claude Code 또는 Codex는 사용할 호스트만 설치하고 기존 계정으로 로그인합니다.
 
 ```sh
-sh scripts/harness/init-template.sh --project-name <name> --prefix <prefix> --app <app>
-pnpm install                                            # husky가 커밋·푸시 훅을 켠다
+sh scripts/harness/init-template.sh \
+  --project-name acme --prefix acme --app web
+pnpm install
 pnpm test:harness
-git config user.name "…" && git config user.email "…"   # 에이전트가 이 이름으로 커밋한다
-rm scripts/harness/init-template.sh                     # init은 한 번만 쓴다
-git add -A && git commit -m "chore: init template"      # 초기화한 트리를 첫 커밋으로 남긴다
 ```
 
-인자와 플레이스홀더 표는 [TEMPLATE_SETUP.md](./TEMPLATE_SETUP.md)에 있다. 그다음 `AGENTS.md`의
-`## Commands`를 이 저장소의 test·typecheck 명령으로 채운다.
+초기화는 프로젝트명·스킬 접두사·예시 앱·브랜치 등 플레이스홀더를 치환합니다.
+템플릿의 작업 기록은 지우고 하네스 표준·ADR·산출물 템플릿은 남깁니다.
 
-세션은 `claude`로 연다. 편집 자동 수락(`acceptEdits`) 모드로 열리지만, 이 세션에서 계획을 승인하기
-전에는 plan-first 훅이 저장소 파일 편집을 막는다(`docs/changes/` 아래는 예외).
-계획 승인 화면에서는 auto 선택지 `Yes, and use auto mode`(옛 버전 이름은 `auto-accept edits`)를 고른다.
-`Yes, manually approve edits`를 고르면 구현 중 편집마다 다시 묻는다.
+그다음 실제 앱의 test·typecheck 명령과 규칙을 설정하고 첫 커밋을 만듭니다.
+인자, 설정할 파일과 초기화 절차는 [TEMPLATE_SETUP.md](TEMPLATE_SETUP.md)에 있습니다.
+템플릿 자체의 `package.json` 기본 test는 하네스 검사이므로 앱 검증 명령으로 교체해야 합니다.
 
-### 사람 행동 세는 법
+## 네 단계의 책임
 
-요청을 입력한 때부터 에이전트가 브랜치에 마지막 커밋을 할 때까지, 사람이 입력하거나 골라야 세션이
-다음으로 넘어가는 지점을 하나씩 센다 — 메시지, 질문 라운드 답, 문서 확인, 계획 승인, 권한 프롬프트.
-읽기는 그다음 입력에 포함하고, 푸시·PR 열기·머지는 세지 않는다. 목표는 예 1이 2회 이하, 예 2가 6회 이하다.
-
-### 예 1. 오타 한 줄 — 사람 행동 2회
-
-| # | 사람이 하는 것 | 읽을 것 | 그다음 에이전트 |
-|---|---|---|---|
-| 1 | 입력: `README의 "설치히기"를 "설치하기"로 고쳐줘` | — | plan mode로 들어가 몇 줄짜리 계획을 보인다 |
-| 2 | 승인: 계획 승인 화면에서 auto 선택지(`Yes, and use auto mode`) 선택 | 계획(무엇을 고치고 어떻게 확인하나) | `feature/<slug>` 브랜치에서 고치고, 확인하고, 커밋한다 |
-
-intent·spec은 건너뛴다. 승인 뒤 커밋까지 에이전트가 하므로 `커밋해줘`를 따로 입력하지 않는다.
-`git add`·`git commit`·`git switch`는 허용 목록에 있어 묻지 않는다. 푸시와 PR은 사람이 한다(에이전트의
-`git push`는 막혀 있다).
-
-### 예 2. 기능 하나(UI 포함) — 사람 행동 6회
-
-| # | 사람이 하는 것 | 읽을 것 | 그다음 에이전트 |
-|---|---|---|---|
-| 1 | 입력: `주문 목록에 상태 필터를 추가해줘` — 평소 말로 | — | `__PREFIX__-intent`가 코드·문서에서 사실을 찾고 결정만 묻는다 |
-| 2 | 답: 질문 라운드에서 고른다(라운드당 최대 4문항, 추천 선택지가 먼저) | 질문과 선택지 | `docs/changes/<YYMMDD_NN>-<slug>/intent.md`를 쓴다 |
-| 3 | 확인: `좋아` 또는 고칠 점 | `intent.md` 전문 | intent를 커밋하고, `__PREFIX__-spec`이 intent에 남은 열린 질문을 묻는다 |
-| 4 | 답: spec 질문 라운드(intent의 추천 답이 첫 선택지) | 질문과 선택지 | `spec.md`와 UI mock 또는 스크린샷을 만든다 |
-| 5 | 확인: `좋아` 또는 고칠 점 | `spec.md` 전문, mock | spec을 커밋하고, plan mode에서 계획(바뀌는 파일·작업 순서·위험·증명·가치)을 보인다 |
-| 6 | 승인: auto 선택지(`Yes, and use auto mode`) 선택 | 계획 | 아래처럼 사람 입력 없이 구현한다 |
-
-6번 뒤 에이전트가 하는 일:
-
-- `plan.md`를 커밋하고, 작업 단위마다 구현 서브에이전트를 띄워(파일이 겹치지 않을 때만 병렬) 테스트로
-  확인하며 구현한다. 단위마다 결과를 확인한 뒤 커밋한다.
-- 새 서브에이전트가 `/review-since`로 spec·plan·`REVIEW.md`에 대조해 리뷰하고, UI 변경이면
-  `__PREFIX__-ui-review`도 돈다. blocker·major는 에이전트가 고친다.
-- `pr.md`(기대한 가치 대 실제 결과, 실행한 명령과 출력, 확인 못 한 가치)를 커밋하고 전문을 보여준다.
-  사람은 이것을 읽고 가치를 판단한 뒤 푸시하고 PR을 연다 — PR 단계라 셈에 넣지 않는다.
-
-질문 라운드가 한 번 늘 때마다, 또 계획에 없는 결정을 에이전트가 물어올 때마다 1회씩 는다.
-intent에 열린 질문이 남지 않으면 4번이 빠진다.
-
-### 예 3. 여러 앱·공유 계약 — 사람 행동 6회
-
-high-risk 변경이다(정의는 `AGENTS.md`의 Guide 절: `apps/*` 둘 이상, 공유 계약, 보안 경로).
-사람이 하는 일은 예 2의 1–6번과 같고, 달라지는 것은 다음과 같다.
-
-- 6번 계획 승인은 tech lead나 아키텍트가 함께 본다(playbook p20).
-- `intent.md`·`spec.md`·`plan.md`가 변경 폴더째 브랜치에 커밋됐는지 PR 리뷰어가 확인한다.
-- 코드 리뷰(`/review-since`)는 건너뛰지 않는다. UI 변경이 없으면 `__PREFIX__-ui-review`는 돌지 않는다.
-- 한 계획을 PR 여러 개로 나눠야 하면 `티켓 나눠`라고 요청한다. `__PREFIX__-tickets`가 순서 있는 티켓을
-  `plan.md`에 붙인다. 그만큼 사람 행동이 는다.
-
-### 진행 중에 알아 둘 것
-
-- 승인은 세션마다다. 세션을 새로 열거나 `/clear` 하면 계획을 다시 승인한다.
-- 계획을 바꾸려면 에이전트에게 다시 계획하라고 말한다. 새 계획은 새 승인을 받는다. 구현 서브에이전트가
-  도는 동안에는 끝나기를 기다린다. plan mode에 들어가면(Shift+Tab으로 들어가 프롬프트를 보내도) 승인이
-  지워진다.
-- 승인 화면에서 컨텍스트를 비우는 선택지는 피한다. 세션이 바뀌면 승인이 이어지지 않을 수 있다.
-- `claude -p`처럼 plan mode가 없는 실행에서는 사람이 `HARNESS_PLAN_APPROVED=1`을 켠다.
-
-## 원칙
-
-정본은 `docs/standards/HARNESS_PRINCIPLES.md`다. ⓪ playbook이 잣대다 — 모든 하네스 요소는
-`docs/standards/PLAYBOOK_MAP.md` 한 행에 대응한다. ① 단계마다 산출물을 브랜치에 커밋해 git을 감사 기록으로
-삼는다. ② 규칙마다 시스템 강제 또는 가이드 중 하나다 — 반쯤 강제는 없다. ③ 단계 전환은 사람의 요청·승인으로
-시작한다. ④ 사실은 에이전트가 찾고, 결정은 사람이 한다. ⑤ play마다 측정 방법을 적는다.
-
-## 무엇이 시스템으로 강제되나
-
-| 규칙 | 장치 | 어기면 |
+| 단계 | 하는 일 | 다음 단계로 넘기는 것 |
 |---|---|---|
-| 이 세션에서 계획을 승인받기 전에는 저장소 파일을 편집하지 않는다(`docs/changes/` 밖) | `scripts/plan-first.py`(Claude Code 훅) | 편집 거절 |
-| 보호 경로(lockfile 등, `.agents/harness.json` `protected_paths`)를 손으로 고치지 않는다 | `scripts/protected-paths-guard.py`(Claude Code 훅) | 편집 거절 |
-| 비밀이 커밋에 들어가지 않는다 | `scripts/secret-scan.py`(pre-commit, staged diff) | 커밋 거절 |
-| 푸시 전에 테스트가 통과한다 | `.husky/pre-push` | 푸시 거절 |
-| 편집한 파일에 포매터를 돌린다(`format_on_edit`, 비어 있으면 꺼짐) | `scripts/format-on-edit.py`(Claude Code 훅) | 실패 출력 |
+| 그릴링 / 의도 | 목표·정책·제약의 실질적인 미결정 해결 | 결정·근거·범위·보류 사항 |
+| 스펙 | 원하는 결과를 관찰 가능한 동작으로 구체화 | 정상·경계·중단·완료·복구 시나리오와 인수 기준 |
+| 계획 | 현재 코드에서 구현하고 검증하는 방법 선택 | 변경 경계·의존 순서·위험·기준별 검증 환경과 방법 |
+| 구현 | 동작 구현, 독립 리뷰와 실행 검증 | 최종 변경·인수 기준별 실제 증거·미충족과 미검증 |
 
-나머지 — high-risk 변경의 `plan.md` 커밋, 커밋 메시지 형식, 사용자 절대경로 금지, `Co-Authored-By` 금지,
-`pr.md` 가치 리뷰 — 는 가이드다. 에이전트는 `AGENTS.md`와 스킬로 알고, 사람은 PR에서 `REVIEW.md`로 확인한다.
-에이전트의 `git push`·`--no-verify`는 `.claude/settings.json` deny가 막는다.
+단계 계약의 정본은 [stage-handoffs.md](docs/standards/execution/stage-handoffs.md)입니다.
+작업 규모에 맞게 필요한 판단을 수행합니다. 이미 합의한 대화에서 intent·spec을 정리할 수 있으며,
+명시적인 요청이나 수락을 받은 그릴링만 진행합니다. 저장소 사실·파일명·일상적인 테스트 선택은
+에이전트가 해결합니다. 새 실질 결정이 생기면 그 항목만 확인하고 기존 승인을 재사용합니다.
+계획 승인, 필요한 커밋 산출물과 high-risk 리뷰 정책은 유지합니다.
 
-빈틈도 있다. plan-first는 Edit/Write 도구만 보므로 Bash로 쓴 파일은 막지 못한다. 보호 경로는 Edit/Write를
-경로로 막고, Bash 명령은 쓰기 표시 옆 경로를 어림으로 볼 뿐이다. deny 목록은 훅을 건너뛰는 커밋의 알려진 철자만
-막는다. 비밀 스캔과 pre-push는 로컬에서만 돈다. CI는 없다 — `docs/examples/`는 켜기 전까지 아무것도
-돌리지 않는다. Codex 세션에서는 git 훅만 돈다.
+예를 들어 직원 2명을 작성하고 빈 세 번째 입력 화면에서 종료하려는 경우, 스펙에
+“앞서 작성한 2명만 등록할 수 있다”는 완료 기준을 둡니다. 계획은 상태·등록 경계와 검증 환경을
+준비하고, 구현은 브라우저에서 등록한 뒤 새로 조회해 실제로 2명인지 확인합니다.
+이 사례의 도메인 규칙 자체를 공통 템플릿에 넣지는 않습니다.
 
-## 하네스 바꾸는 법
+## 작업하기
 
-- 무엇을 옮기는지 `docs/standards/PLAYBOOK_MAP.md`의 행 ID로 적는다. 대응 play가 없으면 `Beyond`, 일부러
-  다르게 하면 `Deviation`과 그 이유를 적는다.
-- 결정은 `docs/decisions/0000-harness-decisions.md`를 제자리에서 고친다. 이력은 git이 맡는다.
-- 구조와 절차는 `docs/standards/AGENT_HARNESS.md`를 따른다. 끝나면 `pnpm test:harness`, 지시문을 고쳤으면
-  `pnpm evals:harness`(실제 모델을 불러 쿼터를 쓴다)를 돌린다.
-- 스킬은 `.agents/skills/` 한 곳에 두고 `.claude/skills`는 심링크 미러다. vendored 스킬은 손으로 고치지 않고
-  `python3 scripts/harness/vendor-skills.py --source <owner>/<repo>`로 갱신한다. 이 저장소의 규칙은
-  `__PREFIX__-*` 어댑터가 덧입힌다.
+평소 요청으로 시작합니다. 초기화 후 `__PREFIX__-*`는 선택한 접두사의 스킬 이름이 됩니다.
 
-## 참고
+- **설명·비교·리뷰:** 요청한 답변이나 findings까지 수행합니다. 수정은 요청받은 범위에서 합니다.
+- **새 기능:** 결정 정리 → 관찰 가능한 스펙 → 계획 승인 → 구현·리뷰·검증 → `pr.md`.
+- **버그:** 기존 계약과 실제 재현에서 시작해 원인·수리·동일 증상 재검증으로 진행합니다.
+- **리팩터링:** 보존할 동작의 baseline을 먼저 확보하고 변경 후 같은 입력으로 비교합니다.
+- **오타 수준 수정:** intent·spec은 생략하고 짧은 계획 승인 후 수정·확인·커밋합니다.
+- **여러 PR로 전달:** `__PREFIX__-tickets`가 기존 계획의 독립 단위와 의존 순서를 정리합니다.
 
-- 플레이북 원본: `docs/references/anthropic-ai-native-sdlc-playbook.pdf`. 비공개 템플릿이라는 전제로 커밋했다.
-  저장소를 공개하면 PDF를 지우고 링크로 바꾼다.
-- 템플릿 설정과 플레이스홀더: [TEMPLATE_SETUP.md](./TEMPLATE_SETUP.md)
-- 산출물 템플릿: `docs/changes/_templates/`(intent · spec · plan · pr)
-- 오래 유지할 결정: `__PREFIX__-adr`, [docs/decisions/README.md](docs/decisions/README.md)
-  (프로젝트 ADR은 0001부터, 0000은 하네스 기록)
-- 단순화: `__PREFIX__-ponytail`. 합의한 범위·증거·검증은 줄이지 않는다.
-- vendored 스킬 라이선스(MIT): `github.com/mattpocock/skills`, `github.com/vercel-labs/agent-skills`,
-  `github.com/emilkowalski/skills`, `github.com/DietrichGebert/ponytail`. 출처와 갱신 명령은
-  `.agents/harness.json` `skills.vendored`에 있다.
+구현자와 리뷰어는 같은 결정·인수 기준·최종 소스를 받습니다. 위임의 실제 완료와 반환 결과를
+확인한 뒤 수용합니다. 실패는 원인에 따라 의도·스펙·계획·구현으로 돌려 해당 증거를 다시 확인합니다.
+절차는 [작업 분기](docs/standards/execution/task-routes.md), 리뷰 기준은 [REVIEW.md](REVIEW.md)에 있습니다.
+
+작업 기록은 `docs/changes/<YYMMDD_NN>-<slug>/`에 커밋합니다.
+`pr.md`는 기대·실제 결과·증거·남은 불확실성을 비교하는 가치 리뷰입니다.
+기본 정책에서 push·PR 생성·머지는 사람이 맡습니다. 명시적인 운영 권한과 프로젝트 정책이 다르면
+해당 범위를 먼저 확인합니다.
+
+## 웹 결과의 완료 기준
+
+사용자에게 보이는 변경은 helper/API/검증 로직만 바뀌어도 실제 브라우저 검증 대상입니다.
+
+- 정상 진입부터 완료까지 제품의 실제 컨트롤을 조작합니다.
+- 쓰기 후 재진입·새 조회로 저장된 값과 개수를 확인합니다.
+- 관련된 입력 경계·취소·중단·오류·재시도·복구를 실행합니다.
+- 모바일·태블릿 웹·모니터에서 확인하고 viewport와 실제 입력장치를 구분합니다.
+
+[웹 인수 검증 계약](docs/standards/qc/web-acceptance.md)에 따라 스펙에서 여정을 정하고,
+계획에서 backend·합성 계정·브라우저 담당·실패 주입·임시 runtime 정리를 준비합니다.
+브라우저 도구가 없는 리뷰어는 실행 증거를 검토하고 메인 에이전트가 실행을 담당합니다.
+코드 테스트·빌드·스크린샷만으로 완료 처리하지 않습니다. fixture와 연결된 backend,
+운영 인증, 터치 에뮬레이션과 실기기 터치는 각각 구분합니다.
+
+## Claude Code와 Codex
+
+| 항목 | Claude Code | Codex |
+|---|---|---|
+| 공통 계약 | `CLAUDE.md`가 `AGENTS.md`를 import | `AGENTS.md` |
+| 스킬 | `.claude/skills/` 심링크 미러 | `.agents/skills/` |
+| 계획·질문·위임 | 해당 호스트의 plan/question/subagent 도구 | 사용 가능한 계획·대화·위임 수단 |
+| 세션 편집 가드 | 템플릿의 plan-first·보호 경로·formatter 훅 | 이 템플릿에는 대응 세션 훅 미설치 |
+| git 가드 | Husky pre-commit·pre-push | 같은 git 가드 |
+
+두 호스트는 같은 작업 책임과 완료 기준을 따릅니다. 도구 이름·권한·가드의 보장 범위는 다릅니다.
+Codex에서 Claude 전용 도구를 기다리거나 호출했다고 가장하지 않습니다.
+스킬이 목록에 노출되지 않으면 정본 파일을 읽어 같은 절차를 적용합니다.
+
+Claude의 plan-first 마커는 마지막 plan mode 진입 이후 이 세션에서 승인한 사실을 나타냅니다.
+특정 변경과 계획의 일치를 보증하지 않습니다. 새 세션은 승인 상태를 확인하고,
+구현자가 도는 동안 다시 plan mode로 들어가 승인 상태를 지우지 않습니다.
+Headless 승인 변수는 사람이 명시적으로 부여하는 수단이며 에이전트가 만들어 성공 실험으로 처리하지 않습니다.
+
+## 검증과 알려진 한계
+
+```sh
+pnpm check:harness       # 배선·미러·선언 등 구조 검사
+pnpm test:harness        # 결정적 회귀와 fresh-init 검사, 모델 호출 없음
+pnpm evals:harness       # Claude 행동 smoke, 모델 쿼터 사용
+```
+
+기존 자동 평가 runner는 Claude용입니다. Codex까지 자동 평가한다고 주장하지 않습니다.
+양호스트 실제 과제와 단계 인계 평가는 [평가 안내](.claude/evals/README.md)를 따릅니다.
+실제 읽기·수정·명령·위임 결과와 최종 산출물을 보고 판정하며, 실패·거절·미검증도 보존합니다.
+instruction 변경을 원인으로 주장하려면 환경을 고정한 대조 평가가 필요합니다.
+
+구조 검사, fake CLI 회귀, native 작업 실행, 브라우저 E2E, 일반 효과 비교는 서로 다른 증거입니다.
+승인 전 멈춘 실행으로 승인 후 전체 흐름을 입증할 수 없습니다. 다른 프로젝트의 성공이나
+이전 지침의 실행을 현재 템플릿 전체 검증으로 대체하지 않습니다.
+
+plan-first는 Bash·MCP 편집 전체를 통제하지 않고, 보호 경로 셸 검사는 휴리스틱입니다.
+로컬 git 가드는 우회 불가능한 보안 경계가 아닙니다. CI와 자동 PR 리뷰는 기본 활성화돼 있지 않으며
+[docs/examples](docs/examples)의 예시를 채택할 때 별도로 설정합니다.
+보장 범위의 정본은 [AGENT_HARNESS.md](docs/standards/AGENT_HARNESS.md)입니다.
+
+## 프로젝트에서 공통 템플릿으로 개선하기
+
+1. 실제 반복 문제와 재현·기존 규칙을 확인합니다.
+2. 프로젝트 도메인 규칙과 공통 작업 방식의 문제를 구분합니다.
+3. adapter·표준·평가를 함께 수정하고 새 초기화본에서 검증합니다.
+4. 검증한 개선을 템플릿 PR로 환류합니다. 다른 프로젝트에 적용할 때 자체 승인·가드를 보존합니다.
+
+자동 업그레이드·일괄 동기화 도구는 포함하지 않습니다.
+vendored 스킬은 원문을 직접 고치지 않고 `.agents/harness.json`의 갱신 명령을 사용합니다.
+
+- [하네스 변경 절차](docs/standards/AGENT_HARNESS.md#changing-the-harness)
+- [원칙](docs/standards/HARNESS_PRINCIPLES.md) · [Playbook 대응표](docs/standards/PLAYBOOK_MAP.md)
+- [하네스 결정 기록](docs/decisions/0000-harness-decisions.md)
+- [프로젝트 ADR](docs/decisions/README.md) · [설정·출처](TEMPLATE_SETUP.md)

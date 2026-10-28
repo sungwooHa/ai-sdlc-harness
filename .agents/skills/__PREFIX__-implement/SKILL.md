@@ -1,89 +1,110 @@
 ---
 name: __PREFIX__-implement
-description: Implement user-requested repository changes through the approved-plan workflow, using implementer subagents, review and pr.md. Use for implementation, fix or refactoring requests, or executing an approved plan. Exclude explanation, design-comparison and review-only requests.
-argument-hint: "[폴더명] [티켓 제목] — 예 260910_00-<slug>; 생략하면 방금 승인된 plan 의 폴더를 쓴다"
+description: Implement user-requested repository changes through the approved-plan workflow, using implementer subagents, review and the required delivery artifacts. Use for implementation, fix or refactoring requests, or executing an approved plan. Exclude explanation, design-comparison and review-only requests.
+argument-hint: "[active change folder and optional ticket]"
 ---
 
-You are the orchestrator: you keep the conversation with the user, the decisions and the
-acceptance of results; implementer subagents make the edits.
+The main agent owns the user conversation, decisions and acceptance; implementer subagents make
+the edits. Read `docs/standards/execution/stage-handoffs.md` for shared responsibilities, handoffs,
+failure returns and host capabilities.
 
-**Plan-first**: repo edits outside `docs/changes/` are refused until a plan is approved in this
-session. The marker means "this session had a plan approved since it last entered plan mode" (an
-`EnterPlanMode` call, or a prompt sent while in plan mode), not "this change's plan is approved",
-and subagents share it. Edit files with Edit/Write, never
-through Bash. With no approved plan yet, call `EnterPlanMode`.
+**Plan-first:** use native EnterPlanMode/ExitPlanMode when available; otherwise present the plan
+and await human approval before implementation. Existing approval may be reused only within its
+actual scope. Claude's hook and marker semantics live in `docs/standards/AGENT_HARNESS.md`;
+other hosts do not acquire that hook. Never manufacture approval/trust markers or set a
+human-only approval variable. Edit through the host's file-edit tools, not shell writes.
 
 ## 0. Select the execution route
 
 Read `docs/standards/execution/task-routes.md` and select Bug fix, Feature or Refactoring from
 the requested result. Establish its repro/cause, acceptance criteria or preserved-behavior
-baseline before implementation. Read-only preparation can inform the approved plan; it does
-not grant write approval. Keep this route and its evidence in subsequent handoffs. This selects
-work inside the existing approval workflow, without creating an additional skill/artifact chain.
+baseline before implementation. Read-only preparation can inform the approved plan without
+granting write approval. Reuse the settled intent/spec instead of repeating discovery.
 
-## 1. Save the plan (first step after approval)
+Apply the risk/artifact policy in `docs/changes/README.md`, including the high-risk definition
+in `AGENTS.md`. A typo-sized routine change uses its approved conversation/native plan without
+a change folder, intent/spec, committed plan or pr.md. Their absence does not start an interview
+or artifact-creation chain. Standard and high-risk changes retain their committed plan/pr.md;
+high-risk work also commits intent/spec before code edits as `AGENTS.md` requires.
 
-1. Resolve the change folder: `$0`, else the folder the approved plan names; ask when unclear.
-   `$1` limits the work to that `## 티켓` row.
-2. Save the approved plan — from the conversation, or the `ExitPlanMode` plan file under
-   `~/.claude/plans/` — as `docs/changes/<YYMMDD_NN>-<slug>/plan.md` and commit it on
-   `feature/<work-slug>` before any code edit.
-3. Read `spec.md`, `plan.md` and each affected app's `AGENTS.md`.
-   For user-visible changes, read `__PREFIX__-ui-review` section 1 before editing to scope the
-   journey and rendered reference; web work also prepares `docs/standards/qc/web-acceptance.md`.
+## 1. Save the approved plan
+
+1. Read the approved plan and affected app instructions. For standard/high-risk work, resolve
+   the folder and optional ticket from the argument or active task and read the required
+   intent/spec. Synthesize only a required missing record from the actual decisions; unresolved
+   material outcomes return to the owning stage. A routine task keeps its approved plan in
+   conversation or the host's native plan record.
+2. Work on `feature/<work-slug>` for every class of change. For standard/high-risk work, save
+   the approved plan from conversation or the host's approved plan file as
+   `docs/changes/<YYMMDD_NN>-<slug>/plan.md` and commit it on `feature/<work-slug>` before code
+   edits. Preserve the plan's criterion-to-proof mapping and actual approval source.
+3. For visible behavior, apply `__PREFIX__-ui-review` before editing to scope the journey and
+   agreed design reference. Prepare `docs/standards/qc/web-acceptance.md` for web work.
+   Internal-only changes retain their ordinary verification.
 
 ## 2. Implement through subagents
 
-- Unless the user turned it off, invoke `Skill(__PREFIX__-ponytail)` to look for a simpler design
-  within the plan.
-- Spawn one implementer subagent per plan work unit (or the `$1` ticket); run units in parallel
-  only when their files/state are independent and shared dependencies are ready. For a feature,
-  verify the first vertical slice before dependent fan-out. Each prompt names the folder, unit,
-  files, selected task route, repro/criteria/baseline and Proof commands/surface, and tells it to:
-  - read `.agents/skills/implement/SKILL.md` and `.agents/skills/tdd/SKILL.md` and follow them,
-    test-first at the plan's seams, skipping their review and commit steps (you run those);
-  - apply the selected task route over upstream workflow preferences. Reuse the approved plan's
-    boundaries; choose ordinary test details locally rather than requiring a new user confirmation
-    for each seam. Stop for a material missing decision or scope change, not a routine test choice;
-  - climb the test ladder: one test file → its directory → the whole suite once at the end;
-  - leave the git index to you, and stop and report when blocked: subagents cannot ask the user.
-- Agent calls run in the background: wait for each completion notification. Verify each output
-  before accepting it — read the diff, execute its route's repro/criteria/equivalence evidence and
-  appropriate checks against the unit's files — then stage that
-  unit's paths and commit per `docs/standards/COMMIT_CONVENTION.md`.
-- When reality departs from the plan, fix `plan.md` in the same commit as the code (and tick the
-  finished `## 티켓` row there). Decisions the plan does not cover go to the user.
-- Call `EnterPlanMode` only after every background implementer has finished: it clears the
-  approval marker and blocks their edits.
+- Unless the user turned it off, apply the `__PREFIX__-ponytail` adapter within the approved
+  outcomes. Use the host's Skill tool or read the adapter by path.
+- Spawn one implementer per plan work unit using the host's supported subagent facility.
+  Parallelize only independent files/state after shared dependencies are ready. For a feature,
+  verify the first vertical slice before dependent fan-out.
+- Give each implementer the folder/unit or approved routine plan, source decisions and constraints,
+  selected task route, criteria or repro/baseline, owned files, proof commands/surface and
+  authorized environment.
+  Tell it to read `.agents/skills/implement/SKILL.md` and `.agents/skills/tdd/SKILL.md` by path
+  and apply these project overrides: test-first at useful approved seams; choose routine test
+  details locally; skip their commit/review steps; leave the index to the main agent; report a
+  blocked material decision rather than asking the user. Preserve all requested criteria.
+- Wait for actual completion, inspect each result and diff, then execute its repro, criteria
+  or equivalence checks against the resulting files before accepting it. An unsuccessful
+  startup or missing result is a failed attempt, not completed independent work. Report missing
+  required capabilities rather than simulating a delegate.
+- Run checks narrow -> wide and the whole suite once at the end. Stage only accepted unit paths
+  and commit per `docs/standards/COMMIT_CONVENTION.md`.
+- When reality departs from a committed plan, update it in the same commit as the code; keep a
+  routine task's conversation/native plan current without creating a change document. Return material
+  outcome/contract gaps to intent/spec; infeasible dependencies/proof to planning; ordinary
+  implementation failures to the unit. Reuse unaffected decisions. Tick finished ticket rows.
+- Enter plan mode only after all background implementers finish; it clears Claude's approval.
 
 ## 3. Review
 
-Run `/review-since <branch-base>` in a fresh subagent against `spec.md` and `plan.md`, with
-`REVIEW.md` as the standards source. For user-visible effects, including helper/API/validation
-changes, invoke `Skill(__PREFIX__-ui-review)` for its scope and code/design passes. A declaration
-of no visual change does not exclude changed behavior. Fix blockers and majors as `REVIEW.md`
-defines them through implementer subagents, then re-verify.
-Give the reviewer the selected route and its original repro, feature criteria or preserved baseline.
-Return failed evidence to its owning route before proceeding; a green build alone does not close it.
+Run `review-since` through a fresh supported subagent with the base, source decisions,
+available spec and approved plan, selected route, original repro/criteria/baseline and `REVIEW.md`.
+Provide the actual final source/build identity and proof context. Inspect its real result before
+acceptance; failed or absent review remains explicit.
+
+For visible effects, including helper/API/validation changes, apply `__PREFIX__-ui-review` for
+code/design scope. Return blockers and majors to their owning stage/unit, fix through
+implementers and rerun affected checks. A green build does not close an unmet criterion.
 
 ## 4. Browser acceptance for web outcomes
 
-Execute `docs/standards/qc/web-acceptance.md` as a distinct step after code checks/review. Assign
-the outcome, acceptance criteria, final build/URL and authorized test context to a browser-capable
-verifier. If it cannot operate the browser, you perform the browser step; a file/shell-only code
-reviewer cannot replace it. Reuse UI-review evidence only when it executed the required paths on
-this final candidate. Native-only work uses the project's device/emulator procedure; internal-only
-changes skip this branch.
+Execute `docs/standards/qc/web-acceptance.md` after code checks/review. Assign its criteria,
+final build/URL and authorized backend/account/data/failure context to a browser-capable
+verifier; the main agent executes it when delegation lacks browser capability. Reuse evidence
+only for the required journeys on this final candidate. A file/shell review cannot establish
+browser interaction. Native-only changes use the project device/emulator procedure.
 
-Return browser failures to implementer subagents, then rerun affected journeys/environments.
-Required checks that cannot run stay unverified. Proceed to the report with their exact scope
-and blocker, without calling the web outcome complete; resolving available setup remains yours.
+Return browser failures to the responsible stage/unit and rerun affected journeys/environments
+after repair. Required unavailable checks stay unverified with their blocker; resolve available
+setup and continue independent work. Keep static, browser, backend and input-device coverage
+distinct. Internal-only changes skip this branch.
 
-## 5. pr.md
+## 5. pr.md and delivery
 
-Write `docs/changes/<YYMMDD_NN>-<slug>/pr.md` from `docs/changes/_templates/pr.md`: compare the
-plan's `## Value` with observed results, paste the commands you ran and their output, and keep
-unverified value explicit with its next observation, owner (`담당 미정` if none) and timing. The
-human judges the value. Put a durable rule learned here in the relevant `AGENTS.md`, or state
-`지식 승격 없음`. Commit `pr.md`, show it in full, and report status, deviations and test results;
-pushing and opening the PR are the developer's.
+For a routine task, complete the applicable verification/review and code commit, then give a
+brief report of the change, actual checks and remaining gaps; no change folder or pr.md is
+required. Standard/high-risk work follows the artifact delivery below.
+
+Write `docs/changes/<YYMMDD_NN>-<slug>/pr.md` from its template. Map every acceptance criterion
+to observed final-candidate evidence, failure or unverified scope. Compare the plan's Value to
+actual results; keep unverified value with its next observation, owner (`담당 미정` if needed)
+and timing. Record commands actually run and results. The human judges value.
+
+Promote a durable rule to its owning standard/AGENTS.md or state `지식 승격 없음`. Commit
+`pr.md`, show it in full, and report status, deviations and evidence gaps.
+
+For every task, clean up task-owned runtimes under the project's lifecycle policy. Pushing,
+opening a PR, merging and deployment retain their existing authorization rules.

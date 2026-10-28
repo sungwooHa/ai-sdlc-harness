@@ -1,6 +1,7 @@
 # Task execution routes
 
-Read the selected branch before making or assigning edits. Use the user's requested result:
+Read [stage handoffs](stage-handoffs.md) when preparing the task's intent/spec/plan, then read
+the selected branch before making or assigning edits. Use the user's requested result:
 correct existing behavior selects Bug fix; add/change behavior selects Feature; preserve behavior
 while changing structure selects Refactoring. For a mixed request, separate its criteria and
 follow their dependencies. Investigation and review-only requests finish without implementation.
@@ -69,6 +70,8 @@ Inspect the delegate's actual returned status/result before accepting it. A fail
 permission denial or missing result is an unsuccessful attempt, not a completed independent
 review. Reassign within available tools or report the gap and perform permitted checks explicitly.
 
+Use the stage contract to distinguish an unresolved outcome, missing behavior criterion,
+unworkable plan and implementation defect; return each failure to its owning stage.
 The main agent accepts actual edits and executed evidence, then runs the repository's review and
 delivery steps. Code checks and browser evidence are separate. On failure, return the failed
 criterion/repro/equivalence check to its owning branch and rerun affected evidence on the final

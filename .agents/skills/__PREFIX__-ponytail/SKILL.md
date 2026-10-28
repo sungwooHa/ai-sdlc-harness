@@ -3,16 +3,18 @@ name: __PREFIX__-ponytail
 description: Apply Ponytail's reuse-first simplification to coding, refactoring and dependency choices within the approved plan, keeping this harness's artifacts and verification. Use when the user asks for ponytail, 포니테일, less code or less over-engineering; also when the implement adapter needs a simpler design.
 ---
 
-Read the approved spec/plan and affected code, then read `.agents/skills/ponytail/SKILL.md` and
+Read the available spec and approved plan (conversation/native plan for a routine change) and
+affected code, then read `.agents/skills/ponytail/SKILL.md` and
 follow it. Use the user's requested lite/full/ultra level; otherwise use its full default. Apply
 these project overrides:
 
 - Simplify implementation within the plan's outcomes. Reuse code, standard-library or native
   features before adding abstractions or dependencies. Deliver the full requested feature; a
   material scope change goes back to the user as a new plan before implementation.
-- The change folder's intent/spec/plan/pr.md, ADRs when needed, accessibility, security and the
-  project's required checks are requirements, not boilerplate. Keep them whole despite Ponytail's
-  code-first/three-line output preference.
+- Preserve the artifacts required by `docs/changes/README.md`, ADRs when needed, accessibility,
+  security and required checks despite the reference's code-first/three-line output preference.
+  A routine change uses its approved conversation/native plan and brief report; it does not
+  create a change folder or missing intent/spec/plan/pr.md.
 - Follow the repo's existing test tools and verification ladder. Ponytail's minimal runnable check
   supplements missing coverage; it never replaces required tests with an ad hoc self-check.
 - This skill grants no write access: plan-first and protected paths still apply.

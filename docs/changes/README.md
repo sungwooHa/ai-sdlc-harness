@@ -12,12 +12,14 @@
 
 | 등급 | 해당 | 필요한 것 |
 |---|---|---|
-| routine | 오타·한 문장으로 설명되는 수정 | plan mode에서 승인한 계획만. 폴더 없음 |
-| standard | 그 밖의 변경 | plan.md 권장(필요한 단계만), pr.md |
+| routine | 동작·계약에 영향 없는 오타 수준의 국소 수정 | 호스트 도구·대화에서 승인한 계획과 간단한 결과 보고. 폴더 없음 |
+| standard | 그 밖의 변경 | 필요한 intent·spec, 구현 전 승인한 plan.md 커밋, pr.md |
 | high-risk | 여러 앱·공유 계약·보안 경로를 건드리는 변경(정확한 경로는 `AGENTS.md`) | intent.md·spec.md·plan.md 커밋, pr.md, `/review-since` 리뷰 필수, 두 번째 승인자(`docs/examples/CODEOWNERS` 예시) |
 
-저장소 파일 편집 전 계획 승인은 모든 등급에서 훅이 강제한다(이 폴더 안은 예외). 표의 나머지는
-가이드이고, PR 리뷰가 `REVIEW.md` Compliance pass로 확인한다.
+계획 승인은 모든 등급의 정책이다. Claude에서는 이 폴더 밖 Edit/Write에 세션 훅이 적용된다.
+이 템플릿에는 대응 Codex 세션 훅이 없으며 계획을 제시하고 실제 승인을 확인한다.
+표의 산출물·단계 인계는 가이드이고, PR 리뷰가 `REVIEW.md`와
+`docs/standards/execution/stage-handoffs.md`를 기준으로 확인한다.
 
 ## 파일
 
