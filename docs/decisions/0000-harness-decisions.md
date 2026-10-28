@@ -221,7 +221,7 @@ pstack의 Bug fix/Feature/Refactoring과 Eval playbook을 참고하되 기존 �
   만들어 성공을 보충하지 않는다. helper의 결정적 반례 회귀는 실제 native/브라우저 성공을 뜻하지 않는다.
 - `.github/workflows/harness.yml`은 PR·수동 실행에 Linux/Python 3.9와 macOS/Python 3.12를
   배선한다. 잠금 의존성 설치, `pnpm test:harness`의 결정적 회귀·fresh-init과 tracked diff 검사를
-  수행하도록 설정했으며 모델 자격 증명·호출은 없다. GitHub 원격 실행은 아직 미검증이다.
+  수행하도록 설정했으며 모델 자격 증명·호출은 없다. GitHub 원격 실행 결과는 해당 커밋의 PR check를 정본으로 삼는다.
   모델 eval CI·자동 PR 리뷰·CODEOWNERS는 `docs/examples/`의 비활성 예시로 유지한다.
 - 실행 결과는 해당 변경의 `pr.md`에 소스·도구·승인·backend 범위와 함께 남긴다. 과거 문서 과제나
   타 프로젝트 브라우저 증거를 새 후보의 완료 증거로 승계하지 않는다. 소수 합성 과제로 20–50개
@@ -244,7 +244,7 @@ bytecode의 false FAIL도 수정했다. 제외는 Git-ignored 생성물에 한�
 - **Bash 쓰기·MCP 편집 도구**: `sed -i`·리다이렉트·`python -c`나 Serena 같은 MCP 편집 도구는 plan-first를 거치지 않는다. AGENTS.md, PR 리뷰, evals가 덮는다.
 - **마커의 뜻**: "이 세션이 마지막으로 plan mode에 들어간 뒤(EnterPlanMode 호출, 또는 plan mode에서 프롬프트를 보냄) 계획을 승인받았다"이지 "이 변경의 계획이 승인됐다"가 아니다. 같은 세션에서 다른 계획으로 승인 상태가 이어질 수 있다. 오케스트레이터가 EnterPlanMode를 부르면 마커가 지워져 진행 중인 구현자가 막히므로, 백그라운드 구현자가 끝난 뒤에만 부른다. `/clear`·새 세션은 다시 승인해야 한다.
 - **우회 변수와 git hook**: `HARNESS_PLAN_APPROVED=1`은 사람용이지만 에이전트가 하위 `claude -p`에 넘기면 게이트를 건너뛴다. deny 규칙과 Codex rules는 에이전트의 알려진 철자만 막고, 사람은 git hook을 언제든 건너뛸 수 있다. 비밀 스캔·pre-push는 로컬에서만 돈다.
-- **CI 범위**: 결정적 회귀와 fresh-init CI를 설정했지만 원격 실행은 미검증이다. 모델 평가·자동 PR
+- **CI 범위**: 결정적 회귀와 fresh-init CI를 설정했으며 원격 결과는 커밋별 PR check에서 확인한다. 모델 평가·자동 PR
   리뷰 예시는 비활성이고 서버의 필수 체크도 별도 설정이다. 가이드의 의미·실제 실행은 PR 리뷰가 확인한다.
 - **닫힌 실패**: plan-first는 payload를 읽지 못하면 거절한다. 스크립트 버그가 모든 편집을 막을 수 있어 테스트와 우회 변수로 대비한다.
 - **Codex 배선**: 이 템플릿은 대응 세션 plan-first·보호 경로·포매터 hook을 설치하지 않는다.

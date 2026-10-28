@@ -21,8 +21,8 @@
 | S3.5 | Build | Skills | p25–26 | 일관되게 적용할 지식은 스킬로 두고 트리거되는지 시험한다. 꼭 지킬 정책은 훅이나 리뷰가 받친다. 빈 곳: 소유자가 있는 정책 스킬(보안·API·브랜드)은 프로젝트 몫. | `.agents/skills/`(`.claude/skills` 미러), `.agents/harness.json` `skills.invocation`, `scripts/harness/vendor-skills.py`의 metadata overlay, 라우팅 eval(`.claude/evals/cases.jsonl`), `.agents/skills/__PREFIX__-implement/SKILL.md`의 구현 요청 범위 description(적용됨·효과 미확인) | Partial | 정책 변경 승인→스킬 머지 시간 / 정책을 인용한 PR 리뷰 지적 수 |
 | S3.6 | Build | Hooks as build-time guardrails | p27 | 보호 경로 편집 차단, 편집 후 포매터, 비밀이 diff에 들어가지 않게. 빌드 훅은 빠르고 파일 하나, 전체 테스트는 커밋·푸시. | `scripts/protected-paths-guard.py`, `scripts/format-on-edit.py`, `scripts/secret-scan.py`, `.husky/pre-commit`, `.husky/pre-push`, `scripts/harness/ensure-husky.sh` | Met | 훅 차단 수(세션 trace) / 머지 뒤 발견된 보호 경로·비밀 위반 수(p44 지표를 빌림) |
 | S3.7 | Build | Parallel sessions and subagents | p27–29 | 계획에서 파일이 겹치지 않는 작업을 나눠 서브에이전트로 돌리고, 반복 작업은 `.claude/agents/`에 둔다. 메인 세션은 조종·취합한다. 빈 곳: worktree 병렬 세션 안내, OpenTelemetry 측정. | 오케스트레이터(`AGENTS.md`), `.agents/skills/__PREFIX__-implement/`, `.agents/skills/__PREFIX__-tickets/`, `.agents/skills/to-tickets/`, `.agents/skills/handoff/`, `.claude/agents/verifier.md` | Partial | 엔지니어당 동시 세션 수 / 주당 머지 변경 수와 재작업률 |
-| S4.1 | Test | Give Claude a feedback loop | p31–33 | 명령 하나로 test·typecheck를 돌리고, 끝났다고 말하기 전에 실행해 출력을 붙인다. 버그는 실패 테스트부터. 테스트를 약화하는 수정은 리뷰에서 거절한다(p32 대안). | `package.json` `test`, `.claude/settings.json` `permissions.allow`, `AGENTS.md` Commands·Verifying, `REVIEW.md` Compliance pass, `.agents/skills/tdd/`, `.agents/skills/diagnosing-bugs/`, `.claude/agents/verifier.md`, `docs/standards/qc/web-acceptance.md` | Met | 에이전트 변경의 첫 CI 통과율(원격 실행 미검증) / PR당 리뷰 시간, 변경 실패율 |
-| S4.2 | Test | Continuous evals in CI | p34–35 | 에이전트 설정(AGENTS.md·스킬·훅)이 바뀌면 eval을 돌리고, 통과율이 떨어진 변경은 머지 전에 본다. 결정적 CI는 설정됨·원격 미검증. 빈 곳: 모델 평가 CI 미활성, 기존 5개 smoke와 새 3개 합성 실무 과제로는 playbook의 실제 작업 20–50개 범위 미충족. | `scripts/harness/run-evals.py`, `.claude/evals/cases.jsonl`, `.claude/evals/README.md`, `.claude/evals/results.jsonl`, `scripts/harness/work-evals.py`, `.claude/evals/work/`, `.github/workflows/harness.yml`, `docs/examples/agent-evals.yml`(비활성 모델 평가) | Partial | 실행별 smoke 통과율·실무 receipt의 기준별 실패/미검증 / CI에서 잡힌 회귀 대 운영에서 발견된 회귀 |
+| S4.1 | Test | Give Claude a feedback loop | p31–33 | 명령 하나로 test·typecheck를 돌리고, 끝났다고 말하기 전에 실행해 출력을 붙인다. 버그는 실패 테스트부터. 테스트를 약화하는 수정은 리뷰에서 거절한다(p32 대안). | `package.json` `test`, `.claude/settings.json` `permissions.allow`, `AGENTS.md` Commands·Verifying, `REVIEW.md` Compliance pass, `.agents/skills/tdd/`, `.agents/skills/diagnosing-bugs/`, `.claude/agents/verifier.md`, `docs/standards/qc/web-acceptance.md` | Met | 에이전트 변경의 첫 CI 통과율(커밋별 PR check 참조) / PR당 리뷰 시간, 변경 실패율 |
+| S4.2 | Test | Continuous evals in CI | p34–35 | 에이전트 설정(AGENTS.md·스킬·훅)이 바뀌면 eval을 돌리고, 통과율이 떨어진 변경은 머지 전에 본다. 결정적 CI는 설정됐으며 원격 결과는 커밋별 PR check에서 확인한다. 빈 곳: 모델 평가 CI 미활성, 기존 5개 smoke와 새 3개 합성 실무 과제로는 playbook의 실제 작업 20–50개 범위 미충족. | `scripts/harness/run-evals.py`, `.claude/evals/cases.jsonl`, `.claude/evals/README.md`, `.claude/evals/results.jsonl`, `scripts/harness/work-evals.py`, `.claude/evals/work/`, `.github/workflows/harness.yml`, `docs/examples/agent-evals.yml`(비활성 모델 평가) | Partial | 실행별 smoke 통과율·실무 receipt의 기준별 실패/미검증 / CI에서 잡힌 회귀 대 운영에서 발견된 회귀 |
 | S5.1 | Deploy | AI in the PR review loop | p37–39 | 모든 PR에 같은 리뷰 pass(버그·보안·spec·plan 준수)를 돌리고, 승인은 코드 소유자가 한다. 빈 곳: 자동 PR 리뷰 미활성, 서버의 브랜치 보호는 프로젝트별 설정·확인 필요. | `REVIEW.md`, `.agents/skills/review-since/`, `.agents/skills/__PREFIX__-ui-review/`, `.agents/skills/__PREFIX__-ui-review/references/user-journey-review.md`, `.agents/skills/web-design-guidelines/`, `.agents/skills/review-animations/`, `docs/examples/claude-review.yml`·`docs/examples/CODEOWNERS`(비활성) | Partial | 첫 리뷰까지 시간 / 머지 전 잡힌 결함 대 운영으로 샌 결함 |
 | S5.2 | Deploy | Hooks as approval gates | p40–44 | 사람 승인이 필요한 행동은 훅·권한이 막고, 막을 때 이유와 승인 경로를 보인다. 빈 곳: managed settings, 묻는(ask) 훅, 릴리스 게이트. | `.claude/settings.json` `permissions.deny`(push·`--no-verify`·`git -c/-C`), `.codex/rules/harness.rules`, `.husky/pre-push` | Partial | 게이트별 대기 시간 / 운영에 닿은 게이트 위반 수 |
 | S5.3 | Deploy | CI/CD integration and deployment | p44–46 | 파이프라인이 `claude -p`로 판단 단계를 돌리고, 에이전트는 운영 게이트를 넘지 못한다. | — | Missing | 사람 호출 없이 분류된 파이프라인 실패 비율 / DORA 지표 |
@@ -56,6 +56,13 @@
 
 ## 행 메모
 
+- **후속 관측 (2026-10-29)**: 후보 `44b1ec2`의 Codex 입력·batch·CLI 과제와 이전 main 대조,
+  Claude 승인 전 중단, 실제 구현 위임·독립 리뷰 및 합성 HTTP/SQLite 앱의 3 viewport 실행을
+  [평가 보고서](../changes/261029_01-harness-learning-loop/evaluation.md)에 구분해 기록했다.
+  A/B의 사전조건 미충족과 B/C의 임시 인계 범위 위반도 보존했다. 보수 후 후보 `6474029`의
+  단일 F 실행은 브랜치 거절 뒤 앱을 편집하지 않고 허용 경로에서 인계했다. Claude 승인 후
+  구현·실기기 입력·일반 생산성 효과는 미검증이며 위 표의 분류는 올리지 않는다.
+
 - **S3.5 · S4.2 · S5.1 · B5 — 공통 검진·실무 평가·CI 연결 (2026-10-29)**: 상태는 유지한다.
   `skills.invocation`은 기존 adapter 진입점·내부 참조·명시 호출 전용 역할을 선언하고 vendor 갱신이
   metadata를 재적용한다. doctor는 충돌·누락·순환·호스트 metadata 오류를 검사하며 의미나 행동을
@@ -64,7 +71,7 @@
   raw 실행 기록과 고정 외부 grader 결과를 분리한다. 모델은 정상 호스트에서 수동 실행하며
   실제 승인·위임·독립 리뷰·브라우저/persistence 증거는 별도 관측한다. 새 승인 마커를 만들지 않는다.
   `.github/workflows/harness.yml`은 Linux/Python 3.9·macOS/Python 3.12의 결정적 회귀와 fresh-init을
-  PR·수동 실행에 연결한다. 원격 실행은 미검증이고 모델 평가·자동 PR 리뷰 예시는 비활성이다.
+  PR·수동 실행에 연결한다. 원격 실행 증거는 해당 커밋의 PR check이며 모델 평가·자동 PR 리뷰 예시는 비활성이다.
   기존 5개 smoke와 새 3개 합성 과제는 서로 다른 자산이며 20–50개 실제 작업 범위로 세지 않는다.
 
 - **S3.5 · S3.7 · S4.1 — 작업 유형별 실제 실행 분기 (2026-10-26)**: 각각 `Partial → Partial`,
