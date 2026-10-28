@@ -5,6 +5,68 @@ How the harness is built and how to change it. Read it before you touch `AGENTS.
 `HARNESS_PRINCIPLES.md`, the playbook mapping in `PLAYBOOK_MAP.md`, the decisions and their
 reasons in `docs/decisions/0000-harness-decisions.md`.
 
+## Requested outcomes
+
+Choose the requested result before starting the implementation flow. The routes below are
+guidance for selecting work and recognizing its finish, not a new permission or execution gate.
+Use the request and existing decisions; do not select a writing route merely because a read-only
+question mentions a bug, feature or plan.
+
+| Requested result | Work and finish |
+|---|---|
+| Investigation or explanation | Answer from the relevant evidence, separating observed facts, inference and missing evidence. Finish with the answer; do not edit the repository. |
+| Design or comparison | Compare relevant alternatives and tradeoffs, recommend a direction and identify unresolved outcome decisions. Do not implement unless the user requested implementation. |
+| Review | Fix the review scope and baseline, inspect the relevant change and report concrete findings and unverified areas. Do not apply fixes unless requested. |
+| Bug fix | Select the implementation skill's [Bug fix route](execution/task-routes.md#bug-fix); accept the original repro and affected regression evidence. |
+| Feature implementation | Select its [Feature route](execution/task-routes.md#feature); account for every observable criterion and applicable recovery path. |
+| Refactoring | Select its [Refactoring route](execution/task-routes.md#refactoring); accept the preserved behavior baseline and final equivalence evidence. |
+
+Read [stage handoffs](execution/stage-handoffs.md) when preparing intent/spec/plan or implementing.
+It assigns outcome decisions to intent, observable behavior to spec, executable work/proof to
+plan and final evidence to implementation. Carry settled decisions and criterion references
+forward; preserve existing artifacts and approval instead of creating another gate.
+
+Combine routes when the requested result needs them. "Compare and propose" ends with a proposal;
+"compare and then implement" includes implementation, subject to the existing writing workflow.
+Do not turn every route transition into an interview or a new approval request. Ask for missing
+outcome decisions that cannot be established from evidence; reuse decisions already given.
+
+Writing routes still follow the existing plan-first, approval, artifact, branch and review rules.
+A requested document edit is writing work too. Selecting a route neither grants permission nor
+satisfies, resets or replaces the plan-first approval marker. Use the existing project skills
+only for the work they serve; no new skill chain or document is required by this routing guide.
+
+The implementation skill reads [task execution routes](execution/task-routes.md) before making
+or assigning edits. Carry the selected route and its repro/criteria/baseline into implementer
+and reviewer prompts. Failed evidence returns to that route before delivery. Project approval,
+artifacts and delegation remain unchanged; upstream TDD seam guidance reuses approved boundaries
+instead of introducing another user confirmation. These are execution instructions, not a hook
+that proves the model followed them; verify actual tool events and resulting artifacts.
+
+## Web verification branch
+
+User-visible web changes, including helper/API/state effects outside UI file globs, enter
+[web acceptance](qc/web-acceptance.md) after implementation and code checks. The implementation
+skill assigns an agent with browser tools or the main agent executes the step. It operates the
+actual journey through completion, fresh persistence read and applicable recovery in three
+viewports. Failures return to implementation and affected paths rerun on the final candidate.
+Missing required execution stays unverified in `pr.md` and delivery. Native-only and internal-only
+work keep their applicable checks. This is a shared Claude/Codex execution guide, not a new hook
+or proof that a browser ran; preserve all existing approval, data and runtime boundaries.
+
+## Cross-host execution
+
+The stage and task contracts define shared responsibilities. Use the host's actual question,
+planning and delegation tools or ordinary dialogue and file reads. A Claude-only tool name is
+not a dependency for Codex. If a skill is not discoverable, read its canonical file directly.
+The main agent owns material questions, approval scope and acceptance; delegate only to
+available capabilities and accept actual returned status/results.
+
+This template installs Claude session hooks and common Git hooks. It does not install
+corresponding Codex session hooks: describe that repository wiring, not a product-wide claim
+that Codex has no hooks. Never manufacture trust or approval markers to join preapproval
+evidence with postapproval implementation. Keep any missing execution explicit.
+
 ## Changing the harness
 
 1. Name the `PLAYBOOK_MAP.md` row the change moves (row ID, status before → after). An element with
@@ -30,7 +92,7 @@ reasons in `docs/decisions/0000-harness-decisions.md`.
 | `.agents/skills/`, `.claude/skills/` | Skill root and its symlink mirror |
 | `.claude/agents/` | Subagents (`verifier`) |
 | `.claude/settings.json`, `.husky/*` | Hook wiring and `permissions` |
-| `.codex/config.toml`, `.codex/rules/harness.rules` | Codex: no hooks; rules forbid push, hook-skipping commits and `git -c`/`-C` |
+| `.codex/config.toml`, `.codex/rules/harness.rules` | Codex configuration and command rules; this template installs no Codex session hooks |
 | `.claude/evals/`, `scripts/harness/run-evals.py` | Behavioural evals (model quota; not in `test:harness`) |
 | `docs/changes/` | One committed folder per change; see its README |
 | `docs/decisions/` | ADRs; `0000` is the harness record |
@@ -97,8 +159,8 @@ Not enforced; guides and PR review (`REVIEW.md`) cover them.
 - **Approval variable.** A child `HARNESS_PLAN_APPROVED=1 claude -p …` skips plan-first;
   `permissions.deny` refuses a command that assigns the variable, by its text only (a script file
   that sets it passes).
-- **Codex.** No plan-first, protected paths or formatter: Codex follows `AGENTS.md`, skills and git
-  hooks.
+- **Codex wiring.** This template installs no Codex plan-first, protected-path or formatter
+  session hooks. Codex follows `AGENTS.md`, skills and the configured Git hooks.
 
 ## Skills
 

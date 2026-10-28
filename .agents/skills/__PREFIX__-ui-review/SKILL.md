@@ -1,6 +1,6 @@
 ---
 name: __PREFIX__-ui-review
-description: Review a UI diff for design quality — web-design-guidelines on the changed UI files, plus review-animations when motion files changed — and report findings in REVIEW.md severities. Use after changing __UI_SOURCE_GLOB__, before declaring a UI change done, or when the user says "UI 리뷰", "화면 리뷰", "디자인 검토", "ui review". Not for logic/spec review (/review-since).
+description: Review user-visible changes for design, behavior and browser acceptance, including helper/API/validation effects outside __UI_SOURCE_GLOB__. Use before UI implementation for scope, before delivery, or for UI review requests. Internal-only work uses ordinary code review.
 argument-hint: "[base ref, e.g. origin/__INTEGRATION_BRANCH__] — base defaults to the merge-base with __INTEGRATION_BRANCH__"
 ---
 
@@ -9,10 +9,15 @@ reports in the severities `REVIEW.md` defines.
 
 ## 1. Scope the diff
 
-1. Resolve the base (`$0`, else `git merge-base HEAD origin/__INTEGRATION_BRANCH__`) and list the
-   changed files matching `__UI_SOURCE_GLOB__`. If none, say so and stop.
-2. Split them: **UI files** (anything rendering markup) and **motion files** (animation/transition
-   definitions, `@keyframes`, motion tokens). Everything else is out of scope.
+1. Before implementation, identify the user outcome, normal entry, observable finish and relevant
+   recovery paths. Inspect the existing rendered product and agreed design reference. For web,
+   prepare `docs/standards/qc/web-acceptance.md`. A new screen has no fabricated before image.
+2. Prefer the task-owned diff/baseline when concurrent changes exist; otherwise resolve the base
+   (`$0`, else `git merge-base HEAD origin/__INTEGRATION_BRANCH__`). Start at `__UI_SOURCE_GLOB__`
+   and follow helpers/API/state changes with visible effects. Stop only when the scope has no
+   visible effect; a missing UI-path diff or `시각 변경 없음` alone is insufficient.
+3. Review rendering/behavior against the existing project contract. Include markup, styles and
+   relevant state/validation; apply motion criteria only to changed motion. Keep unrelated logic out.
 
 ## 2. Code pass (in this session, one after another)
 
@@ -21,7 +26,15 @@ reports in the severities `REVIEW.md` defines.
 - If there are motion files, read `.agents/skills/review-animations/SKILL.md` and the files it
   references, and follow it on them. Otherwise skip and say so.
 
-## 3. Report
+## 3. Browser acceptance
+
+For web outcomes, execute `docs/standards/qc/web-acceptance.md`. When called from `__PREFIX__-implement`,
+its browser step owns assignment and execution; reuse current-candidate evidence rather than
+running the same step twice. For standalone verification, own that execution here. A request
+limited to static review stays within that scope and labels browser outcomes unverified.
+Native-only changes use the project's device/emulator procedure and report unavailable coverage.
+
+## 4. Report
 
 - Deduplicate: a defect flagged by more than one pass is one finding; keep one file:line.
 - Rank each finding with the `REVIEW.md` severities and apply its rules (failure scenario or
@@ -29,5 +42,6 @@ reports in the severities `REVIEW.md` defines.
 - Output in __HUMAN_DOC_LANG__: findings ranked blocker → major → minor with the pass that found
   them, then questions, then 미검증 잔여 (skipped passes, with the reason).
 
-Add a render pass here when the project has one (a screenshot critic subagent under
-`.claude/agents/`); until then say the render pass was not run.
+Report browser failures before visual findings, and missing execution as unverified. Keep code,
+rendered interaction, connected E2E and input-device coverage separate; screenshots alone do
+not complete the journey. Apply any project visual-review procedure alongside this contract.

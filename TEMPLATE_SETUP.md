@@ -1,156 +1,108 @@
-# AI SDLC Agent Harness — 템플릿 설정 안내
+# 템플릿 설정과 프로젝트 적용
 
-이 저장소는 **에이전트 개발 하네스(agent development harness)** 의 재사용 가능한 GitHub 템플릿이다.
-Claude Code / Codex 같은 코딩 에이전트가 한 저장소 안에서 일관되게 움직이도록,
-① 항상 로드되는 운영 계약(`AGENTS.md`), ② 스킬 계층(`.agents/skills/`),
-③ 모델 판단과 무관하게 도는 결정적 게이트(hooks · husky), ④ 단계마다 브랜치에 커밋하는 산출물 체인
-(`docs/changes/<YYMMDD_NN>-<slug>/`), ⑤ 그 전부를 기계적으로 검사하는 체커와 회귀 테스트를 묶어 놓았다.
-기준은 Anthropic "AI-Native SDLC Playbook"(`docs/references/`)이고, 대응표는 `docs/standards/PLAYBOOK_MAP.md`다.
+처음 사용하는 흐름과 완료 기준은 [README](README.md)에 있습니다.
+이 문서는 초기화 옵션, 프로젝트가 채울 설정, 기존 프로젝트로 개선을 가져오는 절차를 다룹니다.
 
-실제로 운영 중이던 폴리글랏 모노레포의 하네스에서 추출했다. 프로젝트 고유 지식은 모두 제거하고
-`__UPPER_SNAKE__` 플레이스홀더로 바꿔 두었다.
+## 새 저장소 초기화
 
-## Use this template — 3단계
-
-1. GitHub 에서 **Use this template** 으로 새 저장소를 만들고 클론한다.
-2. 플레이스홀더를 한 번에 치환한다.
-
-   ```sh
-   sh scripts/harness/init-template.sh \
-     --project-name acme-platform --prefix acme --app web \
-     --apps-overview "Polyglot monorepo: apps/web (React, Vite), apps/api (Spring Boot, Java 21)." \
-     --package-manager pnpm --node-version 22.12.0 \
-     --ui-source-glob 'apps/web/src/**/{ui,routes}/**' \
-     --human-doc-lang Korean
-   ```
-
-   브랜치는 트렁크(`main` 하나)가 기본값이다. 다르면 `--default-branch`, `--integration-branch` 로 준다.
-   `--integration-branch` 를 주지 않으면 기본 브랜치를 따른다.
-
-   스킬 디렉터리 `__PREFIX__-*` 와 `apps/__APP__` 도 함께 rename 되고 `.claude/skills` 심링크가 다시 걸린다.
-   템플릿 자신의 변경 폴더(`docs/changes/` 아래 `README.md`·`_templates/` 외)와 `.claude/evals/results.jsonl` 은
-   지우고, 하네스 결정 기록 `docs/decisions/0000-harness-decisions.md` 와 `docs/references/` 는 남긴다.
-   `scripts/harness/init-template.sh` 는 한 번만 쓰고 3단계에서 지운다.
-3. 검증하고, init 스크립트를 지우고, 초기화한 트리를 첫 커밋으로 남긴다.
-
-   ```sh
-   pnpm install          # husky 만 설치된다
-   pnpm test:harness     # 하네스 계약 + 가드 회귀 테스트
-   git config user.name "…" && git config user.email "…"
-   rm scripts/harness/init-template.sh
-   git add -A && git commit -m "chore: init template"
-   ```
-
-   deny 규칙이 `git -c` 를 막으므로, 작성자는 위처럼 저장소 로컬 설정에 넣어 둔다 — 에이전트 세션도 이 이름으로
-   커밋한다.
-
-그 다음 실제로 채워야 할 것: `AGENTS.md` 의 `## Commands`(test·typecheck 명령 하나씩)와
-`## Things agents get wrong`, `apps/<app>/AGENTS.md`, `.husky/pre-commit` 의 프로젝트 게이트,
-`.agents/harness.json` 의 `format_on_edit`(포매터를 쓴다면), `docs/agents/issue-tracker.md`(트래커를 쓴다면).
-CI 는 없다. 켜려면 `docs/examples/` 의 비활성 예시에서 시작한다.
-
-옛 버전 템플릿에서 옮겨 왔다면: 이제 `docs/changes/` 를 git 이 무시하지 않으므로 커밋하지 않을 옛 로컬 변경
-폴더는 `.git/info/exclude` 에 한 줄씩 넣는다.
-
-## 플레이스홀더 표
-
-| 플레이스홀더 | 의미 | 예시 |
-|---|---|---|
-| `__PROJECT_NAME__` | 저장소/프로젝트 이름 (`package.json` name 포함) | `acme-platform` |
-| `__PREFIX__` | 어댑터 스킬 접두사 — 디렉터리명·슬래시 커맨드 모두 | `acme` → `/acme-intent` |
-| `__APP__` | 예시 앱 디렉터리 이름 (`apps/__APP__`) | `frontend` |
-| `__APPS_OVERVIEW__` | AGENTS.md 첫 문단: 앱 목록과 스택 한 덩어리 | "Polyglot monorepo … pnpm 9, Node ≥ 22.12." |
-| `__PACKAGE_MANAGER__` | 문서·권한 허용 목록·pre-push 에 적히는 패키지 매니저 명령 | `pnpm` |
-| `__NODE_VERSION__` | `package.json` engines.node 하한 | `22.12.0` |
-| `__DEFAULT_BRANCH__` | 운영 브랜치 | `main` |
-| `__INTEGRATION_BRANCH__` | 통합 브랜치 (PR 대상). 트렁크면 기본 브랜치와 같다 | 기본값: `__DEFAULT_BRANCH__` 값 |
-| `__UI_SOURCE_GLOB__` | UI 리뷰가 필요한 소스 범위 | `apps/frontend/src/**/{ui,host,routes}/**` |
-| `__HUMAN_DOC_LANG__` | 사람이 읽는 산출물의 언어 | `Korean` |
-
-`__HUMAN_DOC_LANG__` 을 Korean 이외로 바꾸면 `docs/changes/_templates/*.md` 와 그 구조 마커(제목·상태 문자열,
-`시각 변경 없음` 등)도 함께 번역해야 한다 — 어댑터 스킬과 `REVIEW.md` 가 이 문자열을 참조한다.
-`__PACKAGE_MANAGER__` 를 pnpm 이외로 바꾸면 `package.json` 의 `test:harness` 스크립트 본문과
-`packageManager` 필드, `.husky/pre-push` 가 부르는 test 명령도 확인해 고친다.
-커밋 메시지 형식은 `docs/standards/COMMIT_CONVENTION.md` 에 직접 적혀 있다(가이드, PR 리뷰에서 확인).
-`Co-Authored-By` 같은 트레일러도 가이드로 금지하고, `.claude/settings.json` `attribution` 이 Claude Code 꼬리말을 끈다.
-허용하기로 정하면 둘을 함께 바꾼다.
-
-## 무엇이 들어 있나 (A/B 버킷)
-
-### A. 원본 그대로 가져온 것
-
-- 벤더 스킬: `grilling`, `to-spec`, `to-tickets`, `implement`, `tdd`, `review-since`, `diagnosing-bugs`,
-  `prototype`, `writing-for-agents`, `handoff`, `web-design-guidelines`, `review-animations`,
-  `animation-vocabulary`, `ponytail`. 어댑터가 감싸는 것은 `disable-model-invocation: true` 로 잠겨 있고
-  어댑터가 경로로 읽는다. 로컬 유틸리티 `git-commit`(커밋 규칙을 `COMMIT_CONVENTION.md` 에 맞게 고침)과
-  `draw-diagram` 은 상류가 없어 갱신 대상이 아니다.
-- `scripts/harness/`: `vendor-skills.py`, `run-evals.py`, `ensure-husky.sh`.
-- `scripts/`: `check-agent-harness.py`, `plan-first.py`, `protected-paths-guard.py`, `secret-scan.py`, `format-on-edit.py`.
-- `docs/changes/_templates/{intent,spec,plan}.md`, `.claude/evals/README.md`, `.codex/config.toml`,
-  `.claude/agents/verifier.md`.
-
-### B. 그대로 쓰되 토큰만 플레이스홀더로 바꾼 것
-
-`AGENTS.md`, `CLAUDE.md`, `.agents/harness.json`, 어댑터 스킬(`__PREFIX__-intent`/`-spec`/`-tickets`/
-`-implement`/`-ui-review`/`-adr`/`-ponytail`), `docs/agents/issue-tracker.md`,
-`docs/standards/AGENT_HARNESS.md`, `.claude/settings.json`, `.husky/pre-commit`,
-`apps/__APP__/AGENTS.md`, `package.json`, `.claude/evals/cases.jsonl`.
-
-원본을 일반화해 다시 쓴 것: `REVIEW.md`(제품 고유 검사 줄을 뺌), `docs/standards/COMMIT_CONVENTION.md`
-(원본의 커밋 규칙 문서와 `.codex/rules/commit-convention.mdc` 를 한 곳으로 모음 — `.mdc` 는 Codex 가 읽지 않아 지웠다).
-템플릿에서 새로 쓴 것: `.codex/rules/harness.rules`(`git push`·`--no-verify` 두 번째 울타리),
-`scripts/plan-first.py`·`scripts/secret-scan.py`·`scripts/format-on-edit.py`·`.husky/pre-push`,
-`docs/standards/PLAYBOOK_MAP.md`, `docs/decisions/0000-harness-decisions.md`, `docs/examples/`.
-
-### C. 일부러 뺀 것 (프로젝트 고유)
-
-- 도메인 스킬 전부: 백엔드/프런트엔드 아키텍처 가이드, 디자인 시스템, 데스크톱 패키징·릴리스,
-  capability ledger, UX 라이팅, 제품 DB 조회 스킬 등 — 특정 제품 지식에 묶여 있어 옮겨봐야 쓸모가 없다.
-- 도메인 가드·스크립트: `ds-design-guard.py`(디자인 토큰), `ds-registry-drift-check.sh`,
-  `ledger-update.sh`(데스크톱 capability ledger), `brs-skill-sync-check.sh`,
-  `frontend-quality-check.sh` 와 그 테스트들 — husky 훅과 `.claude/settings.json` 에서도 뺐다.
-- `docs/standards/<domain>/**`, `docs/knowledge/**`(생성 인덱스 시스템 포함), `docs/adr/**`,
-  실제 변경 폴더 `docs/changes/<날짜>-*`, `ui-critic`/`agent-thread-inspector`
-  서브에이전트, `bitbucket-pipelines.yml`.
-- 원본 evals 9케이스(하드코딩된 색상 hex, `*.generated.ts` 등 프로젝트 규칙을 검사) → 하네스 지시를 재는 일반 케이스로 교체.
-
-## 가치 리뷰
-
-PR 은 가치 리뷰다. `pr.md`(`docs/changes/_templates/pr.md`)에 기대한 가치와 실제 결과·증거를 대조하고,
-확인 못 한 가치는 그대로 적는다. `## 가치 확인` 제목과 상태 문자열은 언어를 바꿀 때 템플릿과 함께 맞춘다.
-
-## 게이트 추가하는 법
-
-- **먼저 판정**: "어기면 되돌릴 수 없거나 사람 리뷰에서 안 보이나?" — 예면 시스템, 아니면 가이드다
-  (`docs/standards/HARNESS_PRINCIPLES.md`). 반쯤 강제하는 게이트는 넣지 않는다. 옮기는 `PLAYBOOK_MAP.md`
-  행을 적고 `docs/decisions/0000-harness-decisions.md` 를 고친다.
-- **어느 층에**: 층 순서는 DB 제약 > CI > pre-commit > 에이전트 훅 > 문서다(앞일수록 우회하기 어렵다).
-  넣지 않은 게이트는 있다고 적지 않는다. 이 템플릿에는 CI 가 없다.
-- **커밋 게이트**: `.husky/pre-commit` 에 한 줄 추가(무엇을 막는지 + 끄는 법을 주석으로) →
-  `.agents/harness.json` `hook_intents` 에 `{id, event, script}`(세션 훅은 `matcher` 도)로 선언한다.
-  선언과 배선이 어긋나거나 스크립트가 없으면 `check:harness` 가 실패한다.
-- **세션 훅**: `.claude/settings.json` 의 해당 이벤트에 추가하고 같은 `hook_intents` 항목에 이벤트와 matcher 를 적는다.
-  Codex 에는 세션 훅이 없다 — AGENTS.md·스킬·git 훅만 따른다.
-- **편집 차단**: `.agents/harness.json` `protected_paths` 에 `{id, globs, reason, instead}` 추가.
-  예시는 `docs/standards/AGENT_HARNESS.md` 에 있다.
-
-## 검증 명령
+GitHub **Use this template**으로 생성한 저장소에서 실행합니다.
+기본 도구는 Git, Python 3.9 이상, Node.js 22.12 이상, pnpm 9입니다.
+Claude/Codex CLI와 브라우저·앱 도구는 필요한 실행에 맞게 별도로 준비합니다.
 
 ```sh
-pnpm check:harness        # 하네스 계약 (읽기 전용)
-pnpm test:harness         # check:harness + 가드 회귀 테스트 전부
-pnpm evals:harness        # claude -p 행동 회귀 (모델 쿼터 소모, test:harness 에 포함되지 않음)
+sh scripts/harness/init-template.sh \
+  --project-name acme-platform --prefix acme --app web \
+  --apps-overview "apps/web and apps/api. Describe the actual stack." \
+  --package-manager pnpm --node-version 22.12.0 \
+  --ui-source-glob 'apps/web/src/**' --human-doc-lang Korean
+pnpm install
+pnpm test:harness
 ```
 
-## 라이선스 / 출처
+기본은 main 트렁크입니다. 다른 기본 브랜치는 `--default-branch`, 별도 통합 브랜치는
+`--integration-branch`로 지정합니다. 통합 브랜치를 생략하면 기본 브랜치를 따릅니다.
+초기화는 스킬·앱 디렉터리를 rename하고 미러를 다시 연결합니다.
+템플릿 자신의 변경 폴더와 eval 결과는 지우며 하네스 ADR·표준·템플릿·참고 자료는 남깁니다.
+기존 프로젝트에 init을 다시 실행하면 자체 기록을 지울 수 있으므로 사용하지 않습니다.
 
-`.agents/skills/` 의 벤더 스킬은 각 상류 저장소의 MIT 라이선스를 따른다
-(출처와 갱신 명령은 `.agents/harness.json` `skills.vendored` 에 선언되어 있다).
+설정과 검증을 마친 뒤 작성자 정보를 확인하고 초기 상태를 커밋합니다.
 
-- `github.com/mattpocock/skills` (MIT) — grilling, to-spec, to-tickets, implement, tdd,
-  code-review(→ review-since), diagnosing-bugs, prototype, writing-for-agents, handoff
-- `github.com/vercel-labs/agent-skills` (MIT) — web-design-guidelines
-- `github.com/emilkowalski/skills` (MIT) — review-animations, animation-vocabulary
-- `github.com/DietrichGebert/ponytail` (MIT) — ponytail
+```sh
+git config user.name "Your Name"
+git config user.email "you@example.com"
+rm scripts/harness/init-template.sh
+git add -A
+git commit -m "chore: init template"
+```
 
-갱신은 손으로 고치지 말고 `python3 scripts/harness/vendor-skills.py --source <owner>/<repo>` 로 한다.
+init 스크립트는 한 번만 사용합니다. 실제 테스트·타입 검사 명령 설정까지 끝나야 앱 개발 준비가 됩니다.
+
+## 플레이스홀더와 옵션
+
+| 플레이스홀더 | 옵션·설정 | 의미 |
+|---|---|---|
+| `__PROJECT_NAME__` | `--project-name` | 프로젝트 이름 |
+| `__PREFIX__` | `--prefix` | 프로젝트 adapter 접두사 |
+| `__APP__` | `--app` | 예시 앱 디렉터리 |
+| `__APPS_OVERVIEW__` | `--apps-overview` | 실제 앱과 스택 |
+| `__PACKAGE_MANAGER__` | `--package-manager` | 명령에 사용하는 패키지 매니저 |
+| `__NODE_VERSION__` | `--node-version` | Node 최소 버전 |
+| `__DEFAULT_BRANCH__` | `--default-branch` | 기본 브랜치 |
+| `__INTEGRATION_BRANCH__` | `--integration-branch` | PR 대상 통합 브랜치 |
+| `__UI_SOURCE_GLOB__` | `--ui-source-glob` | UI 검사 출발점; 보이는 helper/API 효과도 포함 |
+| `__HUMAN_DOC_LANG__` | `--human-doc-lang` | 사람용 산출물 언어 |
+
+다른 언어를 선택하면 `docs/changes/_templates/`의 제목·상태 문자열과 이를 참조하는 adapter도
+함께 맞춥니다. 다른 패키지 매니저를 쓰면 `package.json` scripts·packageManager,
+permission 허용 명령과 pre-push 명령을 함께 확인합니다.
+
+## 프로젝트에서 채울 것
+
+| 파일 | 설정할 내용 |
+|---|---|
+| `AGENTS.md` | 앱 구조, 실제 test/typecheck 명령, 반복되는 실수와 도메인 불변식 |
+| `apps/<app>/AGENTS.md` | 앱별 구조·컨벤션·검증·금지사항 |
+| `package.json` | 앱 test·typecheck 명령; 기본 test:harness만으로 앱 검증을 대신하지 않기 |
+| `.agents/harness.json` | 실제 보호 경로와 formatter argv |
+| `.husky/pre-commit` | 프로젝트에 필요한 빠른 가드 |
+| `docs/agents/issue-tracker.md` | 사용하는 트래커와 게시 권한; 기본은 외부 트래커 없음 |
+| `docs/standards/qc/web-acceptance.md` | 프로젝트별 backend·계정·runtime·브라우저 검증 절차의 연결 |
+| `.claude/settings.json` | 실제 명령 권한과 신뢰한 hook 배선 |
+| `.codex/config.toml`, `.codex/rules/harness.rules` | 호스트에서 신뢰·지원하는 설정과 command 경계 |
+
+임의로 권한·승인 마커를 만들어 설정을 통과시키지 않습니다.
+호스트 전용 설정을 다른 호스트의 강제로 설명하지 않습니다. 이 템플릿은 Codex 세션 편집 훅을
+설치하지 않으며, 양호스트의 git 가드는 Husky 배선과 실제 실행 여부를 확인해야 합니다.
+CI 예시는 비활성이므로 필요한 경우 프로젝트 정책에 맞게 별도로 채택합니다.
+
+## 기존 프로젝트에 개선 가져오기
+
+이 템플릿은 자동 동기화 도구를 제공하지 않습니다.
+
+1. 프로젝트의 템플릿 기반 revision과 로컬 변경·현재 가드를 확인합니다.
+2. 공통 adapter·표준·runner의 변경을 비교하고 도메인 규칙을 보존해 병합합니다.
+3. 변경된 manifest·hook 배선·스킬 미러·산출물 정책을 함께 확인합니다.
+4. `pnpm test:harness`와 해당 앱 검증을 실행하고, 지시문 변화는 실제 과제로 관측합니다.
+5. 스펙 기준이 최종 구현·브라우저 증거까지 전달됐는지 검토합니다.
+   미실행·권한 거절·가드 차이는 그대로 남깁니다.
+
+옛 버전의 로컬 기록을 커밋하지 않을 때는 그 경로만 clone의 `.git/info/exclude`에 넣습니다.
+기존 프로젝트의 기록 정책을 공통 템플릿의 정책으로 덮어쓰지 않습니다.
+
+## 변경과 출처
+
+하네스 변경은 [AGENT_HARNESS](docs/standards/AGENT_HARNESS.md)의 절차를 따릅니다.
+manifest와 배선을 함께 바꾸고 [Playbook 대응표](docs/standards/PLAYBOOK_MAP.md) 및
+[ADR-0000](docs/decisions/0000-harness-decisions.md)에 이유를 기록합니다.
+사람이 보는 검토는 [REVIEW.md](REVIEW.md), 행동 평가와 제약은
+[평가 안내](.claude/evals/README.md)에 있습니다.
+
+스킬의 정본은 `.agents/skills/`이며 Claude 미러는 심링크입니다.
+프로젝트 adapter를 통해 upstream 원문에 프로젝트 절차를 적용합니다.
+vendored 스킬의 출처·license·revision·갱신 명령은 `.agents/harness.json`과 각 frontmatter가 소유합니다.
+MIT upstream은 mattpocock/skills, vercel-labs/agent-skills, emilkowalski/skills,
+DietrichGebert/ponytail입니다.
+
+Anthropic playbook PDF는 `docs/references/`에 있습니다. 공개 배포 전 배포 권한을 확인하고,
+권한이 없으면 PDF를 제거하고 공식 출처 링크로 교체합니다. 현재 작업이 공개 전환을 허가하지는 않습니다.
+pstack은 작업 분기와 평가 설계의 참고이며 코드·스킬을 그대로 vendor한 것은 아닙니다.

@@ -14,6 +14,10 @@ written files, unknown checks. Critical cases WARN at 2/3, others FAIL. `--mutat
 side by side: KILLED, SURVIVED (kept, its instruction marked a removal candidate in the results), ERROR for a
 run without an answer or a bad declaration. Each case appends one JSON line to the results file. `--jobs N`
 runs copies side by side in case order. The real checkout and the temp directory are left as found.
+The model child receives EOF even when the scripted caller supplies nonempty standard input.
+Normal and nonzero model completion stops owned children while an independent process survives.
+Successful auth-error quotations do not abort later cases; native errors and missing completion cannot
+pass. Git overrides from the caller or a case cannot change the archived source or original Git state.
 """
 
 from __future__ import annotations
@@ -21,9 +25,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -32,7 +38,7 @@ RUNNER = REPO / "scripts/harness/run-evals.py"
 # Logs its argv, environment and what the copy looks like (one line per call), then prints stream-json events
 # for the prompt and writes what the events say it wrote. The user path is split so no scanner reads it.
 FAKE_CLAUDE = """#!/usr/bin/env python3
-import json, os, subprocess, sys, time
+import json, os, signal, subprocess, sys, time
 from pathlib import Path
 state = Path(os.environ["FAKE_CLAUDE_STATE"])
 prompt = sys.argv[sys.argv.index("-p") + 1]
@@ -43,9 +49,35 @@ dot_git = Path(".git")  # a worktree's .git is a file naming the real checkout
 git_files = [dot_git] if dot_git.is_file() else [p for p in dot_git.rglob("*") if p.is_file()]
 runner_test = Path("scripts/test/run-evals.test.py")  # test:harness names it: must run, skip, leak nothing
 stub = subprocess.run([sys.executable, str(runner_test)], capture_output=True, text=True) if runner_test.is_file() else None
+stdin = sys.stdin.read() if os.environ.get("FAKE_READ_STDIN") else None
+if os.environ.get("FAKE_CHILD_MARKER"):
+    marker = Path(os.environ["FAKE_CHILD_MARKER"])
+    child_code = '''import json, os, signal, sys, time
+from pathlib import Path
+marker = Path(sys.argv[1])
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+pending = marker.with_suffix('.pending')
+pending.write_text(json.dumps({'pid': os.getpid(), 'pgid': os.getpgrp()}))
+pending.replace(marker.with_suffix('.ready'))
+deadline = time.monotonic() + 20
+while not marker.with_suffix('.release').exists() and time.monotonic() < deadline:
+    time.sleep(0.01)
+if marker.with_suffix('.release').exists():
+    marker.write_text('child write after evaluation returned')
+'''
+    child_streams = {} if os.environ.get("FAKE_CHILD_KEEP_PIPES") else {
+        "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    subprocess.Popen([sys.executable, "-c", child_code, str(marker)], stdin=subprocess.DEVNULL, **child_streams)
+    deadline = time.monotonic() + 3
+    while not marker.with_suffix('.ready').exists():
+        if time.monotonic() > deadline:
+            sys.exit('finite child did not start')
+        time.sleep(0.01)
 with (state / "calls.jsonl").open("a", encoding="utf-8") as log:
     log.write(json.dumps({
         "argv": sys.argv[1:], "prompt": prompt, "cwd": os.getcwd(),
+        "stdin": stdin,
+        "git_env": sorted(k for k in os.environ if k.startswith("GIT_")),
         "env": sorted(k for k in os.environ if k.startswith(("ANTHROPIC_", "CLAUDE_CODE_"))),
         "approved": os.environ.get("HARNESS_PLAN_APPROVED"),
         "hooks": sorted(h["command"] for gs in settings.get("hooks", {}).values() for g in gs for h in g["hooks"]),
@@ -79,10 +111,17 @@ intent = next(p.name for p in Path(".agents/skills").glob("*-intent"))
 if prompt == "auth":
     emit({"type": "result", "is_error": True, "result": "Failed to authenticate. Please log in."})
     sys.exit(1)
+if prompt == "native-auth-result-zero":
+    emit({"type": "result", "subtype": "error_during_execution", "is_error": True,
+          "result": "authentication_error: login expired"})
+    sys.exit(0)
+if prompt == "native-auth-event":
+    emit({"type": "error", "error": {"type": "invalid_api_key", "message": "login expired"}})
+    sys.exit(1)
 if prompt == "crash":
     print("Claude usage limit reached.")
     sys.exit(1)
-if prompt == "route" or (prompt.startswith("flaky") and count % 3 != 2):
+if prompt in {"route", "auth-quote-final", "auth-quote-tool", "native-error", "missing-result", "git-case-env"} or (prompt.startswith("flaky") and count % 3 != 2):
     tool("Skill", skill=intent)
 elif prompt.startswith("flaky"):
     tool("Skill", skill="grilling")
@@ -114,7 +153,21 @@ elif prompt.startswith("meet-"):
         time.sleep(0.05)
     if partner.exists():
         tool("Skill", skill=intent)
-emit({"type": "result", "subtype": "success", "is_error": False, "result": "done with " + prompt})
+if prompt == "auth-quote-tool":
+    tool("Read", file_path="src/login.py")
+    emit({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t",
+          "content": "raise authentication_error('Failed to authenticate')"}]}})
+if prompt == "native-error":
+    emit({"type": "result", "subtype": "error_during_execution", "is_error": True,
+          "result": "Tool execution failed"})
+    sys.exit(0)
+if prompt == "missing-result":
+    sys.exit(0)
+final = "The source prints Failed to authenticate for authentication_error." if prompt == "auth-quote-final" else "done with " + prompt
+emit({"type": "result", "subtype": "success", "is_error": False, "result": final})
+if os.environ.get("FAKE_STDERR"):
+    print(os.environ["FAKE_STDERR"], file=sys.stderr)
+sys.exit(int(os.environ.get("FAKE_EXIT_CODE", "0")))
 """
 
 # Fails on FAKE_INIT_FAIL; otherwise renames the prefixed skill and fills one placeholder, as the real one does.
@@ -158,6 +211,15 @@ CASES = [
     {"id": "crash", "prompt": "crash", "expect": SKILL, "measures": [{"file": "AGENTS.md", "text": "Keep it short.\n"}]},
     {"id": "meet-a", "prompt": "meet-a", "expect": SKILL},
     {"id": "meet-b", "prompt": "meet-b", "expect": SKILL},
+    {"id": "auth-quote-final", "prompt": "auth-quote-final", "expect": SKILL},
+    {"id": "auth-quote-tool", "prompt": "auth-quote-tool", "expect": SKILL},
+    {"id": "native-auth-result-zero", "prompt": "native-auth-result-zero", "expect": SKILL},
+    {"id": "native-auth-event", "prompt": "native-auth-event", "expect": SKILL},
+    {"id": "native-error", "prompt": "native-error", "expect": SKILL,
+     "measures": [{"file": "AGENTS.md", "text": "Keep it short.\n"}]},
+    {"id": "missing-result", "prompt": "missing-result", "expect": SKILL},
+    {"id": "git-case-env", "prompt": "git-case-env", "expect": SKILL,
+     "env": {"GIT_DIR": "case-injected-git", "GIT_WORK_TREE": "case-injected-tree", "GIT_INDEX_FILE": "case-injected-index"}},
 ]
 # What would take the child off the subscription login, as claude 2.1.296 reads it (key credentials, workload
 # identity, an explicit profile, provider switches, endpoint, socket and custom headers), and the subscription
@@ -187,7 +249,10 @@ def main() -> int:
             "scripts/harness/init-template.sh": FAKE_INIT,
             "scripts/test/run-evals.test.py": "FIXTURE_ANSWERS = 'replaced by a stub in copies'\n",
             ".claude/settings.json": json.dumps(SETTINGS, indent=2) + "\n",
-            ".claude/evals/cases.jsonl": "".join(json.dumps(c) + "\n" for c in CASES),
+            ".claude/evals/cases.jsonl": "".join(json.dumps(
+                {**c, "env": {"GIT_DIR": str(repo / ".git"), "GIT_WORK_TREE": str(repo),
+                               "GIT_INDEX_FILE": str(repo / ".git/index")}}
+                if c["id"] == "git-case-env" else c) + "\n" for c in CASES),
             ".agents/skills/__PRE" "FIX__-intent/SKILL.md": "---\nname: __PRE" "FIX__-intent\n---\n",
             "AGENTS.md": "# Rules\n\nAlways route.\nKeep it short.\n",
             "docs/changes/README.md": "kept\n",
@@ -221,9 +286,11 @@ def main() -> int:
                "FAKE_ROOT": str(repo.resolve()), "HARNESS_PLAN_APPROVED": "1"}
         results = state / "results.jsonl"
 
-        def run(*args: str, **extra: str) -> subprocess.CompletedProcess[str]:
+        def run(*args: str, caller_stdin: str | None = None, test_timeout: float | None = None,
+                **extra: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run([sys.executable, "scripts/harness/run-evals.py", *args], cwd=repo,
-                                  env={**env, **extra}, capture_output=True, text=True, errors="replace")
+                                  env={**env, **extra}, input=caller_stdin,
+                                  capture_output=True, text=True, errors="replace", timeout=test_timeout)
 
         def line(result: subprocess.CompletedProcess[str], case: str) -> str:
             return next((l for l in result.stdout.splitlines() if l.startswith(case + " ")), "")
@@ -261,6 +328,85 @@ def main() -> int:
             and record["model"] == "sonnet" and record["model_ids"] == ["fake-model-1"] and record["cli"] == "0.0.1" \
             and record["setting_sources"] == "project,local" and record["user_memory_isolated"] == "unverified" \
             and "mutated" not in record, f"one result line per case: {record}"
+
+        # A scripted caller's stdin (for example a heredoc) must never reach the model process.
+        result = run("--only", "route", "--results", str(state / "stdin-results.jsonl"),
+                     caller_stdin="SCRIPTED_CALLER_STDIN_NOT_A_PROMPT\n", FAKE_READ_STDIN="1")
+        assert result.returncode == 0 and "PASS 1/1" in line(result, "route"), f"{result.stdout}{result.stderr}"
+        assert calls()[-1]["stdin"] == "", f"the model child must receive EOF, not caller stdin: {calls()[-1]['stdin']!r}"
+
+        # The CLI can close its pipes and exit while one of its children is still working.
+        # It must not write after the evaluation returns, for either success or nonzero exit.
+        independent = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"],
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, start_new_session=True)
+        cleanup_observations = []
+        try:
+            for exit_code, keep_pipes in ((0, ""), (7, ""), (0, "1"), (7, "1")):
+                marker = state / f"child-{exit_code}-{bool(keep_pipes)}.late"
+                try:
+                    try:
+                        result = run("--only", "route", "--results", str(state / f"{marker.stem}-results.jsonl"),
+                                     test_timeout=5, FAKE_CHILD_MARKER=str(marker), FAKE_EXIT_CODE=str(exit_code),
+                                     FAKE_CHILD_KEEP_PIPES=keep_pipes)
+                    except subprocess.TimeoutExpired:
+                        cleanup_observations.append({"cli_exit": exit_code, "keep_pipes": bool(keep_pipes),
+                                                     "timed_out": True, "independent_alive": independent.poll() is None})
+                        continue
+                    expected = "PASS 1/1" if exit_code == 0 else "FAIL 0/1"
+                    assert result.returncode == (0 if exit_code == 0 else 1) and expected in line(result, "route"), \
+                        f"original exit and trace grading must stay: {result.stdout}{result.stderr}"
+                    if exit_code:
+                        assert "claude exited 7" in result.stdout, result.stdout
+                    marker.with_suffix('.release').touch()  # Only permit the child write after return.
+                    time.sleep(0.3)
+                    cleanup_observations.append({"cli_exit": exit_code, "late_write": marker.exists(),
+                                                 "keep_pipes": bool(keep_pipes), "timed_out": False,
+                                                 "independent_alive": independent.poll() is None})
+                finally:
+                    ready = marker.with_suffix('.ready')
+                    if ready.exists():
+                        child = json.loads(ready.read_text())
+                        try:
+                            if os.getpgid(child['pid']) == child['pgid']:
+                                os.kill(child['pid'], signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+        finally:
+            independent.kill()
+            independent.wait(timeout=3)
+        assert all(not row['timed_out'] and not row['late_write'] and row['independent_alive']
+                   for row in cleanup_observations), \
+            f"only owned children must stop before evaluation completion: {cleanup_observations}"
+        # Quoted source or diagnostic text on a successful run is not an authentication failure.
+        before_calls = len(calls())
+        result = run("--only", "auth-quote-final,auth-quote-tool", "--results", str(state / "quoted-results.jsonl"),
+                     FAKE_STDERR="The source's message is Failed to authenticate.")
+        assert result.returncode == 0 and all("PASS 1/1" in line(result, case)
+                                             for case in ("auth-quote-final", "auth-quote-tool")), \
+            f"successful source/tool/final quotations must not abort later cases: {result.stdout}{result.stderr}"
+        assert len(calls()) == before_calls + 2, "both successful cases must actually execute"
+
+        result = run("--only", "route", "--results", str(state / "stderr-results.jsonl"),
+                     FAKE_STDERR="Failed to authenticate. stderr 경계", FAKE_EXIT_CODE="1")
+        assert result.returncode == 2 and "/login" in result.stdout and "stderr 경계" in result.stdout, \
+            f"nonzero native stderr must still reach authentication handling: {result.stdout}{result.stderr}"
+        for case in ("native-auth-result-zero", "native-auth-event"):
+            result = run("--only", case, "--results", str(state / f"{case}-results.jsonl"))
+            assert result.returncode == 2 and "/login" in result.stdout, \
+                f"structured native authentication errors must abort, including rc0: {result.stdout}{result.stderr}"
+        before_calls = len(calls())
+        result = run("--only", "native-auth-result-zero,native-auth-event", "--jobs", "1",
+                     "--results", str(state / "auth-stop-results.jsonl"))
+        assert result.returncode == 2 and len(calls()) == before_calls + 1, \
+            f"an authentication failure must stop queued model calls: {result.stdout}{result.stderr}"
+        for case in ("native-error", "missing-result"):
+            result = run("--only", case, "--results", str(state / f"{case}-results.jsonl"))
+            assert result.returncode == 1 and "FAIL 0/1" in line(result, case), \
+                f"a matching Skill call cannot hide a failed/missing terminal result: {result.stdout}{result.stderr}"
+        result = run("--only", "native-error", "--mutate", "--results", str(state / "native-mutation-results.jsonl"))
+        assert result.returncode == 1 and "ERROR 1/1 runs got no answer" in line(result, "native-error"), \
+            f"a native error cannot count as killing a mutated instruction: {result.stdout}{result.stderr}"
         for flag in ("--login", "--api"):
             result = run("--only", "route", flag)
             assert result.returncode == 2 and "unrecognized arguments" in result.stderr, \
@@ -325,9 +471,43 @@ def main() -> int:
             problems = runner.measure_problems(repo, {"measures": [{"file": outside, "text": "Keep it short.\n"}]})
             assert problems and "relative path" in problems[0], (outside, problems)
 
-        # A GIT_DIR or GIT_WORK_TREE in the caller's environment reaches neither the copy's git nor the agent.
-        result = run("--only", "route", "--results", str(results), GIT_DIR=str(repo / ".git"), GIT_WORK_TREE=str(repo))
-        assert result.returncode == 0 and calls()[-1]["clean"], f"{result.stdout}{result.stderr}"
+        # Caller routing must not change which source is archived, and cases cannot reintroduce it.
+        foreign = Path(temp_dir) / "other-repository"
+        foreign.mkdir()
+        (foreign / "foreign.txt").write_text("unrelated source\n")
+        clean_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+        for args in (("init", "-q"), ("add", "--all"), ("commit", "-q", "-m", "foreign source")):
+            subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+                            "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", *args],
+                           cwd=foreign, env=clean_env, check=True, capture_output=True)
+        policy = repo / "AGENTS.md"
+        original_policy = policy.read_bytes()
+        policy.write_bytes(original_policy + b"staged source state\n")
+        assert git("add", "AGENTS.md").returncode == 0
+        policy.write_bytes(original_policy + b"unstaged source state\n")
+
+        def source_state(path: Path) -> tuple:
+            return (subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path, env=clean_env),
+                    (path / ".git/index").read_bytes(), (path / ".git/config").read_bytes(),
+                    {name: (path / name).read_bytes() for name in
+                     subprocess.check_output(["git", "ls-files", "-z"], cwd=path, env=clean_env).decode().split("\0") if name})
+
+        source_before, foreign_before = source_state(repo), source_state(foreign)
+        for name, value in (("GIT_DIR", str(foreign / ".git")), ("GIT_WORK_TREE", str(foreign)),
+                            ("GIT_INDEX_FILE", str(foreign / ".git/index")), ("GIT_COMMON_DIR", str(foreign / ".git"))):
+            result = run("--only", "route", "--results", str(results), **{name: value})
+            assert result.returncode == 0 and calls()[-1]["clean"] and not calls()[-1]["git_env"], \
+                f"caller {name} must reach neither source Git nor agent: {result.stdout}{result.stderr}"
+            assert last_result()["sha"] == sha, "the target source revision must be used, never the foreign repository"
+            assert source_state(repo) == source_before and source_state(foreign) == foreign_before, \
+                f"{name} changed original HEAD/index/config/working bytes"
+        result = run("--only", "git-case-env", "--results", str(results))
+        assert result.returncode == 0 and calls()[-1]["clean"] and not calls()[-1]["git_env"], \
+            f"case.env cannot inject Git routing into the child: {result.stdout}{result.stderr}"
+        assert source_state(repo) == source_before and source_state(foreign) == foreign_before, \
+            "case.env changed source state"
+        assert git("reset", "-q", "HEAD", "--", "AGENTS.md").returncode == 0
+        policy.write_bytes(original_policy)
 
         # --jobs: two cases that only pass together pass side by side, printed in case order.
         result = run("--only", "meet-a,meet-b", "--jobs", "2", "--results", str(results))
@@ -356,7 +536,8 @@ def main() -> int:
 
     print("PASS: run-evals runner (stream-json trace judging, git-status judging, excluded and initialized copies, "
           "case env and plan-approval drop, subscription login only, critical WARN, --mutate side by side with "
-          "removal candidates, results JSONL, --jobs)")
+          "removal candidates, results JSONL, --jobs, caller stdin isolation, owned child cleanup, native failure "
+          "channels, quoted auth text, queued auth stop, Git routing/source preservation)")
     return 0
 
 

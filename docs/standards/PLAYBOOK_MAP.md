@@ -9,13 +9,13 @@
 
 | ID | 단계 | play | 쪽 | 기준(우리 말) | 하네스 요소 | 상태 | 측정(선행 / 후행) |
 |---|---|---|---|---|---|---|---|
-| S1.1 | Plan | Capture as intent.md | p11–13 | 요청자의 말로 인터뷰해 템플릿대로 intent.md를 쓰고, 사람이 고친 뒤 변경 폴더에 커밋한다. | `.agents/skills/__PREFIX__-intent/`, `.agents/skills/grilling/`, `docs/changes/_templates/intent.md`, `docs/changes/README.md` | Met | 첫 대화→intent.md 커밋 시간 / 첫 spec.md 커밋 뒤 intent.md 수정 수 |
-| S2.1 | Design | Requirements and design | p15–17 | intent.md로 spec.md를 쓰며 우려를 표시하고, 사람이 검토해 intent.md 옆에 커밋한다. 빈 곳: 브랜드·보안·UX 정책 스킬, intent 수락이 spec을 띄우는 트리거. | `.agents/skills/__PREFIX__-spec/`, `.agents/skills/to-spec/`, `.agents/skills/prototype/`, `docs/changes/_templates/spec.md`, UI mock 권장(`README.md`) | Partial | intent.md→spec.md 커밋 간격 / 첫 plan.md 커밋 뒤 spec.md 커밋 수 |
+| S1.1 | Plan | Capture as intent.md | p11–13 | 합의한 요청·결정에서 intent.md를 정리한다. 실질 미결정은 확인하고 정식 인터뷰는 요청·수락 후 진행한다. 새 결정을 사람이 검토한 뒤 변경 폴더에 커밋한다. | `.agents/skills/__PREFIX__-intent/`, `.agents/skills/grilling/`, `docs/changes/_templates/intent.md`, `docs/changes/README.md` | Met | 첫 대화→intent.md 커밋 시간 / 첫 spec.md 커밋 뒤 intent.md 수정 수 |
+| S2.1 | Design | Requirements and design | p15–17 | intent.md의 결정으로 정상·경계·완료·중단·복구와 인수 기준을 쓰고, 새 결정을 사람이 검토해 intent.md 옆에 커밋한다. 빈 곳: 브랜드·보안·UX 정책 스킬, intent 수락이 spec을 띄우는 트리거. | `.agents/skills/__PREFIX__-spec/`, `.agents/skills/to-spec/`, `.agents/skills/prototype/`, `docs/changes/_templates/spec.md`, `docs/standards/execution/stage-handoffs.md`, UI mock 권장(`README.md`) | Partial | intent.md→spec.md 커밋 간격 / 첫 plan.md 커밋 뒤 spec.md 커밋 수 |
 | S3.1 | Build | Plan mode | p19–21 | 승인된 계획 없이 편집하지 않는다(p20). plan.md는 바뀌는 파일·작업 순서·위험·증명을 담아 커밋하고, 구현이 벗어나면 같은 커밋에서 고친다. 마커 뜻은 "이 세션이 마지막으로 plan mode에 들어간 뒤(EnterPlanMode 호출, 또는 plan mode에서 프롬프트를 보냄) 계획을 승인받았다"이지 "이 변경의 계획이 승인됐다"가 아니다. | `scripts/plan-first.py`, `.claude/settings.json`(PreToolUse·PostToolUse·UserPromptSubmit 배선), `.agents/harness.json` `plan_first`, `.agents/skills/__PREFIX__-implement/`, `.agents/skills/implement/`, `docs/changes/_templates/plan.md` | Met | 계획 승인→머지 시간, 첫 구현으로 머지된 비율 / 변경당 재작업 수, 머지 diff가 plan.md와 맞는 비율 |
-| S3.2 | Build | Auto mode | p21 | 계획 승인 뒤에는 편집마다 묻지 않고 구현한다. 빈 곳: auto 선택지(`Yes, and use auto mode`, 옛 이름 `auto-accept edits`)는 승인 때 사람이 고른다, worktree 병렬 안내 없음. | `.claude/settings.json` `defaultMode: acceptEdits`, 승인 안내(`README.md`) | Partial | 승인 뒤 편집 프롬프트 수(목표 0) / 머지 diff가 plan.md와 맞는 비율 |
+| S3.2 | Build | Auto mode | p21 | 계획 승인 뒤에는 편집마다 묻지 않고 구현한다. 빈 곳: 실제 호스트의 승인·편집 권한은 사람이 선택하며 worktree 병렬 안내 없음. | `.claude/settings.json` `defaultMode: acceptEdits`, 승인 안내(`CLAUDE.md`, `README.md`) | Partial | 승인 뒤 편집 프롬프트 수(목표 0) / 머지 diff가 plan.md와 맞는 비율 |
 | S3.3 | Build | Source of truth (sidebar) | p22 | 산출물마다 원본 시스템을 하나로 정한다. 여기서는 저장소가 원본이다. | `docs/agents/issue-tracker.md` | Met | 원본 선언 여부(문서 확인) / 외부 기록과 어긋난 사례 수 |
-| S3.4 | Build | CLAUDE.md | p23–24 | 새 합류자에게 필요한 명령·규칙·자주 틀리는 것만 한 쪽 이하로 루트에 커밋하고, 두 번 틀린 것은 고친다. | `AGENTS.md`(≤60줄, `always_on_max_lines`), `CLAUDE.md`(`@AGENTS.md`), `.agents/skills/writing-for-agents/` | Met | AGENTS.md가 막았어야 할 실수의 반복(`git log -p -- AGENTS.md`) / 새 팀원의 첫 머지 PR까지 시간 |
-| S3.5 | Build | Skills | p25–26 | 일관되게 적용할 지식은 스킬로 두고 트리거되는지 시험한다. 꼭 지킬 정책은 훅이나 리뷰가 받친다. 빈 곳: 소유자가 있는 정책 스킬(보안·API·브랜드)은 프로젝트 몫. | `.agents/skills/`(`.claude/skills` 미러), `scripts/harness/vendor-skills.py`, 라우팅 eval(`.claude/evals/cases.jsonl`) | Partial | 정책 변경 승인→스킬 머지 시간 / 정책을 인용한 PR 리뷰 지적 수 |
+| S3.4 | Build | CLAUDE.md | p23–24 | 새 합류자에게 필요한 명령·규칙·자주 틀리는 것만 한 쪽 이하로 루트에 커밋하고, 두 번 틀린 것은 고친다. | `AGENTS.md`(≤60줄, `always_on_max_lines`), `CLAUDE.md`(`@AGENTS.md`), `.agents/skills/writing-for-agents/`, 요청 결과 pointer(`docs/standards/AGENT_HARNESS.md#requested-outcomes`, 분기 pilot) | Met | AGENTS.md가 막았어야 할 실수의 반복(`git log -p -- AGENTS.md`) / 새 팀원의 첫 머지 PR까지 시간 |
+| S3.5 | Build | Skills | p25–26 | 일관되게 적용할 지식은 스킬로 두고 트리거되는지 시험한다. 꼭 지킬 정책은 훅이나 리뷰가 받친다. 빈 곳: 소유자가 있는 정책 스킬(보안·API·브랜드)은 프로젝트 몫. | `.agents/skills/`(`.claude/skills` 미러), `scripts/harness/vendor-skills.py`, 라우팅 eval(`.claude/evals/cases.jsonl`), `.agents/skills/__PREFIX__-implement/SKILL.md`의 구현 요청 범위 description(분기 pilot, 효과 미측정) | Partial | 정책 변경 승인→스킬 머지 시간 / 정책을 인용한 PR 리뷰 지적 수 |
 | S3.6 | Build | Hooks as build-time guardrails | p27 | 보호 경로 편집 차단, 편집 후 포매터, 비밀이 diff에 들어가지 않게. 빌드 훅은 빠르고 파일 하나, 전체 테스트는 커밋·푸시. | `scripts/protected-paths-guard.py`, `scripts/format-on-edit.py`, `scripts/secret-scan.py`, `.husky/pre-commit`, `.husky/pre-push`, `scripts/harness/ensure-husky.sh` | Met | 훅 차단 수(세션 trace) / 머지 뒤 발견된 보호 경로·비밀 위반 수(p44 지표를 빌림) |
 | S3.7 | Build | Parallel sessions and subagents | p27–29 | 계획에서 파일이 겹치지 않는 작업을 나눠 서브에이전트로 돌리고, 반복 작업은 `.claude/agents/`에 둔다. 메인 세션은 조종·취합한다. 빈 곳: worktree 병렬 세션 안내, OpenTelemetry 측정. | 오케스트레이터(`AGENTS.md`), `.agents/skills/__PREFIX__-implement/`, `.agents/skills/__PREFIX__-tickets/`, `.agents/skills/to-tickets/`, `.agents/skills/handoff/`, `.claude/agents/verifier.md` | Partial | 엔지니어당 동시 세션 수 / 주당 머지 변경 수와 재작업률 |
 | S4.1 | Test | Give Claude a feedback loop | p31–33 | 명령 하나로 test·typecheck를 돌리고, 끝났다고 말하기 전에 실행해 출력을 붙인다. 버그는 실패 테스트부터. 테스트를 약화하는 수정은 리뷰에서 거절한다(p32 대안). | `package.json` `test`, `.claude/settings.json` `permissions.allow`, `AGENTS.md` Commands·Verifying, `REVIEW.md` Compliance pass, `.agents/skills/tdd/`, `.agents/skills/diagnosing-bugs/`, `.claude/agents/verifier.md` | Met | 에이전트 변경의 첫 CI 통과율(CI 활성화 후) / PR당 리뷰 시간, 변경 실패율 |
@@ -36,6 +36,21 @@
 
 ## 행 메모
 
+- **S3.5 · S3.7 · S4.1 — 작업 유형별 실제 실행 분기 (2026-10-26)**: 각각 `Partial → Partial`,
+  `Partial → Partial`, `Met → Met`. `__PREFIX__-implement` 본문이 `docs/standards/execution/task-routes.md`에서 버그·기능·리팩터링을
+  선택하고 선행 증거와 완료 근거를 구현자·리뷰어에 전달한다. 실패는 같은 경로로 반환한다.
+  기존 승인·산출물·가드는 유지하고 옛 시각 변화만 보는 계획 문구와 seam 재확인 충돌을 정리한다.
+  실제 도구 기록·수정 산출물·독립 검사를 관찰하며 문서만으로 행동 개선이나 상태 승격을 선언하지 않는다.
+
+- **S3.4 · S3.5 · S4.2 — 요청 결과별 분기 pilot (2026-10-25)**: 상태는 각각 `Met → Met`,
+  `Partial → Partial`, `Partial → Partial`로 유지한다. 항상 읽는 pointer와 구현 스킬의 선택 범위를
+  보강했지만 실제 요청에서의 행동 개선이나 CI 평가 범위 확대는 아직 확인하지 않았다.
+  `docs/standards/AGENT_HARNESS.md#requested-outcomes`가 조사·설계·리뷰의 답변 종료와
+  버그 수정·기능·리팩터링의 구현·검증 종료를 구분한다. 복합 요청은 요청한 결과까지 연결한다.
+  S3.1의 계획 승인·마커, S1.1/S2.1 및 기존 구현의 산출물 정책은 변경하지 않는다.
+  비교 과제에서는 요청 범위 밖 편집·구현 스킬 호출과 실제 종료 결과를 관찰하고, 쓰기 작업은
+  기존 승인 workflow 안에서 평가한다. 구조 검사·fresh-init 통과는 행동 개선의 증거가 아니다.
+  효과 측정과 채택 판단 전의 로컬 실험이며, 결과는 ADR-0000의 해당 pilot 절에서 갱신한다.
 - **S3.1**: 세션은 `acceptEdits`로 시작하지만 승인 전 편집 불가(p20)는 plan-first 훅이 지킨다. 훅이 보는 것은
   Edit·Write·MultiEdit·NotebookEdit 도구뿐이다. Bash 쓰기(`sed -i`, 리다이렉트)와 MCP 편집 도구는 거치지 않으며,
   AGENTS.md 가이드와 PR 리뷰가 맡는다. plan.md와 diff의 일치도 훅 대신 PR 리뷰가 본다(p20 7단계는 "고려").
@@ -45,7 +60,7 @@
 - **S3.6**: `format_on_edit`의 기본값은 `{}`(no-op)이고, 프로젝트가 포매터를 채워야 동작한다. 비밀 스캔과
   pre-push는 로컬 git hook이라 사람은 건너뛸 수 있다. 보호 경로 훅은 Edit·Write·MultiEdit를 대상 경로로 막는다.
   Bash 분기는 쓰기 표시(`>`, `sed`, `tee`, `mv` 등) 옆 경로를 보는 어림이라 강제로 치지 않는다(원칙 ②).
-- **S4.1**: UI 시각 확인(브라우저·스크린샷 도구)은 프로젝트가 붙인다(가이드). 테스트 파일을 잠그는 훅 대신 리뷰 거절(p32 대안)을 쓴다.
+- **S4.1**: 웹은 `docs/standards/qc/web-acceptance.md`의 에이전트 브라우저 실행→실패 반환→재검증을 구현·UI 스킬과 `REVIEW.md`에서 호출한다(가이드). 실제 브라우저·테스트 backend 도구와 네이티브 검증은 프로젝트가 제공한다. 상태는 `Met → Met`이며 실행 효과·결함 재발 감소는 미측정이다. 테스트 파일을 잠그는 훅 대신 리뷰 거절(p32 대안)을 쓴다.
 - **S4.2**: 2026-10-16 측정(baseline / `--mutate`, 각 3회): 라우팅 PASS 3/3 / SURVIVED · plan-first PASS 3/3 / SURVIVED ·
   승인 뒤 테스트 PASS 3/3 / SURVIVED 1/3 · high-risk 코드 전 계획(질문 없이 답하게 다시 짬) PASS 3/3 / KILLED 3/3 ·
   사용자 절대경로 없음 PASS 3/3 / SURVIVED. SURVIVED case는 행동 회귀 테스트로 남기고, 잰 지시는 삭제 후보로

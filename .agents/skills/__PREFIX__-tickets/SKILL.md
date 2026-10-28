@@ -1,24 +1,25 @@
 ---
 name: __PREFIX__-tickets
-description: Split one approved docs/changes/<YYMMDD_NN>-<slug>/plan.md into PR-sized tickets with blocking order, appended to plan.md. Use only when one plan must ship as more than one PR — "티켓 나눠", "작업 분해", "split into tickets", "to-tickets".
-argument-hint: "[폴더명] — 예 260910_00-<slug>; 생략하면 docs/changes/ 의 최근 plan.md 를 쓴다"
+description: Split an approved plan into independently verifiable PR-sized tickets with dependency order. Use when one plan must ship as several PRs; a single-PR change keeps its plan's existing work units.
+argument-hint: "[active change folder]"
 ---
 
-Use this only when one plan must ship as several PRs; for a single-PR change the plan's
-`## Files that change` / `## Order of work` already is the breakdown — say so and stop.
+Read `docs/standards/execution/stage-handoffs.md` for handoff ownership and host equivalents.
+For one PR, retain the plan's work units and their proof instead of manufacturing tickets.
 
-1. Resolve the change folder: `$0` when given, otherwise the folder with the largest
-   `<YYMMDD_NN>` id that has `plan.md`; confirm it with the user. Read that `plan.md`: it is the
-   source of the breakdown, not the conversation alone.
-2. Read `docs/agents/issue-tracker.md`.
-3. Read `.agents/skills/to-tickets/SKILL.md` and follow it, with these overrides:
-   - Publish nothing outside the repo and write no `.scratch/` files; skip tracker issues and
-     labels.
-   - Ticket bodies in __HUMAN_DOC_LANG__; titles in the form `<동사구> — <끝에서 끝까지 동작>`.
-   - No `**Status:** ready-for-agent` line and no `## Parent` section.
-   - The only output is a `## 티켓` section appended to that `plan.md`: one row per ticket,
-     blockers first — `| [ ] | <제목> | <한 줄 범위> | <blocked-by> |`. The implementer ticks a
-     row in the same commit that lands the ticket.
-4. Once the user approves the breakdown, commit `plan.md`, name the frontier (tickets with no open
-   blockers), and invoke `Skill(__PREFIX__-implement)` with args `<YYMMDD_NN>-<slug> <ticket title>`
-   for the frontier ticket the user picks.
+1. Resolve the argument or active task's approved `plan.md`; ask only when the task is ambiguous.
+   Read its intent/spec and `docs/agents/issue-tracker.md`. Preserve the plan's outcome, criteria,
+   constraints, actual approval and dependency order.
+2. Read `.agents/skills/to-tickets/SKILL.md` by path as a vertical-slice reference. Choose
+   independently verifiable outcomes and real blockers; shared dependencies must be ready
+   before parallel work. Keep criterion/proof ownership visible in each ticket.
+3. Append a `## 티켓` table to the same plan:
+   `| [ ] | <제목> | <범위·기준·검증> | <blocked-by> |`. Titles describe the delivered end-to-end
+   behavior in __HUMAN_DOC_LANG__. Publish nothing outside the repository.
+4. Present the breakdown under the existing approval rules; reuse prior approval only when it
+   covers these units. Commit the approved plan, identify unblocked units and continue through
+   `__PREFIX__-implement` only when execution was requested. Pass the folder, selected unit,
+   decisions, criteria, permitted files and proof context. A breakdown-only request ends here.
+
+Tracker issues, labels and the reference's `.scratch/` files do not apply. An implementer ticks
+a finished row with its code; missing verification keeps the corresponding criterion unverified.
