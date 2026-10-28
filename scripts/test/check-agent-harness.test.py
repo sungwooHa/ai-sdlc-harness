@@ -3,7 +3,7 @@
 
 A minimal fixture repository passes: ignored files (.husky/_ shims, an ignored script with Hangul),
 a personal `local-*` skill and Hangul under scripts/test/ do not count. Each mutation below breaks
-exactly one of the six checks and must fail with that check's code and no other.
+the declared invariant and must fail with the expected diagnostic codes.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ CONFIG = {
     "skills": {
         "root": ".agents/skills", "claude_mirror": ".claude/skills", "local_prefix": "local-",
         "adapters": {"map": {"x-intent": ["grilling"]}},
+        "invocation": {"entrypoints": ["x-intent"], "internal": ["grilling"], "explicit_only": []},
     },
     "hook_intents": [
         {"id": "guard", "event": "PreToolUse", "matcher": "Edit|Bash", "script": "scripts/guard.py"},
@@ -43,7 +44,9 @@ PLAYBOOK_MAP = (
     "| S1.1 | `.agents/skills/x-intent/`, `.agents/skills/grilling/` |\n"
     "| B5 | `docs/standards/PLAYBOOK_MAP.md`, `.claude/agents/verifier.md` |\n"
 )
-GRILLING = "---\nname: grilling\ndisable-model-invocation: true\n---\n# grilling\n"
+GRILLING = "---\nname: grilling\ndisable-model-invocation: true\nuser-invocable: false\n---\n# grilling\n"
+ENTRY = "---\nname: x-intent\n---\nRead `.agents/skills/grilling/SKILL.md`.\n"
+POLICY = "interface:\n  display_name: \"Example\"\npolicy:\n  allow_implicit_invocation: false\n"
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -64,8 +67,10 @@ def build(root: Path) -> None:
     write(root, "scripts/guard.py", "print('guard')\n")
     write(root, "scripts/scan.py", "print('scan')\n")
     write(root, "scripts/test/guard.test.py", "# 테스트 파일은 한글을 써도 된다\n")
-    write(root, ".agents/skills/x-intent/SKILL.md", "---\nname: x-intent\n---\n# x-intent\n")
+    write(root, ".agents/skills/x-intent/SKILL.md", ENTRY)
     write(root, ".agents/skills/grilling/SKILL.md", GRILLING)
+    write(root, ".agents/skills/x-intent/agents/openai.yaml", POLICY.replace("false", "true"))
+    write(root, ".agents/skills/grilling/agents/openai.yaml", POLICY)
     for name in ("x-intent", "grilling"):
         (root / ".claude/skills" / name).parent.mkdir(parents=True, exist_ok=True)
         (root / ".claude/skills" / name).symlink_to(f"../../.agents/skills/{name}", target_is_directory=True)
@@ -87,6 +92,26 @@ def undeclared_git_hook(root: Path) -> None:  # named in the map, so only the de
     write(root, "docs/standards/PLAYBOOK_MAP.md", PLAYBOOK_MAP + "| S5.2 | `.husky/commit-msg` |\n")
 
 
+def change_skills(root: Path, key: str, value) -> None:
+    config = json.loads((root / ".agents/harness.json").read_text())
+    config["skills"][key] = value
+    write(root, ".agents/harness.json", json.dumps(config))
+
+
+def standalone(root: Path) -> None:
+    write(root, ".agents/skills/draw-diagram/SKILL.md", "---\nname: svg-diagram\ndescription: Diagram.\n---\nBody.\n")
+    (root / ".claude/skills/draw-diagram").symlink_to("../../.agents/skills/draw-diagram", target_is_directory=True)
+    write(root, "docs/standards/PLAYBOOK_MAP.md", PLAYBOOK_MAP + "| B7 | `.agents/skills/draw-diagram/` |\n")
+
+
+def unmapped_internal(root: Path) -> None:
+    standalone(root)
+    write(root, ".agents/skills/draw-diagram/SKILL.md",
+          "---\nname: svg-diagram\nuser-invocable: false\ndisable-model-invocation: false\n---\nBody.\n")
+    write(root, ".agents/skills/draw-diagram/agents/openai.yaml", POLICY)
+    change_skills(root, "invocation", {"entrypoints": ["x-intent"], "internal": ["grilling", "draw-diagram"], "explicit_only": []})
+
+
 # (label, expected code, mutation)
 MUTATIONS = [
     ("1 matcher wired for Edit only", "hook_matcher",
@@ -106,6 +131,66 @@ MUTATIONS = [
     ("5 agent missing from PLAYBOOK_MAP", "playbook_map",
      lambda r: write(r, "docs/standards/PLAYBOOK_MAP.md", PLAYBOOK_MAP.replace(", `.claude/agents/verifier.md`", ""))),
     ("6 Hangul in a non-test script", "hangul", lambda r: write(r, "scripts/guard.py", "print('안녕')\n")),
+    ("roles conflict", "skill_roles",
+     lambda r: change_skills(r, "invocation", {"entrypoints": ["x-intent", "grilling"], "internal": ["grilling"], "explicit_only": []})),
+    ("duplicate role entry", "skill_roles",
+     lambda r: change_skills(r, "invocation", {"entrypoints": ["x-intent", "x-intent"], "internal": ["grilling"], "explicit_only": []})),
+    ("undeclared adapter role", "skill_roles",
+     lambda r: change_skills(r, "invocation", {"entrypoints": [], "internal": ["grilling"], "explicit_only": []})),
+    ("role references a missing skill", "skill_roles",
+     lambda r: change_skills(r, "invocation", {"entrypoints": ["x-intent", "missing"], "internal": ["grilling"], "explicit_only": []})),
+    ("internal exposed in Claude", "skill_policy",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("user-invocable: false", "user-invocable: true"))),
+    ("public hidden in Claude", "skill_policy",
+     lambda r: write(r, ".agents/skills/x-intent/SKILL.md", ENTRY.replace("name: x-intent", "name: x-intent\nuser-invocable: false"))),
+    ("Codex silently permits internal skill", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "true"))),
+    ("Codex quoted boolean", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "'false'"))),
+    ("Codex hash without whitespace is not a comment", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "false#comment"))),
+    ("Codex folded scalar is not a boolean", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "false\n    continued"))),
+    ("Codex comments do not end a scalar continuation", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("false", "false\n\n  # comment\n    continued"))),
+    ("Codex policy header needs a real comment boundary", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("policy:", "policy:#comment"))),
+    ("Codex duplicate policy", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY + "policy:\n  allow_implicit_invocation: false\n")),
+    ("Codex flow policy", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", "policy: {allow_implicit_invocation: false}\n")),
+    ("Codex duplicate boolean", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY + "  allow_implicit_invocation: true\n")),
+    ("Codex missing metadata", "codex_policy",
+     lambda r: (r / ".agents/skills/grilling/agents/openai.yaml").unlink()),
+    ("adapter never reads its reference", "skill_reference",
+     lambda r: write(r, ".agents/skills/x-intent/SKILL.md", ENTRY.replace("grilling/SKILL.md", "grilling/README.md"))),
+    ("adapter references a missing skill", "skill_reference",
+     lambda r: write(r, ".agents/skills/x-intent/SKILL.md", ENTRY + "Read `.agents/skills/gone/SKILL.md`.\n")),
+    ("duplicate registration across directories", "skill_name",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("name: grilling", "name: x-intent"))),
+    ("duplicate managed frontmatter key", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("name: grilling", "name: grilling\nname: other"))),
+    ("spaced duplicate registration name", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("name: grilling", "name: grilling\nname : other"))),
+    ("spaced duplicate Claude menu flag", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("user-invocable: false", "user-invocable: false\nuser-invocable : true"))),
+    ("spaced duplicate Claude invocation flag", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("disable-model-invocation: true", "disable-model-invocation: true\ndisable-model-invocation : false"))),
+    ("registration name cannot continue onto another line", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("name: grilling", "name: grilling\n  continued"))),
+    ("Claude menu flag must not be a folded scalar", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("user-invocable: false", "user-invocable: false\n  continued"))),
+    ("Claude invocation flag must not be a folded scalar", "skill_metadata",
+     lambda r: write(r, ".agents/skills/grilling/SKILL.md", GRILLING.replace("disable-model-invocation: true", "disable-model-invocation: true\n\n# comment\n  continued"))),
+    ("unmapped internal must also disable Claude invocation", "skill_policy", unmapped_internal),
+    ("missing role configuration", "skill_roles", lambda r: change_skills(r, "invocation", None)),
+    ("adapter cycle", {"adapter_target", "skill_roles", "skill_cycle"},
+     lambda r: change_skills(r, "adapters", {"map": {"x-intent": ["grilling"], "grilling": ["x-intent"]}})),
+    ("quoted managed policy key", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY.replace("allow_implicit_invocation:", "'allow_implicit_invocation':"))),
+    ("policy merge alias", "codex_policy",
+     lambda r: write(r, ".agents/skills/grilling/agents/openai.yaml", POLICY + "  <<: *other\n")),
 ]
 
 
@@ -122,16 +207,27 @@ def main() -> int:
         code, out, codes = run(root)
         if code != 0 or not out.startswith("PASS"):
             failures.append(f"passing fixture: exit {code}\n{out}")
+        standalone(root)
+        write(root, ".agents/skills/grilling/agents/openai.yaml",
+              "# policy: ignored comment\n" + POLICY.replace("false", "false # kept").replace("policy:", "policy: # kept") +
+              "  future_setting: {opaque: true}\n  future_notes: |\n    opaque multiline\n    allow_implicit_invocation: text\n"
+              "dependencies:\n  tools:\n    - type: mcp\n      description: |\n        multiline dependency\n")
+        write(root, ".agents/skills/grilling/SKILL.md",
+              GRILLING.replace("name: grilling", "name : grilling\ndescription: |\n  opaque multiline\n  content"))
+        code, out, codes = run(root)
+        if code != 0:
+            failures.append(f"standalone alias and opaque metadata must remain valid: exit {code}\n{out}")
         for index, (label, expected, mutate) in enumerate(MUTATIONS):
             root = Path(temp_dir) / f"fail{index}"
             build(root)
             mutate(root)
             code, out, codes = run(root)
-            if code != 1 or codes != {expected}:
+            expected_codes = expected if isinstance(expected, set) else {expected}
+            if code != 1 or codes != expected_codes:
                 failures.append(f"{label}: expected exit 1 with only [{expected}], got exit {code}\n{out}")
     for failure in failures:
         print(f"FAIL {failure}")
-    print(f"{'FAIL' if failures else 'PASS'}: check-agent-harness tests ({len(MUTATIONS) + 1} fixtures)")
+    print(f"{'FAIL' if failures else 'PASS'}: check-agent-harness tests ({len(MUTATIONS) + 2} fixtures)")
     return 1 if failures else 0
 
 

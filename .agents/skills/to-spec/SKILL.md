@@ -2,6 +2,7 @@
 name: to-spec
 description: "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed."
 disable-model-invocation: true
+user-invocable: false
 metadata:
   source: https://github.com/mattpocock/skills/tree/3cca18b368ae/skills/engineering/to-spec
   commit: 3cca18b368ae95cdbdebbff572ccafa662551015

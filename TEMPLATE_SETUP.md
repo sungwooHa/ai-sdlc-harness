@@ -64,6 +64,7 @@ permission 허용 명령과 pre-push 명령을 함께 확인합니다.
 | `apps/<app>/AGENTS.md` | 앱별 구조·컨벤션·검증·금지사항 |
 | `package.json` | 앱 test·typecheck 명령; 기본 test:harness만으로 앱 검증을 대신하지 않기 |
 | `.agents/harness.json` | 실제 보호 경로와 formatter argv |
+| `.github/workflows/harness.yml` | PR·수동 실행의 결정적 하네스 회귀; 앱 CI와 서버의 필수 체크 정책은 프로젝트에서 연결 |
 | `.husky/pre-commit` | 프로젝트에 필요한 빠른 가드 |
 | `docs/agents/issue-tracker.md` | 사용하는 트래커와 게시 권한; 기본은 외부 트래커 없음 |
 | `docs/standards/qc/web-acceptance.md` | 프로젝트별 backend·계정·runtime·브라우저 검증 절차의 연결 |
@@ -73,7 +74,26 @@ permission 허용 명령과 pre-push 명령을 함께 확인합니다.
 임의로 권한·승인 마커를 만들어 설정을 통과시키지 않습니다.
 호스트 전용 설정을 다른 호스트의 강제로 설명하지 않습니다. 이 템플릿은 Codex 세션 편집 훅을
 설치하지 않으며, 양호스트의 git 가드는 Husky 배선과 실제 실행 여부를 확인해야 합니다.
-CI 예시는 비활성이므로 필요한 경우 프로젝트 정책에 맞게 별도로 채택합니다.
+결정적 CI는 Linux/Python 3.9와 macOS/Python 3.12에서 `pnpm test:harness`를 실행하도록 설정돼
+있습니다. fresh-init도 이 suite에 포함되며 모델 호출·자격 증명은 없습니다. GitHub 원격 실행은
+아직 미검증입니다. `docs/examples/agent-evals.yml`과 `claude-review.yml`은 비활성 모델 평가·
+PR 리뷰 예시이므로 채택할 때 프로젝트 정책과 권한을 별도로 설정합니다.
+
+## 스킬 검진과 실제 과제
+
+`pnpm check:harness`는 `skills.invocation`에 선언된 진입점·내부 참조·명시 호출 전용 역할을
+실제 스킬과 대조합니다. 역할·등록명 충돌, adapter 참조 누락/순환과 Claude/Codex metadata
+불일치를 검사합니다. 자동 발견 설정은 승인 권한이 아니며 선언 밖 standalone 스킬의 기존
+정책은 유지합니다. vendor 갱신 명령은 본문을 가져오면서 로컬 metadata를 다시 적용합니다.
+
+`.claude/evals/work/`에는 입력 수리·반복 작성 완료/복구·동작 보존 리팩터링 과제가 있습니다.
+`scripts/harness/work-evals.py prepare`는 커밋된 후보를 저장소 밖 독립 작업본으로 내보내고,
+`inspect`와 `grade`는 실제 실행 뒤 원본/작업본 무결성과 외부 동작 결과를 기록합니다.
+`--ref`는 하네스, `--task-ref`는 비교에 사용할 고정 과제 revision입니다.
+모델·승인·위임·브라우저는 정상 호스트에서 수행합니다. 준비·종료·자동 동작 판정만으로 전체
+과제를 통과 처리하지 않으며, 새 승인 마커를 만들거나 사람이 설정할 변수를 대신 켜지 않습니다.
+작업본 제외 항목, raw trace, 실패 보존과 필요한 브라우저 실행은
+[평가 안내](.claude/evals/README.md#reusable-real-work-trials)를 따릅니다.
 
 ## 기존 프로젝트에 개선 가져오기
 

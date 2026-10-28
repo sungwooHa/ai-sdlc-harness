@@ -106,13 +106,30 @@ Headless 승인 변수는 사람이 명시적으로 부여하는 수단이며 �
 ## 검증과 알려진 한계
 
 ```sh
-pnpm check:harness       # 배선·미러·선언 등 구조 검사
+pnpm check:harness       # 배선·미러·스킬 역할·참조·양호스트 호출 metadata 검사
 pnpm test:harness        # 결정적 회귀와 fresh-init 검사, 모델 호출 없음
-pnpm evals:harness       # Claude 행동 smoke, 모델 쿼터 사용
+pnpm evals:harness       # 기존 Claude 5개 행동 smoke, 모델 쿼터 사용
 ```
 
-기존 자동 평가 runner는 Claude용입니다. Codex까지 자동 평가한다고 주장하지 않습니다.
-양호스트 실제 과제와 단계 인계 평가는 [평가 안내](.claude/evals/README.md)를 따릅니다.
+스킬 검진은 `.agents/harness.json`의 `skills.invocation`과 실제 metadata를 대조합니다.
+역할 중복·등록명 충돌·adapter 참조 누락/순환·호스트 정책 불일치를 찾지만 실제 자동 선택이나
+작업 성공을 증명하지는 않습니다. vendored 스킬 갱신 때도 이 metadata를 다시 적용합니다.
+
+기존 자동 모델 runner는 Claude용입니다. 별도의 [실무 과제 3개](.claude/evals/work/cases.json)는
+입력 수리, 반복 작성의 완료·복구, 동작 보존 리팩터링을 다룹니다. 아래 도구가 독립 작업본을
+준비하고 실행 후 무결성·외부 동작 판정을 돕습니다. 모델 실행은 평소 Claude/Codex 호스트에서
+진행하며, 도구가 모델을 호출하거나 권한·승인을 부여하지 않습니다.
+
+```sh
+# 후보와 과제 자산을 먼저 커밋하고, 아직 없는 저장소 밖 디렉터리를 지정합니다.
+python3 scripts/harness/work-evals.py prepare --case field-repair --ref HEAD --output /tmp/harness-field-repair-1
+```
+
+반환된 작업본에서 실제 승인 범위와 `prompt.txt`로 수행한 뒤 raw trace를 보존하고 `inspect`,
+`grade`를 실행합니다. 비교 기준이 과제 자산보다 오래됐으면 동일한 `--task-ref`로 과제를 고정합니다.
+준비 성공·native 종료·자동 동작 PASS는 과제 전체 PASS가 아닙니다. 정상 검사도 `NEEDS_REVIEW`로
+남으며 실제 위임·독립 리뷰·필요한 브라우저/persistence 검증은 별도로 확인합니다.
+명령·receipt·재실행·단계 인계 절차는 [평가 안내](.claude/evals/README.md)를 따릅니다.
 실제 읽기·수정·명령·위임 결과와 최종 산출물을 보고 판정하며, 실패·거절·미검증도 보존합니다.
 instruction 변경을 원인으로 주장하려면 환경을 고정한 대조 평가가 필요합니다.
 
@@ -121,8 +138,12 @@ instruction 변경을 원인으로 주장하려면 환경을 고정한 대조 �
 이전 지침의 실행을 현재 템플릿 전체 검증으로 대체하지 않습니다.
 
 plan-first는 Bash·MCP 편집 전체를 통제하지 않고, 보호 경로 셸 검사는 휴리스틱입니다.
-로컬 git 가드는 우회 불가능한 보안 경계가 아닙니다. CI와 자동 PR 리뷰는 기본 활성화돼 있지 않으며
-[docs/examples](docs/examples)의 예시를 채택할 때 별도로 설정합니다.
+로컬 git 가드는 우회 불가능한 보안 경계가 아닙니다.
+[결정적 CI](.github/workflows/harness.yml)는 PR·수동 실행에 Linux/Python 3.9와 macOS/Python 3.12의
+`pnpm test:harness` 및 fresh-init 검사를 배선했습니다. 모델 자격 증명과 모델 호출은 필요하지 않으며,
+GitHub 원격 실행 결과는 아직 검증하지 않았습니다. 모델 평가 CI와 자동 PR 리뷰는
+[docs/examples](docs/examples)의 비활성 예시로 남습니다. 세 과제는 작은 회귀 자산이며
+Playbook의 실제 작업 20–50개 범위나 일반 생산성 효과를 충족한 근거가 아닙니다.
 보장 범위의 정본은 [AGENT_HARNESS.md](docs/standards/AGENT_HARNESS.md)입니다.
 
 ## 프로젝트에서 공통 템플릿으로 개선하기

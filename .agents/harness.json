@@ -119,6 +119,30 @@
         ]
       }
     },
+    "invocation": {
+      "description": "Managed roles govern discovery only, never mutation permission. Project entrypoints select ordinary work; internal adapter references stay hidden in Claude and non-implicit in Codex. Existing explicit-only handoff remains user-invoked. Undeclared standalone skills keep their existing discovery policy.",
+      "entrypoints": [
+        "__PREFIX__-intent",
+        "__PREFIX__-spec",
+        "__PREFIX__-tickets",
+        "__PREFIX__-implement",
+        "__PREFIX__-ui-review",
+        "__PREFIX__-ponytail",
+        "__PREFIX__-adr"
+      ],
+      "internal": [
+        "grilling",
+        "to-spec",
+        "to-tickets",
+        "implement",
+        "web-design-guidelines",
+        "review-animations",
+        "ponytail"
+      ],
+      "explicit_only": [
+        "handoff"
+      ]
+    },
     "disabled": []
   },
   "hook_intents": [

@@ -2,6 +2,7 @@
 name: review-animations
 description: Reviews animation and motion code against a high craft bar derived from Emil Kowalski's design engineering philosophy. Default to flagging; approval is earned.
 disable-model-invocation: true
+user-invocable: false
 metadata:
   source: https://github.com/emilkowalski/skills/tree/d23d7f88a2e2/skills/review-animations
   commit: d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7

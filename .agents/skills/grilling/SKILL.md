@@ -2,6 +2,7 @@
 name: grilling
 description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
 disable-model-invocation: true
+user-invocable: false
 metadata:
   source: https://github.com/mattpocock/skills/tree/3cca18b368ae/skills/productivity/grilling
   commit: 3cca18b368ae95cdbdebbff572ccafa662551015

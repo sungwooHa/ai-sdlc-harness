@@ -2,6 +2,7 @@
 name: implement
 description: "Implement a piece of work based on a spec or set of tickets."
 disable-model-invocation: true
+user-invocable: false
 metadata:
   source: https://github.com/mattpocock/skills/tree/3cca18b368ae/skills/engineering/implement
   commit: 3cca18b368ae95cdbdebbff572ccafa662551015
